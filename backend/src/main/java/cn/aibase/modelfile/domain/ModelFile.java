@@ -26,6 +26,8 @@ public class ModelFile {
     private String kind;
     /** 相对数据目录的存储根（model-files/{id}）。 */
     private String storageRoot;
+    /** 固定下载链接的随机凭证（防穷举），创建后不变。 */
+    private String token;
     private List<FileEntry> files;
     private long totalSize;
     private int fileCount;

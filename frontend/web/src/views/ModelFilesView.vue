@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Refresh, Delete, Download, FolderOpened, Document } from '@element-plus/icons-vue'
+import { Refresh, Delete, Download, FolderOpened, Document, Link } from '@element-plus/icons-vue'
 import { modelFileApi } from '../services/promptApi'
 import type { ModelFile } from '../types'
 
@@ -64,6 +64,23 @@ function handleDownload(row: ModelFile) {
   window.open(modelFileApi.downloadUrl(row.id), '_blank')
 }
 
+/** 复制固定下载链接（随机 token，防穷举；创建后不变）。 */
+async function handleCopyLink(row: ModelFile) {
+  if (!row.token) {
+    ElMessage.warning('该条目缺少下载凭证')
+    return
+  }
+  const url = `${window.location.origin}${modelFileApi.tokenDownloadUrl(row.token)}`
+  try {
+    await navigator.clipboard.writeText(url)
+    ElMessage.success('下载链接已复制')
+  } catch {
+    await ElMessageBox.alert(url, '复制下载链接', {
+      confirmButtonText: '完成',
+    })
+  }
+}
+
 async function handleDelete(row: ModelFile) {
   try {
     await ElMessageBox.confirm(
@@ -84,8 +101,8 @@ async function handleDelete(row: ModelFile) {
   <div class="page">
     <div class="page-header">
       <div>
-        <h1 class="page-title">模型文件</h1>
-        <p class="page-desc">上传与管理模型文件/目录（如 ASR 模型）；目录整体上传或 zip 自动解压，下载时目录打包为 zip</p>
+        <h1 class="page-title">文件管理</h1>
+        <p class="page-desc">上传与管理模型文件/任意文件；目录整体上传或 zip 自动解压；可生成固定下载链接（随机凭证，复制后长期可用）</p>
       </div>
       <div>
         <el-button :icon="Refresh" circle :loading="loading" @click="fetchAll" />
@@ -145,8 +162,9 @@ async function handleDelete(row: ModelFile) {
           <template #default="{ row }">{{ formatSize(row.totalSize) }}</template>
         </el-table-column>
         <el-table-column label="上传时间" width="170" prop="createdAt" />
-        <el-table-column label="操作" width="140" fixed="right">
+        <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
+            <el-button size="small" circle :icon="Link" title="复制固定下载链接" @click="handleCopyLink(row)" />
             <el-button size="small" circle :icon="Download" title="下载" @click="handleDownload(row)" />
             <el-button size="small" circle type="danger" plain :icon="Delete" title="删除" @click="handleDelete(row)" />
           </template>

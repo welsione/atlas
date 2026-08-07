@@ -106,6 +106,8 @@ export type ModelFile = {
   description: string
   kind: 'FILE' | 'DIRECTORY'
   storageRoot: string
+  /** 固定下载链接凭证（随机，防穷举） */
+  token: string
   files: ModelFileEntry[]
   totalSize: number
   fileCount: number

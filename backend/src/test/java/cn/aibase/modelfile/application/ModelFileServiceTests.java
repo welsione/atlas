@@ -143,4 +143,34 @@ class ModelFileServiceTests {
         assertFalse(Files.exists(stored));
         assertTrue(service.list().isEmpty());
     }
+
+    @Test
+    void uploadGeneratesRandomFixedToken() {
+        ModelFile a = service.upload("asr", "", List.of(file("a.bin", "1")));
+        ModelFile b = service.upload("asr", "", List.of(file("b.bin", "2")));
+        // 32 字节 hex = 64 字符
+        assertEquals(64, a.getToken().length());
+        // 随机不重复（防穷举）
+        assertFalse(a.getToken().equals(b.getToken()));
+        // token 固定：重新查询不变
+        assertEquals(a.getToken(), service.get(a.getId()).getToken());
+        assertEquals(a.getToken(), service.getByToken(a.getToken()).getToken());
+    }
+
+    @Test
+    void downloadLinkIsFixedAndTokenGuarded() throws Exception {
+        ModelFile entry = service.upload("asr", "", List.of(file("a.bin", "data")));
+        String link = service.downloadLink(entry.getToken());
+        assertTrue(link.contains(entry.getToken()));
+
+        // 通过 token 下载内容正确
+        ModelFile byToken = service.getByToken(entry.getToken());
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        service.download(byToken.getId(), out);
+        assertEquals("data", out.toString(StandardCharsets.UTF_8));
+
+        // 非法 token（穷举）→ 404
+        assertThrows(cn.aibase.common.ResourceNotFoundException.class,
+                () -> service.getByToken("0000000000000000000000000000000000000000000000000000000000000000"));
+    }
 }

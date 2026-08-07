@@ -43,9 +43,48 @@ public class SchemaInitializer implements ApplicationRunner {
             for (String statement : statements) {
                 jdbc.execute(statement);
             }
+            // 旧库增量迁移：SQLite 不支持 ADD COLUMN IF NOT EXISTS
+            ensureColumn("model_files", "token", "TEXT NOT NULL DEFAULT ''");
+            ensureIndex("idx_model_files_token",
+                    "CREATE UNIQUE INDEX IF NOT EXISTS idx_model_files_token ON model_files(token)");
+            backfillTokens();
             log.info("数据库结构初始化完成（{} 条语句）", statements.size());
         } catch (Exception ex) {
             throw new IllegalStateException("数据库结构初始化失败", ex);
+        }
+    }
+
+    /** 存量回填：为历史条目生成固定下载 token（旧库升级场景）。 */
+    private void backfillTokens() {
+        java.security.SecureRandom random = new java.security.SecureRandom();
+        List<Long> empty = jdbc.queryForList("SELECT id FROM model_files WHERE token = '' OR token IS NULL", Long.class);
+        for (Long id : empty) {
+            byte[] bytes = new byte[32];
+            random.nextBytes(bytes);
+            String token = java.util.HexFormat.of().formatHex(bytes);
+            jdbc.update("UPDATE model_files SET token = ? WHERE id = ?", token, id);
+        }
+        if (!empty.isEmpty()) {
+            log.info("已为 {} 个历史文件条目回填下载 token", empty.size());
+        }
+    }
+
+    /** 检查列是否存在，缺失则 ALTER TABLE 补列。 */
+    private void ensureColumn(String table, String column, String definition) {
+        List<String> columns = jdbc.query("PRAGMA table_info(" + table + ")", (rs, i) -> rs.getString("name"));
+        if (columns.contains(column)) {
+            return;
+        }
+        jdbc.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + definition);
+        log.info("已为表 {} 补列 {}", table, column);
+    }
+
+    /** 检查索引是否存在（SQLite 无 IF NOT EXISTS 于 CREATE UNIQUE INDEX 时按名称查询）。 */
+    private void ensureIndex(String index, String ddl) {
+        try {
+            jdbc.execute(ddl);
+        } catch (Exception ex) {
+            log.debug("索引 {} 已存在（{}）", index, ex.getMessage());
         }
     }
 

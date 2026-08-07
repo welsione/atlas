@@ -30,5 +30,7 @@ export const modelFileApi = {
     return post<ModelFile>('/api/model-files', form)
   },
   downloadUrl: (id: number) => `/api/model-files/${id}/download`,
+  /** 固定公开下载链接（随机 token，防穷举，创建后不变）。 */
+  tokenDownloadUrl: (token: string) => `/api/files/${token}/download`,
   remove: (id: number) => del<void>(`/api/model-files/${id}`),
 }
