@@ -1,0 +1,19 @@
+# Java / Maven
+backend/target/
+*.class
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+
+# Node
+frontend/web/node_modules/
+frontend/web/dist/
+frontend/web/*.tsbuildinfo
+
+# 数据与本地环境
+backend/data/
+*.db
+*.db-journal
+.DS_Store
+.idea/
+.vscode/
+*.iml
