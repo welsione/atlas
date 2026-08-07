@@ -17,4 +17,10 @@ public class AIBaseProperties {
 
     /** 数据根目录：SQLite 文件与外部插件目录的根。 */
     private String dataDir = "./data";
+
+    /** 管理登录密码（设置后管理接口需登录认证）。 */
+    private String adminPassword = "";
+
+    /** 固定管理 Token（X-AIBase-Key 头，脚本调用场景）。 */
+    private String adminKey = "";
 }

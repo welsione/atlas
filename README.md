@@ -82,6 +82,16 @@ public class RedactProcessor implements PromptProcessor {
 | `AIBASE_PORT` | `18081` | HTTP 端口 |
 | `AIBASE_DATA_DIR` | `./data` | 数据目录（SQLite 文件 + plugins/） |
 | `AIBASE_ENC_KEY` | 内置开发密钥 | API Key 加密密钥（Base64 32 字节），**生产必须设置** |
+| `AIBASE_ADMIN_PASSWORD` | 空 | 管理登录密码，设置后管理接口需认证 |
+| `AIBASE_ADMIN_KEY` | 空 | 固定管理 Token（`X-AIBase-Key` 头，脚本调用场景） |
+
+## 安全
+
+- **管理认证**：设置 `AIBASE_ADMIN_PASSWORD` 后，管理接口需登录 token（`Authorization: Bearer`）；`AIBASE_ADMIN_KEY` 供脚本使用 `X-AIBase-Key` 头；公开下载（`/api/files/{token}/...`）不受影响
+- **IP 黑名单**：手动或自动封禁的 IP 拒绝全部 API 访问（403），且其流量不计入控制台 Top IP 排名；安全页可管理/解封
+- **限流**：每 IP / 每链接 / 全局 / 登录失败四维度固定窗口限流，阈值在安全页可视化配置并持久化，超限返回 429
+- **自动封禁**：触发限流的 IP 在窗口内累计达阈值自动加入黑名单（默认 1 小时 10 次，可配）
+- **其他**：下载 token 32 字节随机防穷举、上传路径消毒/zip 炸弹防御、API Key AES-256 加密存储、下载全量审计（IP/UA/字节）
 
 ## 开源说明
 

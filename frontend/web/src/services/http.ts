@@ -2,11 +2,24 @@ import axios, { AxiosError } from 'axios'
 import { ElMessage } from 'element-plus'
 import type { ApiResponse } from '../types'
 
+export const AUTH_TOKEN_KEY = 'aibase-token'
+
 const http = axios.create({
   baseURL: '',
   timeout: 30000,
 })
 
+// 请求拦截：管理认证 token
+http.interceptors.request.use((config) => {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY)
+  if (token) {
+    config.headers = config.headers ?? {}
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
+
+// 响应拦截：401 → 通知全局展示登录
 http.interceptors.response.use(
   (response) => {
     const body = response.data as ApiResponse<unknown>
@@ -17,6 +30,12 @@ http.interceptors.response.use(
     return response
   },
   (error: AxiosError<ApiResponse<unknown>>) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem(AUTH_TOKEN_KEY)
+      window.dispatchEvent(new CustomEvent('aibase:unauthorized'))
+      ElMessage.warning('请先登录')
+      return Promise.reject(error)
+    }
     const message = error.response?.data?.message || error.message || '网络错误'
     ElMessage.error(message)
     return Promise.reject(error)
