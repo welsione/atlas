@@ -61,3 +61,20 @@ CREATE TABLE IF NOT EXISTS plugins (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+-- 模型文件：上传到平台的模型文件/目录（如 ASR 模型），文件落盘于 {dataDir}/model-files/{id}/
+CREATE TABLE IF NOT EXISTS model_files (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'default',
+    description TEXT NOT NULL DEFAULT '',
+    kind TEXT NOT NULL DEFAULT 'FILE',
+    storage_root TEXT NOT NULL,
+    files_json TEXT NOT NULL DEFAULT '[]',
+    total_size INTEGER NOT NULL DEFAULT 0,
+    file_count INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_model_files_category ON model_files(category);

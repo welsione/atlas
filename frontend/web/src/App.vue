@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Cpu, ChatDotRound, SetUp } from '@element-plus/icons-vue'
+import { Cpu, ChatDotRound, SetUp, Files } from '@element-plus/icons-vue'
 import ProvidersView from './views/ProvidersView.vue'
 import PromptsView from './views/PromptsView.vue'
 import PluginsView from './views/PluginsView.vue'
+import ModelFilesView from './views/ModelFilesView.vue'
 
 const current = ref(localStorage.getItem('aibase-tab') || 'providers')
 
@@ -30,6 +31,9 @@ function switchTab(tab: string) {
         <el-menu-item index="prompts">
           <el-icon><ChatDotRound /></el-icon><span>提示词管理</span>
         </el-menu-item>
+        <el-menu-item index="model-files">
+          <el-icon><Files /></el-icon><span>模型文件</span>
+        </el-menu-item>
         <el-menu-item index="plugins">
           <el-icon><SetUp /></el-icon><span>插件</span>
         </el-menu-item>
@@ -38,6 +42,7 @@ function switchTab(tab: string) {
     <el-main class="main">
       <ProvidersView v-if="current === 'providers'" />
       <PromptsView v-else-if="current === 'prompts'" />
+      <ModelFilesView v-else-if="current === 'model-files'" />
       <PluginsView v-else-if="current === 'plugins'" />
     </el-main>
   </el-container>
