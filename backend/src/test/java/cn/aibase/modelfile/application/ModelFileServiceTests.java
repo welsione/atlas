@@ -43,10 +43,11 @@ class ModelFileServiceTests {
 
     @BeforeEach
     void clean() {
-        jdbc.update("DELETE FROM model_files");
+        // 先删磁盘与记录（delete 需要表内有数据才能定位条目），再清表兜底
         for (ModelFile f : service.list()) {
             service.delete(f.getId());
         }
+        jdbc.update("DELETE FROM model_files");
     }
 
     private MultipartFile file(String name, String content) {
