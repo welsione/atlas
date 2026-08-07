@@ -1,0 +1,19 @@
+# AIBase：AI 服务基础组件（供应商配置 + 提示词管理）
+# 服务器部署：docker compose pull && docker compose up -d
+services:
+  aibase:
+    image: ghcr.io/welsione/aibase:latest
+    container_name: aibase
+    restart: unless-stopped
+    ports:
+      - "18081:18081"
+    environment:
+      # API Key 加密密钥（Base64 编码 32 字节）：生产必须设置，可用 openssl rand -base64 32 生成
+      AIBASE_ENC_KEY: ${AIBASE_ENC_KEY:-}
+      AIBASE_PORT: "18081"
+      AIBASE_DATA_DIR: /app/data
+    volumes:
+      - aibase-data:/app/data
+
+volumes:
+  aibase-data:
