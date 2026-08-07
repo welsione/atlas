@@ -87,14 +87,28 @@ CREATE INDEX IF NOT EXISTS idx_model_files_category ON model_files(category);
 -- 注意：token 唯一索引由 SchemaInitializer 迁移逻辑按"先补列再建索引"顺序执行，
 -- 以保证旧库（无 token 列）也能正常升级；新建库同样覆盖。
 
--- 下载日志：审计每次公开下载（IP、UA、时间），用于防攻击分析与业务统计
+-- 下载日志：审计每次公开下载（IP、UA、时间、字节数），用于防攻击分析与流量统计
 CREATE TABLE IF NOT EXISTS download_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     file_id INTEGER NOT NULL,
     ip TEXT NOT NULL DEFAULT '',
     user_agent TEXT NOT NULL DEFAULT '',
+    bytes INTEGER NOT NULL DEFAULT 0,
     downloaded_at TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_download_logs_file ON download_logs(file_id, downloaded_at);
 CREATE INDEX IF NOT EXISTS idx_download_logs_ip ON download_logs(ip, downloaded_at);
+
+-- 上传日志：审计每次上传/更新（IP、字节数），用于流量统计
+CREATE TABLE IF NOT EXISTS upload_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    file_id INTEGER NOT NULL,
+    ip TEXT NOT NULL DEFAULT '',
+    user_agent TEXT NOT NULL DEFAULT '',
+    bytes INTEGER NOT NULL DEFAULT 0,
+    uploaded_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_upload_logs_file ON upload_logs(file_id, uploaded_at);
+CREATE INDEX IF NOT EXISTS idx_upload_logs_ip ON upload_logs(ip, uploaded_at);

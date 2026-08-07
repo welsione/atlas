@@ -3,6 +3,7 @@ package cn.aibase.modelfile.web;
 import cn.aibase.common.ApiResponse;
 import cn.aibase.modelfile.application.ModelFileService;
 import cn.aibase.modelfile.domain.ModelFile;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -40,8 +41,14 @@ public class ModelFileController {
             @RequestParam(value = "category", defaultValue = "default") String category,
             @RequestParam(value = "description", defaultValue = "") String description,
             @RequestParam(value = "token", required = false) String updateToken,
-            @RequestParam("files") List<MultipartFile> files) {
-        return ApiResponse.ok(service.upload(category, description, files, updateToken));
+            @RequestParam("files") List<MultipartFile> files,
+            HttpServletRequest request) {
+        ModelFile entry = service.upload(category, description, files, updateToken);
+        // 上传/更新事件入审计表，供控制台流量统计
+        String forwarded = request.getHeader("X-Forwarded-For");
+        service.recordUpload(entry, forwarded != null && !forwarded.isBlank() ? forwarded : request.getRemoteAddr(),
+                request.getHeader(HttpHeaders.USER_AGENT));
+        return ApiResponse.ok(entry);
     }
 
     /** 条目下载日志（管理端，按 token 鉴权场景由前端列表接口提供 id）。 */

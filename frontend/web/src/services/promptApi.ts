@@ -38,3 +38,18 @@ export const modelFileApi = {
   downloadLogs: (id: number) => get<Array<{ ip: string; userAgent: string; downloadedAt: string }>>(`/api/model-files/${id}/download-logs`),
   remove: (id: number) => del<void>(`/api/model-files/${id}`),
 }
+
+export const monitorApi = {
+  stats: (range: '24h' | '7d' | 'all') =>
+    get<{ uploadBytes: number; uploadCount: number; downloadBytes: number; downloadCount: number; series: Array<{ bucket: string; uploadBytes: number; downloadBytes: number }> }>(`/api/monitor/stats?range=${range}`),
+  overview: () =>
+    get<{
+      cpuCores: number; systemLoad: number; processCpuPercent: number
+      heapUsed: number; heapMax: number; threadCount: number; uptimeSeconds: number
+      systemTotalMemory: number; systemFreeMemory: number
+      diskTotal: number; diskFree: number
+      entryCount: number; storedBytes: number; dataDirBytes: number; dbFileBytes: number
+    }>('/api/monitor/overview'),
+  top: (range: '24h' | '7d' | 'all', limit = 10) =>
+    get<{ topDownloadFiles: Array<{ fileId: number; name: string; count: number; totalBytes: number }>; topIps: Array<{ ip: string; count: number; totalBytes: number }>; topUploadFiles: Array<{ fileId: number; name: string; count: number; totalBytes: number }> }>(`/api/monitor/top?range=${range}&limit=${limit}`),
+}

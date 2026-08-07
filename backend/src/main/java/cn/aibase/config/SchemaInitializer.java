@@ -48,8 +48,13 @@ public class SchemaInitializer implements ApplicationRunner {
             ensureColumn("model_files", "version", "INTEGER NOT NULL DEFAULT 1");
             ensureColumn("model_files", "content_hash", "TEXT NOT NULL DEFAULT ''");
             ensureColumn("model_files", "download_count", "INTEGER NOT NULL DEFAULT 0");
+            ensureColumn("download_logs", "bytes", "INTEGER NOT NULL DEFAULT 0");
             ensureIndex("idx_model_files_token",
                     "CREATE UNIQUE INDEX IF NOT EXISTS idx_model_files_token ON model_files(token)");
+            ensureIndex("idx_upload_logs_file",
+                    "CREATE INDEX IF NOT EXISTS idx_upload_logs_file ON upload_logs(file_id, uploaded_at)");
+            ensureIndex("idx_upload_logs_ip",
+                    "CREATE INDEX IF NOT EXISTS idx_upload_logs_ip ON upload_logs(ip, uploaded_at)");
             backfillTokens();
             backfillVersionAndHash();
             log.info("数据库结构初始化完成（{} 条语句）", statements.size());
