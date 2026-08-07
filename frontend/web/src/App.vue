@@ -6,6 +6,8 @@ import PromptsView from './views/PromptsView.vue'
 import PluginsView from './views/PluginsView.vue'
 import ModelFilesView from './views/ModelFilesView.vue'
 import MonitorView from './views/MonitorView.vue'
+import SecurityView from './views/SecurityView.vue'
+import LoginDialog from './components/LoginDialog.vue'
 
 const current = ref(localStorage.getItem('aibase-tab') || 'providers')
 
@@ -38,6 +40,9 @@ function switchTab(tab: string) {
         <el-menu-item index="monitor">
           <el-icon><Monitor /></el-icon><span>控制台</span>
         </el-menu-item>
+        <el-menu-item index="security">
+          <el-icon><Lock /></el-icon><span>安全</span>
+        </el-menu-item>
         <el-menu-item index="plugins">
           <el-icon><SetUp /></el-icon><span>插件</span>
         </el-menu-item>
@@ -48,8 +53,10 @@ function switchTab(tab: string) {
       <PromptsView v-else-if="current === 'prompts'" />
       <ModelFilesView v-else-if="current === 'model-files'" />
       <MonitorView v-else-if="current === 'monitor'" />
+      <SecurityView v-else-if="current === 'security'" />
       <PluginsView v-else-if="current === 'plugins'" />
     </el-main>
+    <LoginDialog />
   </el-container>
 </template>
 

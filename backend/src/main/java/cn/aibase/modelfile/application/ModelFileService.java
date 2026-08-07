@@ -41,11 +41,11 @@ public class ModelFileService {
     private static final int MAX_UNZIP_ENTRIES = 20000;
     private static final long MAX_UNZIP_TOTAL = 50L * 1024 * 1024 * 1024;
     private static final int TOKEN_LENGTH = 32;
-    /** 每 IP 每分钟下载次数上限（防攻击）。 */
-    private static final int RATE_LIMIT_PER_MINUTE = 60;
 
     private final ModelFileJdbcRepository repository;
     private final AIBaseProperties properties;
+    private final cn.aibase.security.RateLimiter rateLimiter;
+    private final cn.aibase.security.IpRuleService ipRuleService;
     private final java.security.SecureRandom secureRandom = new java.security.SecureRandom();
 
     @Transactional(readOnly = true)
@@ -183,16 +183,17 @@ public class ModelFileService {
 
     /**
      * 记录一次公开下载：写入下载日志（含字节数）+ 累计计数。
-     * 返回 false 表示触发限流（该 IP 每分钟下载次数超限）。
+     * 返回 false 表示触发限流（IP/token/全局任一度量超限，并累计自动封禁统计）。
      */
     @Transactional
     public boolean recordDownload(ModelFile entry, String ip, String userAgent) {
         String clientIp = normalizeIp(ip);
-        String minuteWindow = LocalDateTime.now().minusMinutes(1)
-                .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-        int recent = repository.countDownloadsByIpSince(clientIp, minuteWindow);
-        if (recent >= RATE_LIMIT_PER_MINUTE) {
-            log.warn("下载限流：ip={}，entry={}，最近 1 分钟 {} 次", clientIp, entry.getId(), recent);
+        if (!rateLimiter.allowDownloadIp(clientIp)
+                || !rateLimiter.allowDownloadToken(entry.getToken())
+                || !rateLimiter.allowDownloadGlobal()) {
+            rateLimiter.recordBanHit(clientIp);
+            ipRuleService.maybeAutoBan(clientIp);
+            log.warn("下载限流：ip={}，entry={}", clientIp, entry.getId());
             return false;
         }
         repository.insertDownloadLog(entry.getId(), clientIp, userAgent == null ? "" : userAgent,

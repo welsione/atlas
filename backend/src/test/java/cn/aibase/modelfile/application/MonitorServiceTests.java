@@ -13,6 +13,8 @@ import org.springframework.web.multipart.MultipartFile;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
+import cn.aibase.security.IpRuleService;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -35,6 +37,9 @@ class MonitorServiceTests {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private cn.aibase.security.IpRuleService ipRuleService;
 
     @BeforeEach
     void clean() throws Exception {
@@ -102,5 +107,23 @@ class MonitorServiceTests {
         assertTrue(top.topDownloadFiles().stream()
                 .anyMatch(row -> Long.parseLong(String.valueOf(row.get("count"))) >= 2));
         assertTrue(top.topIps().stream().anyMatch(row -> "9.9.9.9".equals(row.get("ip"))));
+    }
+
+    @Test
+    void blockedIpExcludedFromTopRanking() {
+        ModelFile entry = fileService.upload("asr", "", List.of(file("top.bin", "0123456789")), null);
+        // 恶意 IP 大量下载
+        for (int i = 0; i < 5; i++) {
+            fileService.recordDownload(entry, "66.66.66.66", "bot");
+        }
+        fileService.recordDownload(entry, "8.8.8.8", "normal");
+
+        // 封禁恶意 IP 后：Top 排名不再出现该 IP（禁止被禁流量进入排名）
+        ipRuleService.block("66.66.66.66", "恶意下载");
+        MonitorService.TopStats top = monitorService.top("24h", 10);
+        assertTrue(top.topIps().stream().noneMatch(row -> "66.66.66.66".equals(row.get("ip"))),
+                "黑名单 IP 不应出现在 Top 排名");
+        assertTrue(top.topIps().stream().anyMatch(row -> "8.8.8.8".equals(row.get("ip"))));
+        ipRuleService.unblock("66.66.66.66");
     }
 }

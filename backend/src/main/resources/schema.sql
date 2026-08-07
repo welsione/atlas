@@ -112,3 +112,18 @@ CREATE TABLE IF NOT EXISTS upload_logs (
 
 CREATE INDEX IF NOT EXISTS idx_upload_logs_file ON upload_logs(file_id, uploaded_at);
 CREATE INDEX IF NOT EXISTS idx_upload_logs_ip ON upload_logs(ip, uploaded_at);
+
+-- IP 规则：黑名单（手动 BLOCK / 自动封禁 AUTO_BLOCK），命中后拒绝全部 API 访问
+CREATE TABLE IF NOT EXISTS ip_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ip TEXT NOT NULL UNIQUE,
+    type TEXT NOT NULL DEFAULT 'BLOCK',
+    reason TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL
+);
+
+-- 安全设置（限流阈值等，管理页可视化配置，key-value 持久化）
+CREATE TABLE IF NOT EXISTS security_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);

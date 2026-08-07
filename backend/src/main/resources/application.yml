@@ -20,6 +20,9 @@ aibase:
   encryption-key: ${AIBASE_ENC_KEY:}
   # 数据目录（SQLite 文件与插件目录的根）
   data-dir: ${AIBASE_DATA_DIR:./data}
+  # 管理认证：设置任一项后管理接口需认证（登录密码 / 固定管理 Token）
+  admin-password: ${AIBASE_ADMIN_PASSWORD:}
+  admin-key: ${AIBASE_ADMIN_KEY:}
 
 logging:
   level:

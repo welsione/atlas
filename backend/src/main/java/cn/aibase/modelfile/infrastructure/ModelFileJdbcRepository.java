@@ -119,14 +119,6 @@ public class ModelFileJdbcRepository {
                 fileId, limit);
     }
 
-    /** 统计某 IP 在时间窗口内的下载次数（限流用）。 */
-    public int countDownloadsByIpSince(String ip, String sinceTs) {
-        Integer count = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM download_logs WHERE ip = ? AND downloaded_at >= ?",
-                Integer.class, ip, sinceTs);
-        return count == null ? 0 : count;
-    }
-
     /** 传输流量窗口聚合（upload/download 通用表）。 */
     public List<java.util.Map<String, Object>> transferSummary(String table, String tsColumn, String sinceTs) {
         return jdbc.queryForList(
@@ -151,11 +143,11 @@ public class ModelFileJdbcRepository {
                 sinceTs, limit);
     }
 
-    /** Top 传输 IP。 */
+    /** Top 传输 IP（排除黑名单 IP——禁止被禁流量进入排名）。 */
     public List<java.util.Map<String, Object>> transferTopIps(String table, String tsColumn, String sinceTs, int limit) {
         return jdbc.queryForList(
                 "SELECT ip, COUNT(*) AS count, COALESCE(SUM(bytes),0) AS totalBytes FROM " + table + " WHERE " + tsColumn + " >= ? " +
-                        "GROUP BY ip ORDER BY count DESC LIMIT ?",
+                        "AND ip NOT IN (SELECT ip FROM ip_rules) GROUP BY ip ORDER BY count DESC LIMIT ?",
                 sinceTs, limit);
     }
 

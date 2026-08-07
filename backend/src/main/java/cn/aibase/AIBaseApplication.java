@@ -2,6 +2,7 @@ package cn.aibase;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * AIBase 启动入口。
@@ -10,6 +11,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * 内嵌 SQLite 零依赖部署，前端静态资源打包于 classpath:/static。</p>
  */
 @SpringBootApplication
+@EnableScheduling
 public class AIBaseApplication {
 
     public static void main(String[] args) {
