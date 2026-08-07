@@ -47,13 +47,17 @@ public class ModelFileController {
     @GetMapping("/{id}/download")
     public ResponseEntity<StreamingResponseBody> download(@PathVariable Long id) {
         ModelFile entry = service.get(id);
+        return streamDownload(entry);
+    }
+
+    private ResponseEntity<StreamingResponseBody> streamDownload(ModelFile entry) {
         String fileName = service.downloadFileName(entry);
         String encoded = new String(fileName.getBytes(StandardCharsets.UTF_8), StandardCharsets.ISO_8859_1);
         String disposition = "attachment; filename*=UTF-8''" + urlEncode(fileName) + "; filename=\"" + encoded + "\"";
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition)
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                .body(out -> service.download(id, out));
+                .body(out -> service.download(entry.getId(), out));
     }
 
     @DeleteMapping("/{id}")

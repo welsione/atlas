@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * 全局异常处理：领域异常转统一响应格式 { code, message, data }。
@@ -19,6 +20,13 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(status != null ? status : HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.error(ex.getStatus(), ex.getMessage()));
+    }
+
+    /** 未匹配的路由/静态资源统一返回 404（而非 500）。 */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNotFound(NoResourceFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error(404, "资源不存在"));
     }
 
     @ExceptionHandler(Exception.class)

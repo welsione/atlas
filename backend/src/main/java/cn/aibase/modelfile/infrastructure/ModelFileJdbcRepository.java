@@ -23,7 +23,7 @@ import java.util.List;
 public class ModelFileJdbcRepository {
 
     private static final String SELECT_COLUMNS = """
-            id, name, category, description, kind, storage_root, files_json,
+            id, name, category, description, kind, storage_root, token, files_json,
             total_size, file_count, created_at, updated_at
             """;
 
@@ -40,6 +40,7 @@ public class ModelFileJdbcRepository {
         f.setDescription(rs.getString("description"));
         f.setKind(rs.getString("kind"));
         f.setStorageRoot(rs.getString("storage_root"));
+        f.setToken(rs.getString("token"));
         f.setFiles(readFiles(rs.getString("files_json")));
         f.setTotalSize(rs.getLong("total_size"));
         f.setFileCount(rs.getInt("file_count"));
@@ -52,6 +53,12 @@ public class ModelFileJdbcRepository {
         return jdbc.query("SELECT " + SELECT_COLUMNS + " FROM model_files ORDER BY created_at DESC, id DESC", mapper);
     }
 
+    public ModelFile findByToken(String token) {
+        return jdbc.query("SELECT " + SELECT_COLUMNS + " FROM model_files WHERE token = ?", mapper, token)
+                .stream().findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("ModelFile", token));
+    }
+
     public ModelFile findById(Long id) {
         return jdbc.query("SELECT " + SELECT_COLUMNS + " FROM model_files WHERE id = ?", mapper, id)
                 .stream().findFirst()
@@ -60,10 +67,10 @@ public class ModelFileJdbcRepository {
 
     public ModelFile insert(ModelFile f) {
         f.setId(jdbc.queryForObject(
-                "INSERT INTO model_files (name, category, description, kind, storage_root, files_json, total_size, file_count, created_at, updated_at) " +
-                        "VALUES (?,?,?,?,?,?,?,?,?,?) RETURNING id",
+                "INSERT INTO model_files (name, category, description, kind, storage_root, token, files_json, total_size, file_count, created_at, updated_at) " +
+                        "VALUES (?,?,?,?,?,?,?,?,?,?,?) RETURNING id",
                 Long.class,
-                f.getName(), f.getCategory(), f.getDescription(), f.getKind(), f.getStorageRoot(),
+                f.getName(), f.getCategory(), f.getDescription(), f.getKind(), f.getStorageRoot(), f.getToken(),
                 writeFiles(f.getFiles()), f.getTotalSize(), f.getFileCount(),
                 formatTs(f.getCreatedAt()), formatTs(f.getUpdatedAt())));
         return f;

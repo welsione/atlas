@@ -62,7 +62,8 @@ CREATE TABLE IF NOT EXISTS plugins (
     updated_at TEXT NOT NULL
 );
 
--- 模型文件：上传到平台的模型文件/目录（如 ASR 模型），文件落盘于 {dataDir}/model-files/{id}/
+-- 文件条目：上传到平台的文件/目录（如 ASR 模型），文件落盘于 {dataDir}/model-files/{id}/
+-- token：固定公开下载链接的随机凭证（防穷举），创建后不变
 CREATE TABLE IF NOT EXISTS model_files (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -70,6 +71,7 @@ CREATE TABLE IF NOT EXISTS model_files (
     description TEXT NOT NULL DEFAULT '',
     kind TEXT NOT NULL DEFAULT 'FILE',
     storage_root TEXT NOT NULL,
+    token TEXT NOT NULL DEFAULT '',
     files_json TEXT NOT NULL DEFAULT '[]',
     total_size INTEGER NOT NULL DEFAULT 0,
     file_count INTEGER NOT NULL DEFAULT 1,
@@ -78,3 +80,5 @@ CREATE TABLE IF NOT EXISTS model_files (
 );
 
 CREATE INDEX IF NOT EXISTS idx_model_files_category ON model_files(category);
+-- 注意：token 唯一索引由 SchemaInitializer 迁移逻辑按"先补列再建索引"顺序执行，
+-- 以保证旧库（无 token 列）也能正常升级；新建库同样覆盖。

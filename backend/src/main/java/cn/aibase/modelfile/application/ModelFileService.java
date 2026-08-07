@@ -40,9 +40,11 @@ public class ModelFileService {
     private static final String STORE_DIR = "model-files";
     private static final int MAX_UNZIP_ENTRIES = 20000;
     private static final long MAX_UNZIP_TOTAL = 50L * 1024 * 1024 * 1024;
+    private static final int TOKEN_LENGTH = 32;
 
     private final ModelFileJdbcRepository repository;
     private final AIBaseProperties properties;
+    private final java.security.SecureRandom secureRandom = new java.security.SecureRandom();
 
     @Transactional(readOnly = true)
     public List<ModelFile> list() {
@@ -52,6 +54,21 @@ public class ModelFileService {
     @Transactional(readOnly = true)
     public ModelFile get(Long id) {
         return repository.findById(id);
+    }
+
+    /**
+     * 按固定下载 token 查询条目（公开下载入口）。
+     */
+    @Transactional(readOnly = true)
+    public ModelFile getByToken(String token) {
+        return repository.findByToken(token);
+    }
+
+    /**
+     * 生成固定下载链接（随机 token，防穷举；创建后不变）。
+     */
+    public String downloadLink(String token) {
+        return "/api/files/" + token + "/download";
     }
 
     /**
@@ -76,6 +93,7 @@ public class ModelFileService {
         entry.setDescription(description == null ? "" : description);
         entry.setKind("FILE");
         entry.setStorageRoot("");
+        entry.setToken(newToken());
         entry.setFiles(new ArrayList<>());
         entry.setCreatedAt(LocalDateTime.now());
         entry.setUpdatedAt(entry.getCreatedAt());
@@ -277,5 +295,12 @@ public class ModelFileService {
             }
         }
         return HexFormat.of().formatHex(md.digest());
+    }
+
+    /** 生成随机下载 token：32 字节安全随机数 hex（不可穷举）。 */
+    private String newToken() {
+        byte[] bytes = new byte[TOKEN_LENGTH];
+        secureRandom.nextBytes(bytes);
+        return HexFormat.of().formatHex(bytes);
     }
 }
