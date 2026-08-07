@@ -1,0 +1,1 @@
+{"pluginType":"your-plugin-type","name":"插件名称","description":"插件说明","version":"1.0.0","defaultDataScope":"APP_LOCAL","entry":"src/index.ts"}

@@ -1,0 +1,1 @@
+{"pluginType":"model-files","name":"模型文件","description":"模型文件管理（应用独立）","version":"1.0.0","defaultDataScope":"APP_LOCAL","entry":"src/index.ts"}

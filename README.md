@@ -1,100 +1,87 @@
-# AIBase
+# Atlas — 全 TS 插件化 AI 服务基础平台
 
-AI 服务基础组件：**服务商配置管理** 与 **提示词管理** 的通用基础服务。
-
-每次开发 AI 服务都要管理服务商配置（Base URL / API Key / 模型 / 图标 / 上下文窗口）与提示词模板——AIBase 把这两件事做成开箱即用的独立服务：
-
-- **供应商管理**：CRUD、API Key AES-256 加密存储、模型列表与上下文窗口、Anthropic/OpenAI 兼容连接测试、内置主流国产厂商预设（DeepSeek / MiniMax / 火山引擎 / 硅基流动 / 智谱 / Kimi）
-- **提示词管理**：模板 CRUD、分类、`{{变量}}` 占位与渲染预览、编辑自动归档版本历史、渲染插件管道
-- **插件扩展**：`ProviderAdapter`（新协议适配）与 `PromptProcessor`（内容处理管道）双 SPI，外部 jar 即插即用
-- **零依赖部署**：内嵌 SQLite 单文件数据库 + 单容器镜像，前端打包于后端 jar 内
+以应用为核心的多租户平台：数据集版本化分发（PUBLIC/INTERNAL/SECRET + 信封加密）、插件体系（前后端一体打包、目录热加载）、接口监控、运维台工作日志。
 
 ## 技术栈
 
-- 后端：Java 17 / Spring Boot 3.3 / SQLite（Xerial JDBC）
-- 前端：Vue 3 / TypeScript / Element Plus / Vite
-- 部署：Docker 多阶段构建 → GHCR 镜像 → 服务器 docker compose
+- **全 TypeScript**：后端 NestJS + better-sqlite3（关系表 + JSON 列 + JSON1）+ node:crypto，前端 Vue 3 + Element Plus + Vite
+- Node 22+（外部插件可直接写 `.ts` 运行，无需编译）
+- npm workspaces monorepo
+
+## 目录结构
+
+```
+packages/
+  types/      # 共享 DTO + 插件 SPI 契约（@atlas/types）
+  core/       # NestJS 后端：应用/凭证/插件引擎/数据集/安全/运维台
+  web/        # 前端：控制台/应用管理/应用空间/插件注册表/运维台
+  plugins/    # 内置插件（providers/prompts/model-files/monitor，workspace 包）
+data/
+  plugins/    # 外部插件目录（运行时热加载）
+```
 
 ## 快速开始
 
-### 本地开发
-
 ```bash
-# 后端（默认端口 18081，SQLite 落在 backend/data/）
-cd backend
-mvn spring-boot:run
-
-# 前端（dev 端口 5181，代理 /api 到 18081）
-cd frontend/web
 npm install
-npm run dev
+npm run build:web        # 前端构建
+npm run sync:static      # 产物同步到 core/static
+npm run dev              # 后端（http://127.0.0.1:18081）
 ```
 
-打开 http://localhost:5181 即可使用。
+测试：`npm test`（后端 Jest，13 用例）。
 
-### Docker 部署
+## 核心概念
 
-```bash
-docker build -t aibase .
-docker run -p 18081:18081 -e AIBASE_ENC_KEY=$(openssl rand -base64 32) -v aibase-data:/app/data aibase
+### 应用空间（一级实体）
+一切数据挂靠在应用上：插件实例、数据集、敏感凭证、审计。创建应用自动实例化全部已注册插件；`app_id + app_secret`（SHA-256，仅创建/轮换时展示一次）换短时效令牌（`POST /api/v1/app/auth`），吊销即时生效。
+
+### 插件（前后端一体）
+
+**目录插件**（内置/外部同一形态）：
+
+```
+data/plugins/weather/
+  manifest.json    # {pluginType, name, description, version, defaultDataScope, entry}
+  index.ts         # export default: AibasePlugin（Node 22 type-stripping 直接运行）
+  ui/              # manifest.json（slots: app-space Tab / console 卡片）+ entry.<hash>.js
 ```
 
-首次启动自动初始化数据库，并写入 8 个主流厂商预设（API Key 留空，配置后启用）。
+- **热加载**：目录内容哈希扫描（约 10 秒），更新自动热替换（cache-busting 绕过模块缓存）、删除热卸载（数据保留）
+- **运行时契约**：`PluginEnvironment` 提供 `store()`（通用存储）/ `datasets()`（版本化发布）/ `ops()`（运维台工作日志）/ `config()` / `info|warn|error` / `instance()`
+- **声明式端点**：`/api/apps/{appId}/plugins/{type}/ep/{path}`（热注册/热注销）
+- **UI 契约**：entry 为 ESM，`export default { mount(el, ctx) → unmount }`；运行时依赖（vue/element-plus/icons/`@aibase/runtime`）由平台 import map 提供单实例，插件不打包
+- 数据隔离由插件声明，实例可单向覆盖（SHARED→LOCAL，反向禁止）
+- 内置插件类型为保留字；内置插件为平台可信组件（业务在 core），外部插件隔离运行
 
-## API 概览
+### 数据集（版本化数据分发）
+内容哈希驱动版本，应用轮询 meta、变化才下载（304）：
 
-| 端点 | 说明 |
-|---|---|
-| `GET/POST /api/providers` | 供应商列表 / 创建 |
-| `PUT/DELETE /api/providers/{id}` | 更新 / 删除 |
-| `POST /api/providers/{id}/test` | 连接测试（已保存配置） |
-| `POST /api/providers/test` | 连接测试（未保存表单配置） |
-| `GET/POST /api/prompts` | 提示词列表 / 创建 |
-| `PUT/DELETE /api/prompts/{id}` | 更新（内容变化自动归档版本）/ 删除 |
-| `POST /api/prompts/{id}/render` | 渲染（`{{变量}}` 替换 + 插件管道） |
-| `GET /api/prompts/{id}/versions` | 版本历史 |
-| `GET /api/plugins` | 已注册适配器 / 处理器 / 外部 jar |
-
-## 插件开发
-
-实现 SPI 接口，声明在 `META-INF/services`，打包 jar 放入数据目录 `plugins/`，重启生效：
-
-```java
-// 新协议适配（如 Gemini、自定义网关）
-public class GeminiAdapter implements ProviderAdapter {
-    public String type() { return "GEMINI_COMPATIBLE"; }
-    public ConnectionTestResult test(Provider provider) { /* ... */ }
-}
-
-// 内容处理管道（如敏感信息脱敏、压缩）
-public class RedactProcessor implements PromptProcessor {
-    public String name() { return "redact"; }
-    public String process(String content, Map<String, String> variables) { /* ... */ }
-}
-```
-
-类路径实现（Spring Bean）在启动时自动注册；`plugins/` 目录中的 jar 通过 ServiceLoader 加载。
-
-## 配置
-
-| 环境变量 | 默认 | 说明 |
+| 级别 | 访问 | 存储 |
 |---|---|---|
-| `AIBASE_PORT` | `18081` | HTTP 端口 |
-| `AIBASE_DATA_DIR` | `./data` | 数据目录（SQLite 文件 + plugins/） |
-| `AIBASE_ENC_KEY` | 内置开发密钥 | API Key 加密密钥（Base64 32 字节），**生产必须设置** |
-| `AIBASE_ADMIN_PASSWORD` | 空 | 管理登录密码，设置后管理接口需认证 |
-| `AIBASE_ADMIN_KEY` | 空 | 固定管理 Token（`X-AIBase-Key` 头，脚本调用场景） |
+| PUBLIC | token 直达（防穷举） | 明文 |
+| INTERNAL | Bearer 应用令牌 + 白名单 | 明文 |
+| SECRET | 令牌 + 逐项授权 + 审计 | **信封加密**（KEK=AIBASE_ENC_KEY → 每数据集随机 DEK → AES-256-GCM），明文永不落库 |
 
-## 安全
+刷新：手动或定时（SCHEDULED，插件 `datasetSource()` 重渲染）。
 
-- **管理认证**：设置 `AIBASE_ADMIN_PASSWORD` 后，管理接口需登录 token（`Authorization: Bearer`）；`AIBASE_ADMIN_KEY` 供脚本使用 `X-AIBase-Key` 头；公开下载（`/api/files/{token}/...`）不受影响
-- **IP 黑名单**：手动或自动封禁的 IP 拒绝全部 API 访问（403），且其流量不计入控制台 Top IP 排名；安全页可管理/解封
-- **限流**：每 IP / 每链接 / 全局 / 登录失败四维度固定窗口限流，阈值在安全页可视化配置并持久化，超限返回 429
-- **自动封禁**：触发限流的 IP 在窗口内累计达阈值自动加入黑名单（默认 1 小时 10 次，可配）
-- **其他**：下载 token 32 字节随机防穷举、上传路径消毒/zip 炸弹防御、API Key AES-256 加密存储、下载全量审计（IP/UA/字节）
+### 控制台 / 运维台
+- **控制台**（默认首页）：统计卡片 + 插件注册的 console slot 卡片
+- **运维台**：跨应用工作日志（`ops_logs`），插件经 `env.ops()` 写入；按应用/插件/级别过滤 + 24h 趋势
 
-## 开源说明
+## 配置（环境变量）
 
-- 图标资源参考 [cc-switch](https://github.com/felippe-regazio/cc-switch)（MIT, © Jason Young）
-- 预设模型上下文窗口数据参考 [models.dev](https://models.dev)（OpenRouter 开源模型数据库）
-- 本仓库采用 MIT 许可证
+| 变量 | 说明 |
+|---|---|
+| `AIBASE_PORT` | 端口（默认 18081） |
+| `AIBASE_DATA_DIR` | 数据目录（默认 ./data；外部插件在 data/plugins/） |
+| `AIBASE_ENC_KEY` | 数据集信封加密 KEK（SECRET 级必配） |
+| `AIBASE_ADMIN_PASSWORD` | 管理登录密码（与 KEY 均未配置时管理接口开放，仅限本地开发） |
+| `AIBASE_ADMIN_KEY` | 固定管理 Token（请求头 X-AIBase-Key） |
+| `AIBASE_PLUGIN_SCAN_INTERVAL_MS` | 插件扫描间隔（默认 10000） |
+
+## 主要 API
+
+- 管理面：`/api/apps`（应用 CRUD/凭证轮换吊销）、`/api/plugins`（注册表/卸载）、`/api/apps/{appId}/plugins/...`（实例与内置插件数据）、`/api/apps/{appId}/datasets/...`、`/api/ops/...`（运维台）
+- 数据面（公开）：`/api/v1/app/auth`（令牌换发）、`/api/v1/datasets/{token}/meta|data|secrets`、`/api/files/{token}/meta|download`（模型文件公开下载）
+- 插件 UI：`/api/plugins/ui`（清单，管理认证）、`/_pluginui/{type}/{path}`（资源，公开）

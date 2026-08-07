@@ -1,0 +1,1 @@
+{"pluginType":"providers","name":"供应商管理","description":"AI 供应商管理（全局共享）","version":"1.0.0","defaultDataScope":"GLOBAL_SHARED","entry":"src/index.ts"}
