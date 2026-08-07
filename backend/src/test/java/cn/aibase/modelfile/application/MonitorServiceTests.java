@@ -37,13 +37,25 @@ class MonitorServiceTests {
     private JdbcTemplate jdbc;
 
     @BeforeEach
-    void clean() {
+    void clean() throws Exception {
         for (ModelFile f : fileService.list()) {
             fileService.delete(f.getId());
         }
         jdbc.update("DELETE FROM model_files");
         jdbc.update("DELETE FROM download_logs");
         jdbc.update("DELETE FROM upload_logs");
+        java.nio.file.Path dataRoot = java.nio.file.Path.of("./target/test-monitor-data");
+        if (java.nio.file.Files.exists(dataRoot)) {
+            try (var walk = java.nio.file.Files.walk(dataRoot)) {
+                walk.sorted(java.util.Comparator.reverseOrder())
+                        .forEach(p -> {
+                            try {
+                                java.nio.file.Files.deleteIfExists(p);
+                            } catch (Exception ignored) {
+                            }
+                        });
+            }
+        }
     }
 
     private MultipartFile file(String name, String content) {

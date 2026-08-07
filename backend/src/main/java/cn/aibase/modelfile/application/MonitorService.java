@@ -119,6 +119,8 @@ public class MonitorService {
 
         Path dataDir = Path.of(properties.getDataDir()).toAbsolutePath().normalize();
         File dataRoot = dataDir.toFile();
+        // 目录不存在时 File.getTotalSpace 返回 0，回退到当前工作目录所在盘
+        File diskProbe = dataRoot.isDirectory() ? dataRoot : new File(".").getAbsoluteFile();
         long dirSize = dataRoot.isDirectory() ? directorySize(dataDir) : 0;
         File dbFile = dataDir.resolve("aibase.db").toFile();
         Map<String, Object> fileSummary = repository.fileSummary();
@@ -132,7 +134,7 @@ public class MonitorService {
                 threadBean.getThreadCount(),
                 ManagementFactory.getRuntimeMXBean().getUptime() / 1000,
                 osBean.getTotalMemorySize(), osBean.getFreeMemorySize(),
-                dataRoot.getTotalSpace(), dataRoot.getUsableSpace(),
+                diskProbe.getTotalSpace(), diskProbe.getUsableSpace(),
                 toLong(fileSummary.get("entryCount")), toLong(fileSummary.get("totalBytes")),
                 dirSize, dbFile.exists() ? dbFile.length() : 0);
     }

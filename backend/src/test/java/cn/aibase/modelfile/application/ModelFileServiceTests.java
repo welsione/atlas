@@ -44,13 +44,27 @@ class ModelFileServiceTests {
     private JdbcTemplate jdbc;
 
     @BeforeEach
-    void clean() {
-        // 先删磁盘与记录（delete 需要表内有数据才能定位条目），再清表兜底
+    void clean() throws Exception {
+        // 先删磁盘与记录（delete 需要表内有数据才能定位条目），再清表兜底；
+        // 最后整体清理数据目录，避免 DB 重建后 id 重置撞上磁盘残留
         for (ModelFile f : service.list()) {
             service.delete(f.getId());
         }
         jdbc.update("DELETE FROM model_files");
         jdbc.update("DELETE FROM download_logs");
+        jdbc.update("DELETE FROM upload_logs");
+        java.nio.file.Path dataRoot = java.nio.file.Path.of("./target/test-modelfiles-data");
+        if (java.nio.file.Files.exists(dataRoot)) {
+            try (var walk = java.nio.file.Files.walk(dataRoot)) {
+                walk.sorted(java.util.Comparator.reverseOrder())
+                        .forEach(p -> {
+                            try {
+                                java.nio.file.Files.deleteIfExists(p);
+                            } catch (Exception ignored) {
+                            }
+                        });
+            }
+        }
     }
 
     private MultipartFile file(String name, String content) {
