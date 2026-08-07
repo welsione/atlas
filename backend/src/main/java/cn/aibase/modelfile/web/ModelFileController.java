@@ -39,8 +39,17 @@ public class ModelFileController {
     public ApiResponse<ModelFile> upload(
             @RequestParam(value = "category", defaultValue = "default") String category,
             @RequestParam(value = "description", defaultValue = "") String description,
+            @RequestParam(value = "token", required = false) String updateToken,
             @RequestParam("files") List<MultipartFile> files) {
-        return ApiResponse.ok(service.upload(category, description, files));
+        return ApiResponse.ok(service.upload(category, description, files, updateToken));
+    }
+
+    /** 条目下载日志（管理端，按 token 鉴权场景由前端列表接口提供 id）。 */
+    @GetMapping("/{id}/download-logs")
+    public ApiResponse<List<java.util.Map<String, Object>>> downloadLogs(
+            @PathVariable Long id,
+            @RequestParam(value = "limit", defaultValue = "100") int limit) {
+        return ApiResponse.ok(service.downloadLogs(id, Math.min(limit, 500)));
     }
 
     /** 下载：单文件直接输出；目录实时打包 zip 流式输出（支持 GB 级）。 */

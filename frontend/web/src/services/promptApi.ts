@@ -19,10 +19,11 @@ export const pluginApi = {
 
 export const modelFileApi = {
   list: () => get<ModelFile[]>('/api/model-files'),
-  upload: (category: string, description: string, files: File[]) => {
+  upload: (category: string, description: string, files: File[], updateToken?: string) => {
     const form = new FormData()
     form.append('category', category)
     form.append('description', description)
+    if (updateToken) form.append('token', updateToken)
     for (const file of files) {
       // 目录上传保留相对路径（webkitRelativePath）
       form.append('files', file, file.webkitRelativePath || file.name)
@@ -32,5 +33,8 @@ export const modelFileApi = {
   downloadUrl: (id: number) => `/api/model-files/${id}/download`,
   /** 固定公开下载链接（随机 token，防穷举，创建后不变）。 */
   tokenDownloadUrl: (token: string) => `/api/files/${token}/download`,
+  /** 下载元数据（version + contentHash + 下载次数）。 */
+  metaUrl: (token: string) => `/api/files/${token}/meta`,
+  downloadLogs: (id: number) => get<Array<{ ip: string; userAgent: string; downloadedAt: string }>>(`/api/model-files/${id}/download-logs`),
   remove: (id: number) => del<void>(`/api/model-files/${id}`),
 }
