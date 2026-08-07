@@ -100,16 +100,22 @@ public class ModelFileJdbcRepository {
         jdbc.update("UPDATE model_files SET download_count = download_count + 1 WHERE id = ?", id);
     }
 
-    /** 插入一条下载日志。 */
-    public void insertDownloadLog(Long fileId, String ip, String userAgent, LocalDateTime at) {
-        jdbc.update("INSERT INTO download_logs (file_id, ip, user_agent, downloaded_at) VALUES (?,?,?,?)",
-                fileId, ip, userAgent, formatTs(at));
+    /** 插入一条下载日志（含字节数）。 */
+    public void insertDownloadLog(Long fileId, String ip, String userAgent, long bytes, LocalDateTime at) {
+        jdbc.update("INSERT INTO download_logs (file_id, ip, user_agent, bytes, downloaded_at) VALUES (?,?,?,?,?)",
+                fileId, ip, userAgent, bytes, formatTs(at));
+    }
+
+    /** 插入一条上传日志（含字节数）。 */
+    public void insertUploadLog(Long fileId, String ip, String userAgent, long bytes, LocalDateTime at) {
+        jdbc.update("INSERT INTO upload_logs (file_id, ip, user_agent, bytes, uploaded_at) VALUES (?,?,?,?,?)",
+                fileId, ip, userAgent, bytes, formatTs(at));
     }
 
     /** 查询下载日志（按时间倒序）。 */
     public List<java.util.Map<String, Object>> findDownloadLogs(Long fileId, int limit) {
         return jdbc.queryForList(
-                "SELECT ip, user_agent AS userAgent, downloaded_at AS downloadedAt FROM download_logs WHERE file_id = ? ORDER BY downloaded_at DESC LIMIT ?",
+                "SELECT ip, user_agent AS userAgent, downloaded_at AS downloadedAt, bytes FROM download_logs WHERE file_id = ? ORDER BY downloaded_at DESC LIMIT ?",
                 fileId, limit);
     }
 
@@ -119,6 +125,44 @@ public class ModelFileJdbcRepository {
                 "SELECT COUNT(*) FROM download_logs WHERE ip = ? AND downloaded_at >= ?",
                 Integer.class, ip, sinceTs);
         return count == null ? 0 : count;
+    }
+
+    /** 传输流量窗口聚合（upload/download 通用表）。 */
+    public List<java.util.Map<String, Object>> transferSummary(String table, String tsColumn, String sinceTs) {
+        return jdbc.queryForList(
+                "SELECT COALESCE(SUM(bytes),0) AS totalBytes, COUNT(*) AS totalCount FROM " + table + " WHERE " + tsColumn + " >= ?",
+                sinceTs);
+    }
+
+    /** 传输流量时间序列（bucket：小时或天）。 */
+    public List<java.util.Map<String, Object>> transferSeries(String table, String tsColumn, String sinceTs, int bucketLen) {
+        return jdbc.queryForList(
+                "SELECT substr(" + tsColumn + ", 1, " + bucketLen + ") AS bucket, COALESCE(SUM(bytes),0) AS totalBytes, COUNT(*) AS totalCount " +
+                        "FROM " + table + " WHERE " + tsColumn + " >= ? GROUP BY bucket ORDER BY bucket",
+                sinceTs);
+    }
+
+    /** Top 传输条目（按次数/流量）。 */
+    public List<java.util.Map<String, Object>> transferTopFiles(String table, String tsColumn, String sinceTs, int limit) {
+        return jdbc.queryForList(
+                "SELECT l.file_id AS fileId, f.name AS name, COUNT(*) AS count, COALESCE(SUM(l.bytes),0) AS totalBytes " +
+                        "FROM " + table + " l JOIN model_files f ON f.id = l.file_id WHERE " + tsColumn + " >= ? " +
+                        "GROUP BY l.file_id ORDER BY count DESC LIMIT ?",
+                sinceTs, limit);
+    }
+
+    /** Top 传输 IP。 */
+    public List<java.util.Map<String, Object>> transferTopIps(String table, String tsColumn, String sinceTs, int limit) {
+        return jdbc.queryForList(
+                "SELECT ip, COUNT(*) AS count, COALESCE(SUM(bytes),0) AS totalBytes FROM " + table + " WHERE " + tsColumn + " >= ? " +
+                        "GROUP BY ip ORDER BY count DESC LIMIT ?",
+                sinceTs, limit);
+    }
+
+    /** 条目统计（控制台）。 */
+    public java.util.Map<String, Object> fileSummary() {
+        return jdbc.queryForMap(
+                "SELECT COUNT(*) AS entryCount, COALESCE(SUM(total_size),0) AS totalBytes FROM model_files");
     }
 
     private List<ModelFile.FileEntry> readFiles(String json) {

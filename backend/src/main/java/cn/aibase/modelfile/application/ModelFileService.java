@@ -182,7 +182,7 @@ public class ModelFileService {
     }
 
     /**
-     * 记录一次公开下载：写入下载日志 + 累计计数。
+     * 记录一次公开下载：写入下载日志（含字节数）+ 累计计数。
      * 返回 false 表示触发限流（该 IP 每分钟下载次数超限）。
      */
     @Transactional
@@ -195,9 +195,19 @@ public class ModelFileService {
             log.warn("下载限流：ip={}，entry={}，最近 1 分钟 {} 次", clientIp, entry.getId(), recent);
             return false;
         }
-        repository.insertDownloadLog(entry.getId(), clientIp, userAgent == null ? "" : userAgent, LocalDateTime.now());
+        repository.insertDownloadLog(entry.getId(), clientIp, userAgent == null ? "" : userAgent,
+                entry.getTotalSize(), LocalDateTime.now());
         repository.incrementDownloadCount(entry.getId());
         return true;
+    }
+
+    /**
+     * 记录一次上传/更新事件（含字节数），供控制台流量统计。
+     */
+    @Transactional
+    public void recordUpload(ModelFile entry, String ip, String userAgent) {
+        repository.insertUploadLog(entry.getId(), normalizeIp(ip), userAgent == null ? "" : userAgent,
+                entry.getTotalSize(), LocalDateTime.now());
     }
 
     /**
