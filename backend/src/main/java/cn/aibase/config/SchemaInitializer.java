@@ -6,6 +6,7 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.io.BufferedReader;
@@ -22,6 +23,7 @@ import java.util.List;
  */
 @Slf4j
 @Component
+@Order(1)
 @RequiredArgsConstructor
 public class SchemaInitializer implements ApplicationRunner {
 

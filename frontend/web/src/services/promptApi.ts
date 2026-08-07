@@ -1,5 +1,5 @@
 import { get, post, put, del } from './http'
-import type { Prompt, PromptRequest, RenderResult } from '../types'
+import type { Prompt, PromptRequest, RenderResult, ModelFile } from '../types'
 
 export const promptApi = {
   list: () => get<Prompt[]>('/api/prompts'),
@@ -15,4 +15,20 @@ export const promptApi = {
 export const pluginApi = {
   overview: () =>
     get<{ providerAdapters: string[]; promptProcessors: string[]; externalJars: string[] }>('/api/plugins'),
+}
+
+export const modelFileApi = {
+  list: () => get<ModelFile[]>('/api/model-files'),
+  upload: (category: string, description: string, files: File[]) => {
+    const form = new FormData()
+    form.append('category', category)
+    form.append('description', description)
+    for (const file of files) {
+      // 目录上传保留相对路径（webkitRelativePath）
+      form.append('files', file, file.webkitRelativePath || file.name)
+    }
+    return post<ModelFile>('/api/model-files', form)
+  },
+  downloadUrl: (id: number) => `/api/model-files/${id}/download`,
+  remove: (id: number) => del<void>(`/api/model-files/${id}`),
 }

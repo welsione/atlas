@@ -6,6 +6,11 @@ spring:
     driver-class-name: org.sqlite.JDBC
   jackson:
     default-property-inclusion: non_null
+  servlet:
+    multipart:
+      # 模型文件可能达 GB 级
+      max-file-size: ${AIBASE_MAX_FILE_SIZE:20GB}
+      max-request-size: ${AIBASE_MAX_REQUEST_SIZE:20GB}
 
 server:
   port: ${AIBASE_PORT:18081}

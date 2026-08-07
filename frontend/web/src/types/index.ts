@@ -92,3 +92,23 @@ export type PluginOverview = {
   promptProcessors: string[]
   externalJars: string[]
 }
+
+export type ModelFileEntry = {
+  path: string
+  sizeBytes: number
+  checksum: string
+}
+
+export type ModelFile = {
+  id: number
+  name: string
+  category: string
+  description: string
+  kind: 'FILE' | 'DIRECTORY'
+  storageRoot: string
+  files: ModelFileEntry[]
+  totalSize: number
+  fileCount: number
+  createdAt: string
+  updatedAt: string
+}
