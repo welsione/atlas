@@ -1,5 +1,6 @@
 package cn.aibase.modelfile.application;
 
+import cn.aibase.common.ResourceNotFoundException;
 import cn.aibase.common.ValidationException;
 import cn.aibase.modelfile.domain.ModelFile;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,6 +22,7 @@ import java.util.zip.ZipOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -48,6 +50,7 @@ class ModelFileServiceTests {
             service.delete(f.getId());
         }
         jdbc.update("DELETE FROM model_files");
+        jdbc.update("DELETE FROM download_logs");
     }
 
     private MultipartFile file(String name, String content) {
@@ -56,7 +59,7 @@ class ModelFileServiceTests {
 
     @Test
     void uploadSingleFileStoresEntry() throws Exception {
-        ModelFile entry = service.upload("asr", "测试模型", List.of(file("model.onnx", "binary-data")));
+        ModelFile entry = service.upload("asr", "测试模型", List.of(file("model.onnx", "binary-data")), null);
         assertTrue(entry.getId() > 0);
         assertEquals("FILE", entry.getKind());
         assertEquals(1, entry.getFileCount());
@@ -71,7 +74,7 @@ class ModelFileServiceTests {
     void uploadDirectoryPreservesRelPath() throws Exception {
         ModelFile entry = service.upload("asr", "目录模型", List.of(
                 file("sherpa-model/model.onnx", "onnx-data"),
-                file("sherpa-model/tokens.txt", "tokens")));
+                file("sherpa-model/tokens.txt", "tokens")), null);
         assertEquals("DIRECTORY", entry.getKind());
         assertEquals("sherpa-model", entry.getName());
         assertEquals(2, entry.getFileCount());
@@ -90,7 +93,7 @@ class ModelFileServiceTests {
             zos.closeEntry();
         }
         MultipartFile zip = new MockMultipartFile("files", "asr-model.zip", "application/zip", zipBytes.toByteArray());
-        ModelFile entry = service.upload("asr", "zip 模型", List.of(zip));
+        ModelFile entry = service.upload("asr", "zip 模型", List.of(zip), null);
         assertEquals("DIRECTORY", entry.getKind());
         assertEquals("asr-model", entry.getName());
         assertEquals(2, entry.getFileCount());
@@ -98,7 +101,7 @@ class ModelFileServiceTests {
 
     @Test
     void downloadSingleFileReturnsContent() throws Exception {
-        ModelFile entry = service.upload("asr", "", List.of(file("a.bin", "hello")));
+        ModelFile entry = service.upload("asr", "", List.of(file("a.bin", "hello")), null);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         service.download(entry.getId(), out);
         assertEquals("hello", out.toString(StandardCharsets.UTF_8));
@@ -108,7 +111,7 @@ class ModelFileServiceTests {
     void downloadDirectoryBuildsZip() throws Exception {
         ModelFile entry = service.upload("asr", "", List.of(
                 file("m/f1.txt", "one"),
-                file("m/f2.txt", "two")));
+                file("m/f2.txt", "two")), null);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         service.download(entry.getId(), out);
         assertTrue(out.size() > 0);
@@ -118,9 +121,9 @@ class ModelFileServiceTests {
     @Test
     void pathTraversalRejected() {
         assertThrows(ValidationException.class,
-                () -> service.upload("asr", "", List.of(file("../evil.txt", "x"))));
+                () -> service.upload("asr", "", List.of(file("../evil.txt", "x")), null));
         assertThrows(ValidationException.class,
-                () -> service.upload("asr", "", List.of(file("a/../../evil.txt", "x"))));
+                () -> service.upload("asr", "", List.of(file("a/../../evil.txt", "x")), null));
     }
 
     @Test
@@ -132,12 +135,12 @@ class ModelFileServiceTests {
             zos.closeEntry();
         }
         MultipartFile zip = new MockMultipartFile("files", "bad.zip", "application/zip", zipBytes.toByteArray());
-        assertThrows(ValidationException.class, () -> service.upload("asr", "", List.of(zip)));
+        assertThrows(ValidationException.class, () -> service.upload("asr", "", List.of(zip), null));
     }
 
     @Test
     void deleteRemovesEntryAndDisk() throws Exception {
-        ModelFile entry = service.upload("asr", "", List.of(file("m.bin", "data")));
+        ModelFile entry = service.upload("asr", "", List.of(file("m.bin", "data")), null);
         Path stored = Path.of("./target/test-modelfiles-data/model-files/" + entry.getId());
         assertTrue(Files.exists(stored));
         service.delete(entry.getId());
@@ -147,31 +150,76 @@ class ModelFileServiceTests {
 
     @Test
     void uploadGeneratesRandomFixedToken() {
-        ModelFile a = service.upload("asr", "", List.of(file("a.bin", "1")));
-        ModelFile b = service.upload("asr", "", List.of(file("b.bin", "2")));
-        // 32 字节 hex = 64 字符
+        ModelFile a = service.upload("asr", "", List.of(file("a.bin", "1")), null);
+        ModelFile b = service.upload("asr", "", List.of(file("b.bin", "2")), null);
         assertEquals(64, a.getToken().length());
-        // 随机不重复（防穷举）
         assertFalse(a.getToken().equals(b.getToken()));
-        // token 固定：重新查询不变
         assertEquals(a.getToken(), service.get(a.getId()).getToken());
         assertEquals(a.getToken(), service.getByToken(a.getToken()).getToken());
     }
 
     @Test
-    void downloadLinkIsFixedAndTokenGuarded() throws Exception {
-        ModelFile entry = service.upload("asr", "", List.of(file("a.bin", "data")));
-        String link = service.downloadLink(entry.getToken());
-        assertTrue(link.contains(entry.getToken()));
+    void uploadSetsVersionOneAndStableHash() {
+        ModelFile a = service.upload("asr", "", List.of(file("a.bin", "content-v1")), null);
+        assertEquals(1, a.getVersion());
+        assertTrue(a.getContentHash().length() == 64);
+        // 同一内容哈希稳定
+        ModelFile b = service.upload("asr", "", List.of(file("b.bin", "content-v1")), null);
+        assertEquals(a.getContentHash(), b.getContentHash());
+    }
 
-        // 通过 token 下载内容正确
-        ModelFile byToken = service.getByToken(entry.getToken());
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        service.download(byToken.getId(), out);
-        assertEquals("data", out.toString(StandardCharsets.UTF_8));
+    @Test
+    void updateKeepsTokenAndBumpsVersion() throws Exception {
+        ModelFile original = service.upload("asr", "", List.of(file("m.bin", "v1-content")), null);
+        String token = original.getToken();
+        assertEquals(1, original.getVersion());
 
-        // 非法 token（穷举）→ 404
-        assertThrows(cn.aibase.common.ResourceNotFoundException.class,
+        ModelFile updated = service.upload("asr", "", List.of(file("m.bin", "v2-content-longer")), token);
+        assertEquals(token, updated.getToken());
+        assertEquals(2, updated.getVersion());
+        assertNotEquals(original.getContentHash(), updated.getContentHash());
+
+        // 磁盘内容已替换
+        Path stored = Path.of("./target/test-modelfiles-data/model-files/" + updated.getId(), "m.bin");
+        assertEquals("v2-content-longer", Files.readString(stored));
+        // 更新模式不产生新条目
+        assertEquals(1, service.list().size());
+    }
+
+    @Test
+    void metaReturnsVersionAndHash() {
+        ModelFile entry = service.upload("asr", "", List.of(file("a.bin", "meta-data")), null);
+        ModelFileService.ModelMeta meta = service.meta(entry.getToken());
+        assertEquals(1, meta.version());
+        assertEquals(entry.getContentHash(), meta.contentHash());
+        assertEquals(9, meta.totalSize());
+    }
+
+    @Test
+    void recordDownloadLogsAndCounts() {
+        ModelFile entry = service.upload("asr", "", List.of(file("a.bin", "data")), null);
+        assertTrue(service.recordDownload(entry, "1.2.3.4", "test-client"));
+        assertTrue(service.recordDownload(entry, "1.2.3.4", "test-client"));
+        assertEquals(2, service.get(entry.getId()).getDownloadCount());
+        assertEquals(2, service.downloadLogs(entry.getId(), 100).size());
+    }
+
+    @Test
+    void invalidTokenReturns404() {
+        assertThrows(ResourceNotFoundException.class,
                 () -> service.getByToken("0000000000000000000000000000000000000000000000000000000000000000"));
+    }
+
+    @Test
+    void rateLimitBlocksExcessiveDownloads() {
+        ModelFile entry = service.upload("asr", "", List.of(file("a.bin", "data")), null);
+        boolean blocked = false;
+        for (int i = 0; i < 70; i++) {
+            if (!service.recordDownload(entry, "9.9.9.9", "bot")) {
+                blocked = true;
+                break;
+            }
+        }
+        assertTrue(blocked, "第 61 次下载应被限流");
     }
 }

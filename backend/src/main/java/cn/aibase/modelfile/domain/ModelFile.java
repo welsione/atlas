@@ -28,6 +28,12 @@ public class ModelFile {
     private String storageRoot;
     /** 固定下载链接的随机凭证（防穷举），创建后不变。 */
     private String token;
+    /** 版本号：更新上传（替换内容）时自增。 */
+    private int version;
+    /** 当前版本内容哈希（单文件 SHA-256；目录为清单哈希），业务侧校验"是否更新"。 */
+    private String contentHash;
+    /** 累计下载次数（冗余计数，明细见 download_logs）。 */
+    private long downloadCount;
     private List<FileEntry> files;
     private long totalSize;
     private int fileCount;

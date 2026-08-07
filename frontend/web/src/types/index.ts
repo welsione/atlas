@@ -108,9 +108,21 @@ export type ModelFile = {
   storageRoot: string
   /** 固定下载链接凭证（随机，防穷举） */
   token: string
+  /** 版本号：更新上传时自增，业务侧校验"是否更新" */
+  version: number
+  /** 当前版本内容哈希（单文件 SHA-256 / 目录清单哈希） */
+  contentHash: string
+  /** 累计下载次数 */
+  downloadCount: number
   files: ModelFileEntry[]
   totalSize: number
   fileCount: number
   createdAt: string
   updatedAt: string
+}
+
+export type DownloadLogEntry = {
+  ip: string
+  userAgent: string
+  downloadedAt: string
 }

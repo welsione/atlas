@@ -45,9 +45,13 @@ public class SchemaInitializer implements ApplicationRunner {
             }
             // 旧库增量迁移：SQLite 不支持 ADD COLUMN IF NOT EXISTS
             ensureColumn("model_files", "token", "TEXT NOT NULL DEFAULT ''");
+            ensureColumn("model_files", "version", "INTEGER NOT NULL DEFAULT 1");
+            ensureColumn("model_files", "content_hash", "TEXT NOT NULL DEFAULT ''");
+            ensureColumn("model_files", "download_count", "INTEGER NOT NULL DEFAULT 0");
             ensureIndex("idx_model_files_token",
                     "CREATE UNIQUE INDEX IF NOT EXISTS idx_model_files_token ON model_files(token)");
             backfillTokens();
+            backfillVersionAndHash();
             log.info("数据库结构初始化完成（{} 条语句）", statements.size());
         } catch (Exception ex) {
             throw new IllegalStateException("数据库结构初始化失败", ex);
@@ -66,6 +70,14 @@ public class SchemaInitializer implements ApplicationRunner {
         }
         if (!empty.isEmpty()) {
             log.info("已为 {} 个历史文件条目回填下载 token", empty.size());
+        }
+    }
+
+    /** 存量回填：历史条目版本号置 1。 */
+    private void backfillVersionAndHash() {
+        int updated = jdbc.update("UPDATE model_files SET version = 1 WHERE version IS NULL OR version = 0");
+        if (updated > 0) {
+            log.info("已为 {} 个历史文件条目回填版本号", updated);
         }
     }
 

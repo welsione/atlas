@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS plugins (
 
 -- 文件条目：上传到平台的文件/目录（如 ASR 模型），文件落盘于 {dataDir}/model-files/{id}/
 -- token：固定公开下载链接的随机凭证（防穷举），创建后不变
+-- version：版本号（更新上传时自增）；content_hash：当前版本内容哈希（单文件=SHA-256，目录=清单哈希），业务侧校验"是否更新"
 CREATE TABLE IF NOT EXISTS model_files (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -75,6 +76,9 @@ CREATE TABLE IF NOT EXISTS model_files (
     files_json TEXT NOT NULL DEFAULT '[]',
     total_size INTEGER NOT NULL DEFAULT 0,
     file_count INTEGER NOT NULL DEFAULT 1,
+    version INTEGER NOT NULL DEFAULT 1,
+    content_hash TEXT NOT NULL DEFAULT '',
+    download_count INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -82,3 +86,15 @@ CREATE TABLE IF NOT EXISTS model_files (
 CREATE INDEX IF NOT EXISTS idx_model_files_category ON model_files(category);
 -- 注意：token 唯一索引由 SchemaInitializer 迁移逻辑按"先补列再建索引"顺序执行，
 -- 以保证旧库（无 token 列）也能正常升级；新建库同样覆盖。
+
+-- 下载日志：审计每次公开下载（IP、UA、时间），用于防攻击分析与业务统计
+CREATE TABLE IF NOT EXISTS download_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    file_id INTEGER NOT NULL,
+    ip TEXT NOT NULL DEFAULT '',
+    user_agent TEXT NOT NULL DEFAULT '',
+    downloaded_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_download_logs_file ON download_logs(file_id, downloaded_at);
+CREATE INDEX IF NOT EXISTS idx_download_logs_ip ON download_logs(ip, downloaded_at);
