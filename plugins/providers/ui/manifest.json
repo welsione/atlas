@@ -1,0 +1,13 @@
+{
+  "pluginType": "providers",
+  "name": "供应商管理",
+  "version": "1.0.0",
+  "slots": [
+    {
+      "slot": "app-space",
+      "tab": "供应商",
+      "entry": "entry.00e0488a.js"
+    }
+  ],
+  "entry": "entry.00e0488a.js"
+}

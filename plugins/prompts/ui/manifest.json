@@ -1,0 +1,13 @@
+{
+  "pluginType": "prompts",
+  "name": "提示词管理",
+  "version": "1.0.0",
+  "slots": [
+    {
+      "slot": "app-space",
+      "tab": "提示词",
+      "entry": "entry.7d531f86.js"
+    }
+  ],
+  "entry": "entry.7d531f86.js"
+}

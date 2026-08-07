@@ -1,0 +1,13 @@
+{
+  "name": "@atlas/plugin-providers",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Atlas 官方插件：AI 供应商管理（全局共享）",
+  "main": "src/index.ts",
+  "scripts": {
+    "ui:build": "cd ui-src && npm install && npm run build"
+  },
+  "dependencies": {
+    "@atlas/types": "*"
+  }
+}

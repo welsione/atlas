@@ -1,0 +1,275 @@
+<script setup lang="ts">
+import { onMounted, ref } from 'vue'
+import { Refresh, Search } from '@element-plus/icons-vue'
+import { appApi } from '../services/appApi'
+import { opsApi, type OpsLogRow, type OpsOverview } from '../services/opsApi'
+import type { App } from '../types'
+
+const apps = ref<App[]>([])
+const rows = ref<OpsLogRow[]>([])
+const total = ref(0)
+const loading = ref(false)
+const overview = ref<OpsOverview>({ levels: { INFO: 0, WARN: 0, ERROR: 0 }, byPlugin: [], hourly: [] })
+
+const filters = ref<{ appId?: number; pluginType: string; level: string }>({
+  appId: undefined,
+  pluginType: '',
+  level: '',
+})
+const page = ref(1)
+const size = 20
+
+async function fetchOverview() {
+  try {
+    overview.value = await opsApi.overview()
+  } catch {
+    // 忽略
+  }
+}
+
+async function fetchLogs() {
+  loading.value = true
+  try {
+    const result = await opsApi.logs({
+      appId: filters.value.appId,
+      pluginType: filters.value.pluginType || undefined,
+      level: filters.value.level || undefined,
+      page: page.value,
+      size,
+    })
+    rows.value = result.rows
+    total.value = result.total
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(async () => {
+  try {
+    apps.value = await appApi.list()
+  } catch {
+    // 未登录
+  }
+  await Promise.all([fetchLogs(), fetchOverview()])
+})
+
+function search() {
+  page.value = 1
+  fetchLogs()
+}
+
+function detailOf(row: OpsLogRow): string {
+  try {
+    const detail = JSON.parse(row.detailJson)
+    const parts = Object.entries(detail).map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+    return parts.length ? parts.join('，') : ''
+  } catch {
+    return ''
+  }
+}
+
+function levelTag(level: string) {
+  return level === 'ERROR' ? 'danger' : level === 'WARN' ? 'warning' : 'info'
+}
+
+const maxHourly = () => Math.max(1, ...overview.value.hourly.map((h) => h.count))
+const totalErrors = () => overview.value.byPlugin.reduce((s, p) => s + Number(p.errors ?? 0), 0)
+</script>
+
+<template>
+  <div class="page">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">运维台</h1>
+        <p class="page-desc">跨应用工作日志：插件通过 env.ops() 写入，平台统一查看</p>
+      </div>
+      <el-button :icon="Refresh" circle :loading="loading" @click="search" />
+    </div>
+
+    <!-- 概览 -->
+    <div class="overview-grid">
+      <div class="overview-card surface">
+        <div class="overview-title">级别分布</div>
+        <div class="level-row"><span class="level-dot info" />INFO <b>{{ overview.levels.INFO }}</b></div>
+        <div class="level-row"><span class="level-dot warning" />WARN <b>{{ overview.levels.WARN }}</b></div>
+        <div class="level-row"><span class="level-dot danger" />ERROR <b>{{ overview.levels.ERROR }}</b></div>
+      </div>
+      <div class="overview-card surface">
+        <div class="overview-title">近 24h 趋势（共 {{ overview.hourly.reduce((s, h) => s + h.count, 0) }} 条，错误 {{ totalErrors() }}）</div>
+        <div class="trend">
+          <div v-for="(h, i) in overview.hourly" :key="i" class="trend-col" :title="`${h.bucket}：${h.count} 条（错误 ${h.errors}）`">
+            <div class="trend-bar" :style="{ height: `${(h.count / maxHourly()) * 100}%` }" :class="{ 'is-error': h.errors > 0 }" />
+            <div class="trend-label">{{ String(h.bucket).slice(11, 13) }}时</div>
+          </div>
+        </div>
+      </div>
+      <div class="overview-card surface">
+        <div class="overview-title">按插件（近 7 天）</div>
+        <div v-for="p in overview.byPlugin" :key="p.pluginType" class="plugin-row">
+          <code class="mono">{{ p.pluginType || '平台' }}</code>
+          <el-tag size="small" :type="p.errors > 0 ? 'danger' : 'info'">{{ p.count }} 条{{ p.errors > 0 ? ` / ${p.errors} 错` : '' }}</el-tag>
+        </div>
+        <div v-if="overview.byPlugin.length === 0" class="muted">暂无工作日志</div>
+      </div>
+    </div>
+
+    <!-- 日志列表 -->
+    <div class="surface filter-bar">
+      <el-select v-model="filters.appId" placeholder="全部应用" clearable filterable style="width: 200px" @change="search">
+        <el-option v-for="a in apps" :key="a.id" :label="a.name" :value="a.id" />
+      </el-select>
+      <el-input v-model="filters.pluginType" placeholder="插件类型" clearable style="width: 160px" @keyup.enter="search" @clear="search" />
+      <el-select v-model="filters.level" placeholder="全部级别" clearable style="width: 130px" @change="search">
+        <el-option label="INFO" value="INFO" />
+        <el-option label="WARN" value="WARN" />
+        <el-option label="ERROR" value="ERROR" />
+      </el-select>
+      <el-button type="primary" :icon="Search" @click="search">查询</el-button>
+    </div>
+
+    <div class="surface">
+      <el-table v-loading="loading" :data="rows" empty-text="暂无工作日志">
+        <el-table-column label="时间" width="170">
+          <template #default="{ row }">{{ row.createdAt }}</template>
+        </el-table-column>
+        <el-table-column label="级别" width="90">
+          <template #default="{ row }">
+            <el-tag size="small" :type="levelTag(row.level)">{{ row.level }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="应用" width="140">
+          <template #default="{ row }">
+            <span v-if="row.appId === 0" class="muted">平台</span>
+            <span v-else>{{ apps.find((a) => a.id === row.appId)?.name || `#${row.appId}` }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="插件" width="140">
+          <template #default="{ row }"><code class="mono">{{ row.pluginType || '—' }}</code></template>
+        </el-table-column>
+        <el-table-column prop="message" label="消息" min-width="240" show-overflow-tooltip />
+        <el-table-column label="详情" min-width="180">
+          <template #default="{ row }">
+            <span class="muted detail-text">{{ detailOf(row) || '—' }}</span>
+          </template>
+        </el-table-column>
+      </el-table>
+      <div class="pager">
+        <el-pagination
+          layout="total, prev, pager, next"
+          :total="total"
+          :page-size="size"
+          :current-page="page"
+          @current-change="(p: number) => { page = p; fetchLogs() }"
+        />
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.overview-grid {
+  display: grid;
+  grid-template-columns: 260px 1fr 300px;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.overview-card {
+  padding: 16px;
+  border-radius: 12px;
+}
+
+.overview-title {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.level-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.level-row b {
+  margin-left: auto;
+}
+
+.level-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.level-dot.info { background: #909399; }
+.level-dot.warning { background: #e6a23c; }
+.level-dot.danger { background: #f56c6c; }
+
+.trend {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 96px;
+}
+
+.trend-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+}
+
+.trend-bar {
+  width: 100%;
+  max-width: 22px;
+  background: var(--aibase-accent);
+  border-radius: 3px 3px 0 0;
+  opacity: 0.85;
+  flex: 1;
+  min-height: 2px;
+}
+
+.trend-bar.is-error {
+  background: #f56c6c;
+}
+
+.trend-label {
+  font-size: 10px;
+  color: var(--aibase-muted);
+  margin-top: 4px;
+}
+
+.plugin-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 0;
+}
+
+.filter-bar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+
+.pager {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 0 0;
+}
+
+.muted {
+  color: var(--aibase-muted);
+}
+
+.detail-text {
+  font-size: 12px;
+}
+</style>
