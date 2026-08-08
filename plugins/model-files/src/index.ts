@@ -25,6 +25,8 @@ interface ModelFile {
   contentHash: string
   token: string
   downloadCount: number
+  createdAt: string
+  updatedAt: string
 }
 
 const now = (): string => new Date().toISOString().slice(0, 19).replace('T', ' ')
@@ -49,23 +51,30 @@ const plugin: AibasePlugin = {
         const uploaded: Array<{ path: string; data: Buffer }> = []
         let category = 'default'
         let description = ''
+        let updateId: number | undefined
         let updateToken: string | undefined
         if (body && typeof body === 'object' && 'files' in (body as object) && Array.isArray((body as { files: Array<{ originalname: string; buffer: Buffer }> }).files)) {
           const req = body as { fields?: Record<string, string>; files: Array<{ originalname: string; buffer: Buffer }> }
           category = req.fields?.category ?? 'default'
           description = req.fields?.description ?? ''
+          updateId = req.fields?.updateId ? Number(req.fields.updateId) : undefined
           updateToken = req.fields?.token
           for (const f of req.files) uploaded.push({ path: f.originalname, data: f.buffer })
         } else {
-          const req = body as { files?: Array<{ path: string; base64: string }>; category?: string; description?: string; token?: string }
+          const req = body as { files?: Array<{ path: string; base64: string }>; category?: string; description?: string; token?: string; updateId?: number }
           category = req.category ?? 'default'
           description = req.description ?? ''
+          updateId = req.updateId
           updateToken = req.token
           for (const f of req.files ?? []) uploaded.push({ path: f.path, data: Buffer.from(f.base64, 'base64') })
         }
         if (uploaded.length === 0) throw new Error('缺少文件')
 
-        const existing = updateToken ? list.find((m) => m.token === updateToken) : undefined
+        const existing = updateId
+          ? list.find((m) => m.id === Number(updateId))
+          : updateToken
+            ? list.find((m) => m.token === updateToken)
+            : undefined
         const dirId = existing ? `${existing.id}` : String(list.reduce((m, f) => Math.max(m, f.id), 0) + 1)
 
         // 清空旧文件（更新场景）
@@ -98,6 +107,7 @@ const plugin: AibasePlugin = {
             version: existing.version + 1,
             contentHash,
             downloadCount: 0,
+            updatedAt: now(),
           }
           list[idx] = next
           await store.put('files', list)
@@ -121,6 +131,8 @@ const plugin: AibasePlugin = {
           contentHash,
           token: published.token,
           downloadCount: 0,
+          createdAt: now(),
+          updatedAt: now(),
         }
         list.push(next)
         await store.put('files', list)
@@ -160,13 +172,14 @@ const plugin: AibasePlugin = {
       },
     },
     {
-      method: 'POST', path: 'publish/{id}', summary: '（重新）公开托管',
+      method: 'POST', path: 'publish/{id}', summary: '（重新）公开托管（仅单个文件）',
       handle: async (env, params) => {
         const store = env.store()
         const files = env.files()
         const list = (await store.get<ModelFile[]>('files')) ?? []
         const row = list.find((f) => f.id === Number(params.id))
         if (!row) throw new Error(`模型文件不存在: ${params.id}`)
+        if (row.fileCount > 1) throw new Error('目录（多文件）不支持公开托管，请按单文件上传')
         const published = await files.publish(`${row.id}/${row.files[0].path}`, row.name)
         row.token = published.token
         await store.put('files', list)

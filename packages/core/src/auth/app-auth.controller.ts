@@ -2,7 +2,6 @@ import { Body, Controller, Post, Req } from '@nestjs/common'
 import type { Request } from 'express'
 import { ok, error } from '../common/response.js'
 import { AppTokenService } from './app-token.service.js'
-import { clientIp } from '../security/security.middleware.js'
 
 /**
  * 数据面消费凭证端点：应用用 app_id + app_secret 换取短时效令牌。

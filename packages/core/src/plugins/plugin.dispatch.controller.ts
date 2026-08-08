@@ -37,7 +37,11 @@ export class PluginDispatchController {
 
     let body: unknown = null
     if (req.is('multipart/form-data')) {
-      body = await parseMultipart(req)
+      try {
+        body = await parseMultipart(req)
+      } catch (e) {
+        return res.status(413).json(error(413, (e as Error).message))
+      }
     } else if (req.body && Object.keys(req.body as object).length > 0) {
       body = req.body
     }
@@ -80,13 +84,30 @@ function isBinaryResult(value: unknown): value is BinaryResult {
   )
 }
 
-/** multipart 解析：body = { fields, files: [{originalname, buffer}] }。 */
+/** multipart 解析：body = { fields, files: [{originalname, buffer}] }。限制单文件/总量防内存 DoS。 */
 function parseMultipart(req: Request): Promise<{ fields: Record<string, string>; files: Array<{ originalname: string; buffer: Buffer }> }> {
   return new Promise((resolvePromise, reject) => {
-    const busboy = require('busboy') as (opts: { headers: unknown }) => NodeJS.ReadWriteStream
-    const bb = busboy({ headers: req.headers })
+    const busboy = require('busboy') as (opts: Record<string, unknown>) => NodeJS.ReadWriteStream
+    const bb = busboy({
+      headers: req.headers,
+      limits: {
+        fileSize: 100 * 1024 * 1024,   // 单文件 100MB
+        files: 10,                     // 最多 10 个文件
+        fields: 100,
+        fieldSize: 1024 * 1024,
+        parts: 200,
+      },
+    })
     const fields: Record<string, string> = {}
     const files: Array<{ originalname: string; buffer: Buffer }> = []
+    let limitExceeded = false
+    bb.on('limit', () => {
+      limitExceeded = true
+      req.unpipe(bb)
+      bb.removeAllListeners()
+      req.resume()
+      reject(new Error('上传超出大小/数量限制（单文件≤100MB，≤10 个）'))
+    })
     bb.on('field', (name: string, value: string) => {
       fields[name] = value
     })
@@ -95,7 +116,10 @@ function parseMultipart(req: Request): Promise<{ fields: Record<string, string>;
       stream.on('data', (chunk: Buffer) => chunks.push(chunk))
       stream.on('end', () => files.push({ originalname: info.filename, buffer: Buffer.concat(chunks) }))
     })
-    bb.on('finish', () => resolvePromise({ fields, files }))
+    bb.on('finish', () => {
+      if (limitExceeded) return
+      resolvePromise({ fields, files })
+    })
     bb.on('error', (e: Error) => reject(e))
     req.pipe(bb)
   })

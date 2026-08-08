@@ -31,6 +31,10 @@ describe('AppService', () => {
       datasetRefreshIntervalMs: 60000,
       pluginsDir: join(dir, 'plugins'),
       port: 0,
+      trustProxy: false,
+      devResetDb: false,
+      corsOrigin: '*',
+      keepLogDays: 30,
     }
     await new SchemaInitializer(config).initialize(db)
     const moduleRef = await Test.createTestingModule({
@@ -83,5 +87,28 @@ describe('AppService', () => {
     service.revoke(app.id)
     const restored = service.activate(app.id)
     expect(restored.status).toBe('ACTIVE')
+  })
+
+  it('删除应用级联清理挂靠数据（实例/数据集/存储/凭证）', () => {
+    const { app } = service.create('级联删除测试')
+    Number(db
+      .prepare('INSERT INTO plugin_instances (app_id, plugin_type, data_scope, config_json, enabled, created_at, updated_at) VALUES (?,?,?,?,?,?,?)')
+      .run(app.id, 'test-plugin', 'APP_LOCAL', '{}', 1, '2026-01-01 00:00:00', '2026-01-01 00:00:00')
+      .lastInsertRowid)
+    // plugin_store.instance_id 语义 = scopeKey（APP_LOCAL → appId）
+    db.prepare('INSERT INTO plugin_store (instance_id, entity_id, entity_key, value_json, version, created_at, updated_at) VALUES (?,?,?,?,?,?,?)')
+      .run(app.id, '', 'k', '{}', 1, '2026-01-01 00:00:00', '2026-01-01 00:00:00')
+    const dsId = Number(db
+      .prepare('INSERT INTO datasets (app_id, plugin_type, dataset_key, name, sensitivity, token, version, content_hash, content_json, assets_json, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      .run(app.id, 'test-plugin', 'k1', 'ds', 'PUBLIC', 'tok-1234567890123456', 1, 'h', '{}', '[]', 'PUBLISHED', '2026-01-01 00:00:00', '2026-01-01 00:00:00')
+      .lastInsertRowid)
+
+    service.remove(app.id)
+
+    expect(service.list().some((a) => a.id === app.id)).toBe(false)
+    expect(db.prepare('SELECT COUNT(*) c FROM plugin_instances WHERE app_id = ?').get(app.id)).toEqual({ c: 0 })
+    expect(db.prepare('SELECT COUNT(*) c FROM plugin_store').get()).toEqual({ c: 0 })
+    expect(db.prepare('SELECT COUNT(*) c FROM datasets WHERE id = ?').get(dsId)).toEqual({ c: 0 })
+    expect(db.prepare('SELECT COUNT(*) c FROM app_credentials WHERE app_id = ?').get(app.id)).toEqual({ c: 0 })
   })
 })

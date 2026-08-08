@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- providers：节点连接（服务网格），蓝青色调 -->
+  <rect x="0" y="0" width="100" height="100" rx="22" fill="#ffffff"/>
+  <circle cx="50" cy="42" r="17" fill="#3D9BF5"/>
+  <circle cx="26" cy="72" r="13" fill="#2B86EF"/>
+  <circle cx="74" cy="72" r="13" fill="#5BB9FF"/>
+  <path d="M42 50 L30 65" stroke="#1E6FE8" stroke-width="6" stroke-linecap="round"/>
+  <path d="M58 50 L70 65" stroke="#1E6FE8" stroke-width="6" stroke-linecap="round"/>
+  <path d="M38 74 L62 74" stroke="#0B4FC9" stroke-width="5" stroke-linecap="round"/>
+</svg>

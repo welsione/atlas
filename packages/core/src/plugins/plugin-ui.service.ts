@@ -58,6 +58,22 @@ export class PluginUiService {
     }
   }
 
+  /** 读取插件图标（icons/ 目录，独立于 ui 构建产物）。 */
+  readIconFile(pluginType: string, path: string): string | null {
+    if (!isSafePath(path)) return null
+    const loaded = this.registry.byType(pluginType)
+    if (!loaded || loaded.builtin) return null
+    const iconsDir = join(this.config.pluginsDir, loaded.artifact, 'icons')
+    if (!existsSync(iconsDir)) return null
+    const file = resolve(iconsDir, path)
+    if (!file.startsWith(resolve(iconsDir)) || !existsSync(file)) return null
+    try {
+      return readFileSync(file, 'utf8')
+    } catch {
+      return null
+    }
+  }
+
   private uiDirOf(pluginType: string): string | null {
     const loaded = this.registry.byType(pluginType)
     if (!loaded) return null

@@ -19,6 +19,9 @@ interface Prompt {
 
 const now = (): string => new Date().toISOString().slice(0, 19).replace('T', ' ')
 
+/** 保留的版本历史条数（超出丢弃最旧）。 */
+const MAX_HISTORY = 10
+
 const plugin: AibasePlugin = {
   type: 'prompts',
   name: '提示词管理',
@@ -63,7 +66,7 @@ const plugin: AibasePlugin = {
     {
       method: 'PUT', path: 'update/{id}', summary: '更新提示词（内容变更版本+1）',
       handle: async (env, params, body) => {
-        const req = body as { name?: string; content?: string; variables?: Prompt['variables']; enabled?: boolean }
+        const req = body as { name?: string; category?: string; description?: string; content?: string; variables?: Prompt['variables']; enabled?: boolean }
         const list = (await env.store().get<Prompt[]>('prompts')) ?? []
         const row = list.find((p) => p.id === Number(params.id))
         if (!row) throw new Error(`提示词不存在: ${params.id}`)
@@ -72,16 +75,42 @@ const plugin: AibasePlugin = {
         const next: Prompt = {
           ...row,
           name: req.name ?? row.name,
+          category: req.category ?? row.category,
+          description: req.description ?? row.description,
           content: req.content ?? row.content,
           variables: req.variables ?? row.variables,
           enabled: req.enabled ?? row.enabled,
           version: contentChanged ? row.version + 1 : row.version,
           history: contentChanged
-            ? [...row.history, { version: row.version, content: row.content, createdAt: now() }]
+            ? [...row.history, { version: row.version, content: row.content, createdAt: now() }].slice(-MAX_HISTORY)
             : row.history,
         }
         list[idx] = next
         await env.store().put('prompts', list)
+        return next
+      },
+    },
+    {
+      method: 'POST', path: 'restore/{id}', summary: '从历史版本恢复（生成新版本）',
+      handle: async (env, params, body) => {
+        const req = body as { version?: number }
+        const version = Number(req?.version)
+        if (!version) throw new Error('缺少目标版本号')
+        const list = (await env.store().get<Prompt[]>('prompts')) ?? []
+        const row = list.find((p) => p.id === Number(params.id))
+        if (!row) throw new Error(`提示词不存在: ${params.id}`)
+        const found = row.history.find((h) => h.version === version)
+        if (!found) throw new Error(`历史版本 ${version} 不存在`)
+        const idx = list.indexOf(row)
+        const next: Prompt = {
+          ...row,
+          content: found.content,
+          version: row.version + 1,
+          history: [...row.history, { version: row.version, content: row.content, createdAt: now() }].slice(-MAX_HISTORY),
+        }
+        list[idx] = next
+        await env.store().put('prompts', list)
+        env.info(`恢复提示词「${row.name}」到 v${version}（现为 v${next.version}）`)
         return next
       },
     },

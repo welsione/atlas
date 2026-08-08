@@ -2,13 +2,66 @@ import { readFileSync, existsSync, mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { Logger } from '@nestjs/common'
 import type { AIBaseConfig } from '../config.js'
+import type Database from 'better-sqlite3'
 
 /**
- * 数据库结构初始化：清理旧版结构（无生产数据，全量重建）→ 执行 schema.sql。
- * 与 Java 版语义一致：开发期每次启动 DROP 重建，避免结构残留。
+ * 数据库结构初始化（幂等 + 版本化迁移）：
+ * - schema.sql 全部 CREATE TABLE/INDEX IF NOT EXISTS，可直接幂等执行
+ * - 结构变更走 user_version 迁移（migrations 按版本升序应用）
+ * - 仅当 AIBASE_DEV_RESET_DB=1（开发重置）时 DROP 全表重建
+ * 生产数据跨重启保留。
  */
 export class SchemaInitializer {
   private readonly logger = new Logger(SchemaInitializer.name)
+
+  constructor(private readonly config: AIBaseConfig) {}
+
+  /** 当前结构版本。 */
+  static readonly SCHEMA_VERSION = 1
+
+  /** 版本化迁移：每个 up(db) 在事务内执行，成功后 user_version 递增。 */
+  private static readonly MIGRATIONS: Array<{ version: number; up: (db: Database.Database) => void }> = [
+    {
+      // v1：plugins 表补 icon 列（0.x 早期库结构演进）
+      version: 1,
+      up: (db) => {
+        const cols = db.prepare('PRAGMA table_info(plugins)').all() as Array<{ name: string }>
+        if (!cols.some((c) => c.name === 'icon')) {
+          db.exec("ALTER TABLE plugins ADD COLUMN icon TEXT NOT NULL DEFAULT ''")
+        }
+      },
+    },
+  ]
+
+  /** 打开（或创建）数据库并完成结构初始化。 */
+  async initialize(db: Database.Database): Promise<void> {
+    const dataDir = this.config.dataDir
+    if (!existsSync(dataDir)) {
+      mkdirSync(dataDir, { recursive: true })
+    }
+    if (this.config.devResetDb) {
+      for (const table of SchemaInitializer.LEGACY_TABLES) {
+        db.exec(`DROP TABLE IF EXISTS ${table}`)
+      }
+      db.pragma('user_version = 0')
+      this.logger.warn('AIBASE_DEV_RESET_DB=1：已清空全部表（开发重置）')
+    }
+    const schemaPath = resolve(__dirname, 'schema.sql')
+    const sql = readFileSync(schemaPath, 'utf8')
+    // schema.sql 含 CREATE TABLE IF NOT EXISTS 与索引；逐语句执行
+    for (const statement of sql.split(';').map((s) => s.trim()).filter(Boolean)) {
+      db.exec(statement)
+    }
+    const current = (db.pragma('user_version') as { user_version: number })?.user_version ?? 0
+    for (const migration of SchemaInitializer.MIGRATIONS) {
+      if (migration.version > current) {
+        migration.up(db)
+        db.pragma(`user_version = ${migration.version}`)
+        this.logger.log(`数据库迁移应用：v${migration.version}`)
+      }
+    }
+    this.logger.log(`数据库结构初始化完成（data-dir=${dataDir}，schema-v=${Math.max(current, ...SchemaInitializer.MIGRATIONS.map((m) => m.version))}）`)
+  }
 
   private static readonly LEGACY_TABLES = [
     'apps', 'app_credentials', 'plugins', 'plugin_instances', 'plugin_store',
@@ -18,27 +71,4 @@ export class SchemaInitializer {
     'providers', 'prompts', 'prompt_versions', 'model_files',
     'download_logs', 'upload_logs',
   ]
-
-  constructor(private readonly config: AIBaseConfig) {}
-
-  /** 打开（或创建）数据库并完成结构初始化。 */
-  async initialize(db: {
-    exec: (sql: string) => void
-    close: () => void
-  }): Promise<void> {
-    const dataDir = this.config.dataDir
-    if (!existsSync(dataDir)) {
-      mkdirSync(dataDir, { recursive: true })
-    }
-    for (const table of SchemaInitializer.LEGACY_TABLES) {
-      db.exec(`DROP TABLE IF EXISTS ${table}`)
-    }
-    const schemaPath = resolve(__dirname, 'schema.sql')
-    const sql = readFileSync(schemaPath, 'utf8')
-    // schema.sql 含 CREATE TABLE IF NOT EXISTS 与索引；逐语句执行
-    for (const statement of sql.split(';').map((s) => s.trim()).filter(Boolean)) {
-      db.exec(statement)
-    }
-    this.logger.log(`数据库结构初始化完成（data-dir=${dataDir}）`)
-  }
 }

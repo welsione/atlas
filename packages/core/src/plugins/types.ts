@@ -7,6 +7,8 @@ export interface LoadedPlugin {
   artifact: string
   artifactHash: string
   version: string
+  /** 插件图标声明（data:/http(s)/相对路径）。 */
+  icon: string
   builtin: boolean
   /** 外部插件的入口模块（动态 import 结果），用于卸载后引用。 */
   module?: unknown
@@ -20,6 +22,8 @@ export interface PluginManifest {
   version: string
   defaultDataScope: DataScope
   scopeOverrideAllowed?: boolean
+  /** 插件图标：data: URI / http(s) URL / 相对路径（icons/xxx.svg，存于插件目录 icons/）。 */
+  icon?: string
   /** 入口文件（默认 index）。 */
   entry?: string
 }

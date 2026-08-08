@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Refresh, VideoPlay } from '@element-plus/icons-vue'
+import { Refresh, VideoPlay, FolderOpened, InfoFilled } from '@element-plus/icons-vue'
 import { pluginApi } from '../services/pluginApi'
 import type { PluginDef } from '../types'
+import { iconOf, pluginIconUrl } from '../plugin-host/slotRegistry'
 
 type DefRow = { plugin: PluginDef; runtimeLoaded: boolean; runtimeArtifact: string }
 
@@ -38,24 +39,36 @@ async function handleUnload(row: DefRow) {
     <div class="page-header">
       <div>
         <h1 class="page-title">插件注册表</h1>
-        <p class="page-desc">平台级插件清单：内置保留字 + 外部目录插件（data/plugins/ 热加载，约 10 秒生效）</p>
+        <p class="page-desc">平台级插件清单：内置保留字 + 外部目录插件（plugins/ 热加载，约 10 秒生效）</p>
       </div>
-      <el-button :icon="Refresh" circle :loading="loading" @click="fetchAll" />
+      <el-tooltip content="刷新" placement="bottom">
+        <el-button :icon="Refresh" circle :loading="loading" @click="fetchAll" />
+      </el-tooltip>
     </div>
 
     <div class="surface">
       <el-table v-loading="loading" :data="rows" empty-text="暂无插件">
-        <el-table-column label="插件" min-width="180">
+        <el-table-column label="插件" min-width="220">
           <template #default="{ row }">
             <div class="plugin-cell">
+              <img
+                v-if="pluginIconUrl(row.plugin.pluginType, iconOf(row.plugin.pluginType))"
+                :src="pluginIconUrl(row.plugin.pluginType, iconOf(row.plugin.pluginType))!"
+                class="plugin-icon"
+                alt=""
+              />
               <span class="plugin-name">{{ row.plugin.name }}</span>
               <el-tag v-if="row.plugin.builtin" size="small" type="info">内置</el-tag>
               <el-tag v-else size="small" type="warning">外部</el-tag>
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="plugin.pluginType" label="类型" width="130">
-          <template #default="{ row }"><code class="mono">{{ row.plugin.pluginType }}</code></template>
+        <el-table-column label="标识" width="150">
+          <template #default="{ row }">
+            <el-tooltip :content="`目录：${row.plugin.artifact || 'builtin'}`" placement="top">
+              <code class="mono">{{ row.plugin.pluginType }}</code>
+            </el-tooltip>
+          </template>
         </el-table-column>
         <el-table-column label="数据范围" width="110">
           <template #default="{ row }">
@@ -64,13 +77,10 @@ async function handleUnload(row: DefRow) {
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="plugin.version" label="版本" width="90" />
-        <el-table-column prop="plugin.artifact" label="来源" min-width="140">
-          <template #default="{ row }">
-            <code class="mono">{{ row.plugin.artifact || 'builtin' }}</code>
-          </template>
+        <el-table-column prop="plugin.version" label="版本" width="90">
+          <template #default="{ row }"><code class="mono">v{{ row.plugin.version }}</code></template>
         </el-table-column>
-        <el-table-column prop="plugin.description" label="说明" min-width="220" show-overflow-tooltip />
+        <el-table-column prop="plugin.description" label="说明" min-width="240" show-overflow-tooltip />
         <el-table-column label="运行时" width="90">
           <template #default="{ row }">
             <el-tag size="small" :type="row.runtimeLoaded ? 'success' : 'info'">
@@ -80,10 +90,20 @@ async function handleUnload(row: DefRow) {
         </el-table-column>
         <el-table-column label="操作" width="100" fixed="right">
           <template #default="{ row }">
-            <el-button v-if="!row.plugin.builtin && row.runtimeLoaded" size="small" type="danger" plain :icon="VideoPlay" @click="handleUnload(row)">卸载</el-button>
+            <el-tooltip v-if="!row.plugin.builtin && row.runtimeLoaded" content="卸载后实例与数据保留，重新集成可恢复" placement="top">
+              <el-button size="small" plain :icon="VideoPlay" @click="handleUnload(row)">卸载</el-button>
+            </el-tooltip>
           </template>
         </el-table-column>
       </el-table>
+    </div>
+
+    <div class="install-hint">
+      <el-icon class="hint-icon"><FolderOpened /></el-icon>
+      <span>新增插件：在 <code class="mono">plugins/</code> 目录放入一个含 <code class="mono">manifest.json</code> 与 <code class="mono">src/index.ts</code> 的目录（参考 <code class="mono">template/</code>），约 10 秒后自动热加载。</span>
+      <el-tooltip content="修改插件后按需手动全量重载（POST /api/plugins/reload）" placement="top">
+        <el-icon class="hint-icon"><InfoFilled /></el-icon>
+      </el-tooltip>
     </div>
   </div>
 </template>
@@ -95,7 +115,32 @@ async function handleUnload(row: DefRow) {
   gap: 8px;
 }
 
+.plugin-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  flex-shrink: 0;
+}
+
 .plugin-name {
   font-weight: 600;
+}
+
+.install-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: var(--aibase-surface);
+  border: 1px dashed var(--aibase-stroke);
+  color: var(--aibase-muted);
+  font-size: 13px;
+}
+
+.hint-icon {
+  flex-shrink: 0;
+  color: var(--aibase-accent);
 }
 </style>

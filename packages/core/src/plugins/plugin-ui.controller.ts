@@ -32,7 +32,10 @@ export class PluginUiController {
     const uri = req.originalUrl?.split('?')[0] ?? ''
     const idx = uri.indexOf(prefix)
     const name = idx >= 0 ? uri.slice(idx + prefix.length) : ''
-    const content = this.uiService.readUiFile(pluginType, name || 'manifest.json')
+    // icons/ 前缀 → 插件图标目录（manifest.icon 相对路径指向这里）
+    const content = name.startsWith('icons/')
+      ? this.uiService.readIconFile(pluginType, name.slice('icons/'.length))
+      : this.uiService.readUiFile(pluginType, name || 'manifest.json')
     if (content === null) {
       res.status(404).end()
       return

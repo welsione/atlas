@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- prompts：聊天气泡（提示词），紫色调 -->
+  <rect x="0" y="0" width="100" height="100" rx="22" fill="#ffffff"/>
+  <path d="M14 26 Q14 18 22 18 L78 18 Q86 18 86 26 L86 58 Q86 66 78 66 L46 66 L32 80 L35 66 L22 66 Q14 66 14 58 Z" fill="#8B5CF6"/>
+  <path d="M30 34 Q30 30 34 30 L66 30 Q70 30 70 34 L70 42 Q70 46 66 46 L40 46 L32 54 L33 46 L34 46 Q30 46 30 42 Z" fill="#ffffff" opacity="0.9"/>
+</svg>

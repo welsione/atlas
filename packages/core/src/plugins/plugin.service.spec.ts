@@ -56,6 +56,10 @@ describe('PluginService', () => {
       datasetRefreshIntervalMs: 60000,
       pluginsDir: join(dir, 'plugins'),
       port: 0,
+      trustProxy: false,
+      devResetDb: false,
+      corsOrigin: '*',
+      keepLogDays: 30,
     }
     await new SchemaInitializer(config).initialize(db)
 
@@ -123,5 +127,17 @@ describe('PluginService', () => {
     const overview = service.instanceOverview(1)
     expect(overview.length).toBe(2)
     expect(overview.every((r) => r.runtimeLoaded)).toBe(true)
+  })
+
+  it('autoInstantiate 支持指定插件集合（创建应用勾选）', () => {
+    service.autoInstantiate(99, ['test-local'])
+    expect(service.repository.findInstance(99, 'test-local')).toBeDefined()
+    expect(service.repository.findInstance(99, 'test-shared')).toBeUndefined()
+  })
+
+  it('autoInstantiate 不传集合则实例化全部（默认行为）', () => {
+    service.autoInstantiate(98)
+    expect(service.repository.findInstance(98, 'test-local')).toBeDefined()
+    expect(service.repository.findInstance(98, 'test-shared')).toBeDefined()
   })
 })

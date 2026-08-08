@@ -1,8 +1,10 @@
-import { Controller, Get, Header, Headers, Param, Req, Res } from '@nestjs/common'
+import { Controller, Get, Header, Headers, Inject, Param, Req, Res } from '@nestjs/common'
 import type { Request, Response } from 'express'
 import { ok, error } from '../common/response.js'
 import { DatasetService } from './dataset.service.js'
 import { AppTokenService } from '../auth/app-token.service.js'
+import { clientIp } from '../common/utils.js'
+import { CONFIG, type AIBaseConfig } from '../config.js'
 
 /**
  * 数据面消费端点（公开前缀 /api/v1/）：
@@ -13,13 +15,19 @@ export class DatasetConsumeController {
   constructor(
     private readonly service: DatasetService,
     private readonly tokenService: AppTokenService,
+    @Inject(CONFIG) private readonly config: AIBaseConfig,
   ) {}
 
   @Get(':token/meta')
-  meta(@Param('token') token: string, @Req() req: Request) {
+  meta(@Param('token') token: string, @Req() req: Request, @Res() res: Response) {
     const { appId } = this.consumeContext(req)
-    this.service.recordMetaAccess(token, appId, clientIp(req), req.header('user-agent') ?? '')
-    return ok(this.service.meta(token))
+    try {
+      const meta = this.service.meta(token)
+      this.service.recordMetaAccess(token, appId, clientIp(req, this.config.trustProxy), req.header('user-agent') ?? '')
+      return res.json(ok(meta))
+    } catch {
+      return res.status(404).json(error(404, '数据集不存在'))
+    }
   }
 
   @Get(':token/data')
@@ -27,7 +35,7 @@ export class DatasetConsumeController {
   data(@Param('token') token: string, @Headers('if-none-match') ifNoneMatch: string | undefined, @Req() req: Request, @Res() res: Response) {
     const { appId } = this.consumeContext(req)
     try {
-      const result = this.service.data(token, ifNoneMatch, appId, clientIp(req), req.header('user-agent') ?? '')
+      const result = this.service.data(token, ifNoneMatch, appId, clientIp(req, this.config.trustProxy), req.header('user-agent') ?? '')
       res.setHeader('ETag', result.etag)
       if (result.contentJson === '') {
         res.status(304).end()
@@ -46,12 +54,12 @@ export class DatasetConsumeController {
   secrets(@Param('token') token: string, @Req() req: Request, @Res() res: Response) {
     const { appId } = this.consumeContext(req)
     try {
-      const result = this.service.secrets(token, appId, clientIp(req), req.header('user-agent') ?? '')
+      const result = this.service.secrets(token, appId, clientIp(req, this.config.trustProxy), req.header('user-agent') ?? '')
       return res.json(ok(result))
     } catch (e) {
       const err = e as Error
       if (err.message.includes('非 SECRET') || err.message.includes('未授权') || err.message.includes('Bearer')) {
-        this.service.recordSecretDenied(token, appId, clientIp(req), req.header('user-agent') ?? '')
+        this.service.recordSecretDenied(token, appId, clientIp(req, this.config.trustProxy), req.header('user-agent') ?? '')
         return res.status(400).json(error(400, err.message))
       }
       return res.status(404).json(error(404, err.message))
@@ -63,10 +71,4 @@ export class DatasetConsumeController {
     const bearer = req.header('authorization')?.replace(/^Bearer\s+/i, '')
     return { appId: this.tokenService.validate(bearer) }
   }
-}
-
-export function clientIp(req: Request): string {
-  const fwd = req.header('x-forwarded-for')
-  if (fwd && fwd.trim() !== '') return fwd.split(',')[0].trim()
-  return req.socket.remoteAddress ?? ''
 }

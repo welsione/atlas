@@ -5,6 +5,7 @@ import { DatasetRepository } from './dataset.repository.js'
 import { EnvelopeCrypto } from './envelope-crypto.js'
 import { PluginService } from '../plugins/plugin.service.js'
 import { NotFoundError, ValidationError } from '../common/response.js'
+import { createRateLimiter, now } from '../common/utils.js'
 import { CONFIG, type AIBaseConfig } from '../config.js'
 
 export interface MetaResult {
@@ -36,7 +37,7 @@ export interface SecretResult {
 export class DatasetService {
   private readonly logger = new Logger(DatasetService.name)
   /** IP 限流：每分钟每 IP 最多 120 次消费。 */
-  private readonly rateBuckets = new Map<string, { count: number; resetAt: number }>()
+  private readonly rateLimiter = createRateLimiter(120, 60_000)
 
   constructor(
     @Inject(CONFIG) private readonly config: AIBaseConfig,
@@ -44,10 +45,6 @@ export class DatasetService {
     private readonly crypto: EnvelopeCrypto,
     @Inject(forwardRef(() => PluginService)) private readonly pluginService: PluginService,
   ) {}
-
-  static now(): string {
-    return new Date().toISOString().slice(0, 19).replace('T', ' ')
-  }
 
   static hash(content: string): string {
     return createHash('sha256').update(content).digest('hex')
@@ -86,7 +83,7 @@ export class DatasetService {
       ? req.datasetKey.trim()
       : `manual-${Date.now()}`
     const dekWrapped = sensitivity === 'SECRET' ? this.crypto.wrapNewDek() : ''
-    const now = DatasetService.now()
+    const nowTs = now()
     const id = this.repository.insert({
       app_id: appId,
       plugin_type: req.pluginType ?? '',
@@ -104,8 +101,8 @@ export class DatasetService {
       refresh_interval_seconds: req.refreshIntervalSeconds ?? null,
       last_refreshed_at: null,
       status: 'PUBLISHED',
-      created_at: now,
-      updated_at: now,
+      created_at: nowTs,
+      updated_at: nowTs,
     })
     this.logger.log(`创建数据集：app=${appId}，${req.name}（sensitivity=${sensitivity}）`)
     return this.repository.findById(id)!
@@ -129,16 +126,14 @@ export class DatasetService {
     contentJson: string,
   ): boolean {
     const hash = DatasetService.hash(contentJson)
-    const existing = this.repository
-      .findAllByApp(appId)
-      .find((d) => d.pluginType === pluginType && d.datasetKey === datasetKey)
-    const now = DatasetService.now()
+    const existing = this.repository.findDatasetByKey(appId, pluginType, datasetKey)
+    const nowTs = now()
     if (existing) {
       if (existing.contentHash === hash) return false
       this.repository.updateContent(
         existing.id, name, existing.description, sensitivity,
         existing.version + 1, hash, contentJson, existing.assets.length > 0 ? JSON.stringify(existing.assets) : '[]',
-        existing.dekWrapped, now,
+        existing.dekWrapped, nowTs,
       )
       this.logger.log(`数据集已发布（版本+1）：app=${appId}，key=${datasetKey}，v${existing.version + 1}`)
       return true
@@ -160,8 +155,8 @@ export class DatasetService {
       refresh_interval_seconds: null,
       last_refreshed_at: null,
       status: 'PUBLISHED',
-      created_at: now,
-      updated_at: now,
+      created_at: nowTs,
+      updated_at: nowTs,
     })
     void id
     return true
@@ -185,7 +180,7 @@ export class DatasetService {
     const dek = this.crypto.unwrapDek(d.dekWrapped)
     const ciphertext = this.crypto.encryptWithDek(dek, value)
     this.repository.deactivateSecret(d.id, keyName)
-    this.repository.insertSecret(d.id, keyName.trim(), ciphertext, DatasetService.now())
+    this.repository.insertSecret(d.id, keyName.trim(), ciphertext, now())
     this.logger.log(`敏感凭证录入：dataset=${d.name}，key=${keyName}`)
     const rows = this.repository.findActiveSecrets(d.id).filter((s) => s.key_name === keyName)
     return {
@@ -220,20 +215,20 @@ export class DatasetService {
     const d = this.requireDatasetByKey(appId, pluginType, datasetKey)
     const env = this.pluginService.environmentOrNull(appId, pluginType)
     if (!env || !env.datasetSource()) {
-      this.repository.updateRefreshMeta(d.id, DatasetService.now())
+      this.repository.updateRefreshMeta(d.id, now())
       return false
     }
     const content = env.datasetSource()!.render(env)
     if (content === null) return false
     if (typeof content === 'string') {
       const changed = this.publishFromPlugin(appId, pluginType, datasetKey, d.name, d.sensitivity, content)
-      this.repository.updateRefreshMeta(d.id, DatasetService.now())
+      this.repository.updateRefreshMeta(d.id, now())
       return changed
     }
     return content.then((resolved) => {
       if (resolved === null) return false
       const changed = this.publishFromPlugin(appId, pluginType, datasetKey, d.name, d.sensitivity, resolved)
-      this.repository.updateRefreshMeta(d.id, DatasetService.now())
+      this.repository.updateRefreshMeta(d.id, now())
       return changed
     })
   }
@@ -270,10 +265,11 @@ export class DatasetService {
       this.repository.insertAccessLog(d.appId, consumerAppId, 'DATASET', d.id, d.token, 'data', 400, 0, ip, ua)
       throw new ValidationError('未授权访问该数据集')
     }
-    if (!this.rateLimit(ip)) {
+    if (!this.rateLimiter.allow(ip)) {
       this.repository.insertAccessLog(d.appId, consumerAppId, 'DATASET', d.id, d.token, 'data', 429, 0, ip, ua)
       throw new ValidationError('下载过于频繁，请稍后再试')
-    }    const bytes = Buffer.byteLength(d.contentJson, 'utf8')
+    }
+    const bytes = Buffer.byteLength(d.contentJson, 'utf8')
     this.repository.insertAccessLog(d.appId, consumerAppId, 'DATASET', d.id, d.token, 'data', 200, bytes, ip, ua)
     this.repository.insertDownloadLog(d.id, consumerAppId, consumerAppId === null ? d.token : '', ip, ua, bytes)
     return { etag, contentJson: d.contentJson }
@@ -322,27 +318,13 @@ export class DatasetService {
 
   // ---------- 内部 ----------
 
+  /** 消费授权：PUBLIC 任意；属主应用始终豁免（INTERNAL/SECRET 均可自消费）；其余按 grant。 */
   private checkConsumeAllowed(d: Dataset, consumerAppId: number | null): boolean {
     if (d.sensitivity === 'PUBLIC') return true
     if (consumerAppId === null) return false
-    if (d.sensitivity === 'INTERNAL') return d.appId === consumerAppId || this.repository.hasGrant(d.id, consumerAppId)
+    if (consumerAppId === d.appId) return true
+    if (d.sensitivity === 'INTERNAL') return this.repository.hasGrant(d.id, consumerAppId)
     return this.repository.hasGrant(d.id, consumerAppId)
-  }
-
-  private rateLimit(ip: string): boolean {
-    if (!ip) return true
-    const now = Date.now()
-    const entry = this.rateBuckets.get(ip)
-    if (!entry || entry.resetAt < now) {
-      this.rateBuckets.set(ip, { count: 1, resetAt: now + 60_000 })
-      return true
-    }
-    entry.count += 1
-    if (entry.count > 120) {
-      if (this.rateBuckets.size > 1000) this.rateBuckets.clear()
-      return false
-    }
-    return true
   }
 
   private requireDataset(appId: number, datasetId: number): Dataset {
@@ -352,9 +334,7 @@ export class DatasetService {
   }
 
   private requireDatasetByKey(appId: number, pluginType: string, datasetKey: string): Dataset {
-    const d = this.repository
-      .findAllByApp(appId)
-      .find((x) => x.pluginType === pluginType && x.datasetKey === datasetKey)
+    const d = this.repository.findDatasetByKey(appId, pluginType, datasetKey)
     if (!d) throw new NotFoundError(`数据集不存在: ${pluginType}/${datasetKey}`)
     return d
   }

@@ -10,6 +10,7 @@ const props = defineProps<{
   load: () => Promise<PluginUiEntry>
   appId?: number
   pluginType?: string
+  mode?: string
   refresh: () => void
 }>()
 
@@ -25,6 +26,7 @@ async function mountUI() {
   const returned = entry.mount(host.value, {
     appId: props.appId,
     pluginType: props.pluginType ?? '',
+    mode: props.mode,
     refresh: props.refresh,
   })
   unmount = typeof returned === 'function' ? returned : undefined

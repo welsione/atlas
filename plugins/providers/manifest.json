@@ -1,1 +1,9 @@
-{"pluginType":"providers","name":"供应商管理","description":"AI 供应商管理（全局共享）","version":"1.0.0","defaultDataScope":"GLOBAL_SHARED","entry":"src/index.ts"}
+{
+  "pluginType": "providers",
+  "name": "供应商管理",
+  "description": "供应商配置：OpenAI/Anthropic 兼容接口、API Key 加密、模型快速选择、图标上传",
+  "version": "1.0.0",
+  "defaultDataScope": "GLOBAL_SHARED",
+  "icon": "icons/providers.svg",
+  "entry": "src/index.ts"
+}

@@ -1,39 +1,196 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Refresh, Connection, EditPen, Delete } from '@element-plus/icons-vue'
+import { Plus, Refresh, Connection, EditPen, Delete, Search, Grid, Key, Star, Upload, Close, Check, Link, ArrowRight } from '@element-plus/icons-vue'
 import { get, post, put, del } from '@atlas/runtime'
 
 const props = defineProps({ appId: { type: Number, required: true } })
 
 const rows = ref([])
-const types = ref([])
+const builtinIcons = ref([])
+const customIcons = ref([])
 const loading = ref(false)
 const dialogVisible = ref(false)
 const editing = ref(null)
-const form = ref({ name: '', providerType: 'OPENAI_COMPATIBLE', baseUrl: '', apiKey: '', models: '' })
 const creating = ref(false)
-const testing = ref(null)
+const testing = ref(null)   // 'openai' | 'anthropic' | null
+const keyword = ref('')
+const drawerVisible = ref(false)
+const detailRow = ref(null)
 
 const base = () => `/api/apps/${props.appId}/plugins/providers/ep`
+/** 图标 URL：data:/http(s): 原样返回，相对路径（内置）走插件图标服务。 */
+const iconUrl = (icon) => (/^(data:|https?:)/i.test(icon || '') ? icon : `/_pluginui/providers/${icon}`)
+
+/** 接口品牌图标（内置图标库）。 */
+const OPENAI_ICON = 'icons/vendors/openai.svg'
+const ANTHROPIC_ICON = 'icons/vendors/anthropic.svg'
+
+const filtered = computed(() => {
+  const kw = keyword.value.trim().toLowerCase()
+  if (!kw) return rows.value
+  return rows.value.filter((r) => r.name.toLowerCase().includes(kw) || r.openai.baseUrl.toLowerCase().includes(kw) || r.anthropic.baseUrl.toLowerCase().includes(kw))
+})
+
+const stats = computed(() => ({
+  total: rows.value.length,
+  withOpenai: rows.value.filter((r) => r.openai.baseUrl).length,
+  withAnthropic: rows.value.filter((r) => r.anthropic.baseUrl).length,
+  modelCount: rows.value.reduce((s, r) => s + (r.models?.length ?? 0), 0),
+}))
+
+/** 打开详情抽屉；rows 刷新后同步引用。 */
+function openDetail(row) {
+  detailRow.value = row
+  drawerVisible.value = true
+}
+
+function syncDetail() {
+  if (detailRow.value) {
+    detailRow.value = rows.value.find((r) => r.id === detailRow.value.id) ?? null
+    if (!detailRow.value) drawerVisible.value = false
+  }
+}
 
 async function fetchAll() {
   loading.value = true
   try {
     rows.value = await get(base() + '/list')
+    syncDetail()
   } finally {
     loading.value = false
   }
 }
 
+async function fetchIcons() {
+  const res = await get(base() + '/icons/list')
+  builtinIcons.value = res.builtin ?? []
+  customIcons.value = res.custom ?? []
+}
+
 onMounted(async () => {
   await fetchAll()
-  types.value = await get(base() + '/types')
+  await fetchIcons()
 })
+
+// ================= 模型参考库（快速选择） =================
+const refQuery = ref('')
+const refSearching = ref(false)
+const refResults = ref([])
+let refTimer = null
+
+const fmtCtx = (n) => {
+  if (n == null) return ''
+  return n >= 1048576 ? `${(n / 1048576).toFixed(1)}M` : n >= 1024 ? `${Math.round(n / 1024)}K` : `${n}`
+}
+
+async function searchReference() {
+  const q = refQuery.value.trim()
+  if (q.length < 2) {
+    refResults.value = []
+    return
+  }
+  refSearching.value = true
+  try {
+    const res = await post(base() + '/reference/search', { q, limit: 30 })
+    refResults.value = res.models ?? []
+  } catch {
+    refResults.value = []
+  } finally {
+    refSearching.value = false
+  }
+}
+
+function onRefInput() {
+  clearTimeout(refTimer)
+  refTimer = setTimeout(searchReference, 300)
+}
+
+watch(refQuery, onRefInput)
+onBeforeUnmount(() => clearTimeout(refTimer))
+
+function addRefModel(m) {
+  const hit = selectedModels.value.find((x) => x.modelId === m.modelId)
+  if (hit) return
+  selectedModels.value.push({ modelId: m.modelId, contextTokens: m.contextTokens ?? null })
+  refQuery.value = ''
+  refResults.value = []
+}
+
+// ================= 图标 =================
+const iconQuery = ref('')
+const uploadingIcon = ref(false)
+
+const filteredBuiltin = computed(() => {
+  const q = iconQuery.value.trim().toLowerCase()
+  if (!q) return builtinIcons.value
+  return builtinIcons.value.filter((i) => i.name.toLowerCase().includes(q))
+})
+
+function pickIcon(path) {
+  form.value.icon = form.value.icon === path ? '' : path
+}
+
+async function handleIconUpload(file) {
+  if (!file) return false
+  if (!/\.svg$/i.test(file.name)) {
+    ElMessage.warning('仅支持 SVG 图标')
+    return false
+  }
+  if (file.size > 64 * 1024) {
+    ElMessage.warning(`图标过大（${(file.size / 1024).toFixed(1)}KB），上限 64KB`)
+    return false
+  }
+  uploadingIcon.value = true
+  try {
+    const reader = new FileReader()
+    const dataUrl = await new Promise((resolve, reject) => {
+      reader.onload = () => resolve(reader.result)
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+    const data = String(dataUrl).split(',')[1]
+    const name = file.name.replace(/\.svg$/i, '').replace(/[^a-zA-Z0-9_-]/g, '')
+    const res = await post(base() + '/icons/upload', { data, name })
+    customIcons.value.push(res)
+    form.value.icon = res.path
+    await fetchIcons()
+    ElMessage.success('图标已上传')
+  } catch (e) {
+    ElMessage.error((e && e.message) || '上传失败')
+  } finally {
+    uploadingIcon.value = false
+  }
+  return false
+}
+
+async function handleIconRemove(icon) {
+  try {
+    await ElMessageBox.confirm(`确认删除自定义图标「${icon.name}」？使用该图标的供应商将回退为色点。`, '删除图标', { type: 'warning' })
+    await del(`${base()}/icons/${icon.name}`)
+    if (form.value.icon === icon.path) form.value.icon = ''
+    await fetchIcons()
+    ElMessage.success('已删除')
+  } catch {
+    // 取消
+  }
+}
+
+// ================= 表单 =================
+const form = ref({ name: '', icon: '', iconColor: '#4D6BFE', openai: { baseUrl: '', apiKey: '' }, anthropic: { baseUrl: '', apiKey: '' }, models: '' })
+const selectedModels = ref([])
+const modelMode = ref('quick')
+
+const emptyForm = () => ({ name: '', icon: '', iconColor: '#4D6BFE', openai: { baseUrl: '', apiKey: '' }, anthropic: { baseUrl: '', apiKey: '' }, models: '' })
 
 function openCreate() {
   editing.value = null
-  form.value = { name: '', providerType: 'OPENAI_COMPATIBLE', baseUrl: '', apiKey: '', models: '' }
+  form.value = emptyForm()
+  selectedModels.value = []
+  modelMode.value = 'quick'
+  refQuery.value = ''
+  refResults.value = []
+  iconQuery.value = ''
   dialogVisible.value = true
 }
 
@@ -41,34 +198,58 @@ function openEdit(row) {
   editing.value = row
   form.value = {
     name: row.name,
-    providerType: row.providerType,
-    baseUrl: row.baseUrl,
-    apiKey: '',
-    models: (row.models || []).map((m) => m.modelId).join('\n'),
+    icon: row.icon || '',
+    iconColor: row.iconColor || '#4D6BFE',
+    openai: { baseUrl: row.openai.baseUrl, apiKey: '' },
+    anthropic: { baseUrl: row.anthropic.baseUrl, apiKey: '' },
+    models: (row.models || []).map((m) => (m.contextTokens ? `${m.modelId}:${m.contextTokens}` : m.modelId)).join('\n'),
   }
+  selectedModels.value = (row.models || []).map((m) => ({ modelId: m.modelId, contextTokens: m.contextTokens ?? null }))
+  modelMode.value = 'quick'
+  refQuery.value = ''
+  refResults.value = []
+  iconQuery.value = ''
   dialogVisible.value = true
 }
 
 async function handleSave() {
-  if (!form.value.name.trim() || !form.value.baseUrl.trim()) {
-    ElMessage.warning('请填写名称与 base_url')
+  if (!form.value.name.trim()) {
+    ElMessage.warning('请填写名称')
+    return
+  }
+  const openaiBase = form.value.openai.baseUrl.trim()
+  const anthropicBase = form.value.anthropic.baseUrl.trim()
+  if (!openaiBase && !anthropicBase) {
+    ElMessage.warning('OpenAI 兼容与 Anthropic 兼容接口至少配置一个 BaseUrl')
     return
   }
   creating.value = true
   try {
-    const models = form.value.models
-      .split('\n')
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .map((modelId) => ({ modelId, contextTokens: null }))
-    const payload = { ...form.value, models }
-    if (editing.value) {
-      await put(`${base()}/update/${editing.value.id}`, payload)
-    } else {
-      await post(base() + '/create', payload)
+    const models =
+      modelMode.value === 'quick'
+        ? selectedModels.value.map((m) => ({ modelId: m.modelId, contextTokens: m.contextTokens ?? null }))
+        : form.value.models
+            .split('\n')
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .map((line) => {
+              const [modelId, ctx] = line.split(':')
+              const contextTokens = ctx && !Number.isNaN(Number(ctx)) ? Number(ctx) : null
+              return { modelId: modelId.trim(), contextTokens }
+            })
+    const payload = {
+      name: form.value.name,
+      icon: form.value.icon,
+      iconColor: form.value.iconColor,
+      openai: { baseUrl: openaiBase, apiKey: form.value.openai.apiKey },
+      anthropic: { baseUrl: anthropicBase, apiKey: form.value.anthropic.apiKey },
+      models,
     }
+    if (editing.value) await put(`${base()}/update/${editing.value.id}`, payload)
+    else await post(base() + '/create', payload)
     dialogVisible.value = false
     await fetchAll()
+    ElMessage.success('已保存')
   } finally {
     creating.value = false
   }
@@ -78,28 +259,22 @@ async function handleRemove(row) {
   try {
     await ElMessageBox.confirm(`确认删除「${row.name}」？`, '删除供应商', { type: 'error' })
     await del(`${base()}/delete/${row.id}`)
+    drawerVisible.value = false
     await fetchAll()
+    ElMessage.success('已删除')
   } catch {
     // 取消
   }
 }
 
-async function handleSetDefault(row) {
-  await put(`${base()}/default/${row.id}`)
-  await fetchAll()
-}
-
-async function handleToggle(row) {
-  await put(`${base()}/enabled/${row.id}`, { enabled: !row.enabled })
-  await fetchAll()
-}
-
-async function handleTest(row) {
-  testing.value = row.id
+async function handleTest(row, compat) {
+  const endpoint = compat === 'anthropic' ? row.anthropic : row.openai
+  if (!endpoint.baseUrl) return
+  testing.value = `${row.id}:${compat}`
   try {
-    const result = await post(`${base()}/test`, { baseUrl: row.baseUrl, apiKey: row.apiKey })
-    if (result.success) ElMessage.success(`连接成功（${result.latencyMs}ms）`)
-    else ElMessage.error(`连接失败：${result.message}`)
+    const result = await post(`${base()}/test`, { id: row.id, compat, timeoutSeconds: 5 })
+    if (result.success) ElMessage.success(`${compat === 'anthropic' ? 'Anthropic' : 'OpenAI'} 连接成功（${result.latencyMs}ms${result.modelCount != null ? ` · ${result.modelCount} 个模型` : ''}）`)
+    else ElMessage.error(`${compat === 'anthropic' ? 'Anthropic' : 'OpenAI'} 连接失败：${result.message}`)
   } finally {
     testing.value = null
   }
@@ -108,54 +283,263 @@ async function handleTest(row) {
 
 <template>
   <div class="surface">
-    <div class="panel-header">
-      <el-button type="primary" size="small" :icon="Plus" @click="openCreate">新增供应商</el-button>
-      <el-button :icon="Refresh" size="small" circle :loading="loading" @click="fetchAll" />
+    <!-- 统计条 -->
+    <div class="stats-bar">
+      <div class="stat-block">
+        <span class="stat-icon accent"><el-icon><Grid /></el-icon></span>
+        <div class="stat-text">
+          <span class="stat-num accent">{{ stats.total }}</span>
+          <span class="stat-label">供应商</span>
+        </div>
+      </div>
+      <div class="stat-block">
+        <span class="stat-icon"><el-icon><Link /></el-icon></span>
+        <div class="stat-text">
+          <span class="stat-num">{{ stats.withOpenai }}</span>
+          <span class="stat-label">已配 OpenAI 兼容</span>
+        </div>
+      </div>
+      <div class="stat-block">
+        <span class="stat-icon"><el-icon><Star /></el-icon></span>
+        <div class="stat-text">
+          <span class="stat-num">{{ stats.withAnthropic }}</span>
+          <span class="stat-label">已配 Anthropic 兼容</span>
+        </div>
+      </div>
+      <div class="stat-block">
+        <span class="stat-icon"><el-icon><Key /></el-icon></span>
+        <div class="stat-text">
+          <span class="stat-num">{{ stats.modelCount }}</span>
+          <span class="stat-label">模型总数</span>
+        </div>
+      </div>
     </div>
-    <el-table v-loading="loading" :data="rows" empty-text="暂无供应商">
-      <el-table-column prop="name" label="名称" min-width="120" />
-      <el-table-column label="类型" width="160">
-        <template #default="{ row }"><code class="mono">{{ row.providerType }}</code></template>
-      </el-table-column>
-      <el-table-column label="模型" min-width="160">
-        <template #default="{ row }">
-          <div v-for="m in row.models" :key="m.modelId" class="model-chip">{{ m.modelId }}</div>
-        </template>
-      </el-table-column>
-      <el-table-column label="API Key" width="100">
-        <template #default="{ row }">{{ row.apiKey ? '••••••••' : '未配置' }}</template>
-      </el-table-column>
-      <el-table-column label="默认" width="70">
-        <template #default="{ row }">
-          <el-tag v-if="row.isDefault" size="small" type="warning">默认</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="启用" width="80">
-        <template #default="{ row }">
-          <el-switch :model-value="row.enabled" @change="handleToggle(row)" />
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="220" fixed="right">
-        <template #default="{ row }">
-          <el-button size="small" :icon="Connection" :loading="testing === row.id" @click="handleTest(row)">测试</el-button>
-          <el-button size="small" :icon="EditPen" @click="openEdit(row)">编辑</el-button>
-          <el-button size="small" @click="handleSetDefault(row)">默认</el-button>
-          <el-button size="small" type="danger" plain :icon="Delete" @click="handleRemove(row)">删除</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
 
-    <el-dialog v-model="dialogVisible" :title="editing ? '编辑供应商' : '新增供应商'" width="560">
-      <el-form label-width="90px">
-        <el-form-item label="名称" required><el-input v-model="form.name" /></el-form-item>
-        <el-form-item label="类型">
-          <el-select v-model="form.providerType">
-            <el-option v-for="t in types" :key="t" :label="t" :value="t" />
-          </el-select>
+    <!-- 筛选与操作 -->
+    <div class="toolbar">
+      <el-input v-model="keyword" class="search" :prefix-icon="Search" placeholder="搜索名称 / BaseUrl" clearable />
+      <div class="spacer" />
+      <el-tooltip content="刷新列表" placement="top">
+        <el-button :icon="Refresh" circle :loading="loading" @click="fetchAll" />
+      </el-tooltip>
+      <el-button type="primary" :icon="Plus" @click="openCreate">新增供应商</el-button>
+    </div>
+
+    <!-- 供应商卡片网格 -->
+    <div v-loading="loading" class="card-grid">
+      <div v-for="row in filtered" :key="row.id" class="provider-card" @click="openDetail(row)">
+        <div class="card-head">
+          <img v-if="row.icon" :src="iconUrl(row.icon)" class="p-icon" :alt="row.name" @error="$event.target.style.display = 'none'" />
+          <span v-else class="dot" :style="{ background: row.iconColor || 'var(--aibase-accent)' }" />
+          <span class="p-name" :title="row.name">{{ row.name }}</span>
+          <div class="spacer" />
+          <el-icon class="chevron"><ArrowRight /></el-icon>
+        </div>
+
+        <div v-if="row.openai.baseUrl" class="compat-row" :title="row.openai.baseUrl">
+          <img :src="iconUrl(OPENAI_ICON)" class="compat-icon" alt="OpenAI" @error="$event.target.style.display = 'none'" />
+          <span class="compat-url mono">{{ row.openai.baseUrl }}</span>
+        </div>
+        <div v-if="row.anthropic.baseUrl" class="compat-row" :title="row.anthropic.baseUrl">
+          <img :src="iconUrl(ANTHROPIC_ICON)" class="compat-icon" alt="Anthropic" @error="$event.target.style.display = 'none'" />
+          <span class="compat-url mono">{{ row.anthropic.baseUrl }}</span>
+        </div>
+
+        <div class="card-models">
+          <template v-if="row.models.length">
+            <el-tooltip v-for="m in row.models.slice(0, 3)" :key="m.modelId" :content="m.contextTokens ? `${m.modelId} · ${m.contextTokens} tokens` : m.modelId" placement="top">
+              <span class="model-chip">{{ m.modelId }}</span>
+            </el-tooltip>
+            <el-tag v-if="row.models.length > 3" size="small" type="warning" effect="plain">+{{ row.models.length - 3 }}</el-tag>
+          </template>
+          <span v-else class="model-chip muted-chip">未配置模型</span>
+        </div>
+
+        <div class="card-foot">
+          <span class="muted foot-tip">点击查看详情</span>
+          <el-tag v-if="row.openai.apiKeySet || row.anthropic.apiKeySet" size="small" type="success" effect="plain">已配置密钥</el-tag>
+          <el-tag v-else size="small" type="info" effect="plain">未配置密钥</el-tag>
+        </div>
+      </div>
+
+      <div v-if="!loading && filtered.length === 0" class="empty-state">
+        <el-empty :description="rows.length === 0 ? '暂无供应商，点击「新增供应商」创建' : '没有匹配的供应商'" :image-size="80" />
+      </div>
+    </div>
+
+    <!-- 详情抽屉 -->
+    <el-drawer v-model="drawerVisible" :title="detailRow?.name ?? ''" direction="rtl" size="440px" :with-header="false">
+      <div v-if="detailRow" class="drawer-body">
+        <div class="drawer-head">
+          <img v-if="detailRow.icon" :src="iconUrl(detailRow.icon)" class="drawer-icon" :alt="detailRow.name" @error="$event.target.style.display = 'none'" />
+          <span v-else class="dot" :style="{ background: detailRow.iconColor || 'var(--aibase-accent)' }" />
+          <div class="drawer-title">
+            <div class="drawer-name">{{ detailRow.name }}</div>
+            <div class="muted drawer-sub">供应商详情</div>
+          </div>
+        </div>
+
+        <!-- OpenAI 兼容接口 -->
+        <div class="endpoint-block">
+          <div class="endpoint-title">
+            <img :src="iconUrl(OPENAI_ICON)" class="endpoint-icon" alt="OpenAI" @error="$event.target.style.display = 'none'" />
+            <span>OpenAI 兼容接口</span>
+          </div>
+          <div v-if="detailRow.openai.baseUrl" class="endpoint-url mono" :title="detailRow.openai.baseUrl">{{ detailRow.openai.baseUrl }}</div>
+          <div v-else class="endpoint-empty muted">未配置</div>
+          <div class="endpoint-meta">
+            <el-tag v-if="detailRow.openai.apiKeySet" size="small" type="success" effect="plain">API Key 已配置</el-tag>
+            <el-tag v-else size="small" type="warning" effect="plain">API Key 未配置</el-tag>
+            <el-button
+              v-if="detailRow.openai.baseUrl"
+              size="small"
+              :icon="Connection"
+              :loading="testing === detailRow.id + ':openai'"
+              @click="handleTest(detailRow, 'openai')"
+            >测试连接</el-button>
+          </div>
+        </div>
+
+        <!-- Anthropic 兼容接口 -->
+        <div class="endpoint-block">
+          <div class="endpoint-title">
+            <img :src="iconUrl(ANTHROPIC_ICON)" class="endpoint-icon" alt="Anthropic" @error="$event.target.style.display = 'none'" />
+            <span>Anthropic 兼容接口</span>
+          </div>
+          <div v-if="detailRow.anthropic.baseUrl" class="endpoint-url mono" :title="detailRow.anthropic.baseUrl">{{ detailRow.anthropic.baseUrl }}</div>
+          <div v-else class="endpoint-empty muted">未配置</div>
+          <div class="endpoint-meta">
+            <el-tag v-if="detailRow.anthropic.apiKeySet" size="small" type="success" effect="plain">API Key 已配置</el-tag>
+            <el-tag v-else size="small" type="warning" effect="plain">API Key 未配置</el-tag>
+            <el-button
+              v-if="detailRow.anthropic.baseUrl"
+              size="small"
+              :icon="Connection"
+              :loading="testing === detailRow.id + ':anthropic'"
+              @click="handleTest(detailRow, 'anthropic')"
+            >测试连接</el-button>
+          </div>
+        </div>
+
+        <!-- 模型 -->
+        <div class="endpoint-block">
+          <div class="endpoint-title"><el-icon><Key /></el-icon><span>模型（{{ detailRow.models?.length ?? 0 }} 个）</span></div>
+          <div v-if="detailRow.models?.length" class="drawer-models">
+            <el-tooltip v-for="m in detailRow.models" :key="m.modelId" :content="m.contextTokens ? `${m.modelId} · ${m.contextTokens} tokens` : m.modelId" placement="top">
+              <span class="model-chip">{{ m.modelId }}</span>
+            </el-tooltip>
+          </div>
+          <div v-else class="endpoint-empty muted">未配置模型</div>
+        </div>
+
+        <!-- 底部操作 -->
+        <div class="drawer-foot">
+          <span class="muted foot-info">
+            <span class="dot" :style="{ background: detailRow.iconColor || 'var(--aibase-accent)' }" />
+            标识色 {{ detailRow.iconColor || '未设置' }}
+          </span>
+          <div class="spacer" />
+          <el-button size="small" type="danger" plain :icon="Delete" @click="handleRemove(detailRow)">删除</el-button>
+          <el-button size="small" type="primary" :icon="EditPen" @click="openEdit(detailRow)">编辑</el-button>
+        </div>
+      </div>
+    </el-drawer>
+
+    <el-dialog v-model="dialogVisible" :title="editing ? '编辑供应商' : '新增供应商'" width="680">
+      <el-form label-width="110px">
+        <el-form-item label="名称" required><el-input v-model="form.name" placeholder="如 DeepSeek" /></el-form-item>
+        <el-form-item label="图标">
+          <div class="icon-picker-wrap">
+            <div class="icon-tools">
+              <el-input v-model="iconQuery" class="icon-search" size="small" placeholder="搜索内置图标" clearable :prefix-icon="Search" />
+              <el-upload :auto-upload="true" :show-file-list="false" :before-upload="handleIconUpload" accept=".svg">
+                <el-button size="small" type="primary" plain :icon="Upload" :loading="uploadingIcon">上传图标</el-button>
+              </el-upload>
+            </div>
+            <div v-if="customIcons.length" class="icon-group-title">自定义（{{ customIcons.length }}/20）</div>
+            <div class="icon-picker">
+              <div
+                v-for="icon in customIcons"
+                :key="icon.name"
+                class="icon-item"
+                :class="{ active: form.icon === icon.path }"
+                :title="icon.name"
+                @click="pickIcon(icon.path)"
+              >
+                <img :src="iconUrl(icon.path)" :alt="icon.name" loading="lazy" />
+                <el-icon v-if="form.icon === icon.path" class="check"><Check /></el-icon>
+                <span class="icon-remove" @click.stop="handleIconRemove(icon)"><Close /></span>
+              </div>
+            </div>
+            <div class="icon-group-title">内置</div>
+            <div class="icon-picker">
+              <div
+                v-for="icon in filteredBuiltin"
+                :key="icon.path"
+                class="icon-item"
+                :class="{ active: form.icon === icon.path }"
+                :title="icon.name.replace(/\.svg$/, '')"
+                @click="pickIcon(icon.path)"
+              >
+                <img :src="iconUrl(icon.path)" :alt="icon.name" loading="lazy" />
+                <el-icon v-if="form.icon === icon.path" class="check"><Check /></el-icon>
+              </div>
+              <span v-if="!filteredBuiltin.length" class="muted">无匹配图标</span>
+            </div>
+            <el-button v-if="form.icon" size="small" text type="info" :icon="Close" @click="form.icon = ''">清除图标</el-button>
+          </div>
         </el-form-item>
-        <el-form-item label="Base URL" required><el-input v-model="form.baseUrl" placeholder="https://api.example.com/v1" /></el-form-item>
-        <el-form-item label="API Key"><el-input v-model="form.apiKey" type="password" show-password :placeholder="editing ? '留空保持不变' : ''" /></el-form-item>
-        <el-form-item label="模型 ID"><el-input v-model="form.models" type="textarea" :rows="3" placeholder="每行一个模型 ID" /></el-form-item>
+        <el-form-item label="标识颜色">
+          <el-color-picker v-model="form.iconColor" />
+          <span class="muted hint">未设图标时显示的圆点颜色</span>
+        </el-form-item>
+
+        <el-divider content-position="left">OpenAI 兼容接口</el-divider>
+        <el-form-item label="Base URL">
+          <el-input v-model="form.openai.baseUrl" placeholder="https://api.example.com/v1" clearable />
+        </el-form-item>
+        <el-form-item label="API Key">
+          <el-input v-model="form.openai.apiKey" type="password" show-password :placeholder="editing && form.openai.apiKey === '' ? '留空保持不变' : ''" clearable />
+        </el-form-item>
+
+        <el-divider content-position="left">Anthropic 兼容接口</el-divider>
+        <el-form-item label="Base URL">
+          <el-input v-model="form.anthropic.baseUrl" placeholder="https://api.example.com" clearable />
+        </el-form-item>
+        <el-form-item label="API Key">
+          <el-input v-model="form.anthropic.apiKey" type="password" show-password :placeholder="editing && form.anthropic.apiKey === '' ? '留空保持不变' : ''" clearable />
+        </el-form-item>
+
+        <el-divider content-position="left">模型（两接口共享）</el-divider>
+        <el-form-item label="模型">
+          <div class="model-editor">
+            <el-radio-group v-model="modelMode" size="small">
+              <el-radio-button value="quick">快速选择（参考库）</el-radio-button>
+              <el-radio-button value="manual">手动输入</el-radio-button>
+            </el-radio-group>
+
+            <template v-if="modelMode === 'quick'">
+              <el-input v-model="refQuery" placeholder="搜索 models.dev 参考库，如 deepseek / claude / gpt-4o，点击结果加入" clearable :prefix-icon="Search" @keyup.enter="searchReference" />
+              <div v-if="refSearching" class="ref-hint muted">搜索中…</div>
+              <div v-else-if="refResults.length" class="ref-list">
+                <div v-for="m in refResults" :key="m.provider + '/' + m.modelId" class="ref-item" @click="addRefModel(m)">
+                  <span class="mono ref-id">{{ m.provider }}/{{ m.modelId }}</span>
+                  <span class="muted ref-ctx">{{ fmtCtx(m.contextTokens) }} ctx</span>
+                  <el-icon class="ref-add"><Plus /></el-icon>
+                </div>
+              </div>
+              <div v-else-if="refQuery.trim().length >= 2" class="ref-hint muted">无匹配结果，试试其他关键词或切换手动输入</div>
+              <div class="selected-models">
+                <el-tag v-for="(m, i) in selectedModels" :key="m.modelId" closable size="small" @close="selectedModels.splice(i, 1)">
+                  {{ m.modelId }}<span v-if="m.contextTokens" class="tag-ctx"> · {{ fmtCtx(m.contextTokens) }} ctx</span>
+                </el-tag>
+                <span v-if="!selectedModels.length" class="muted">尚未选择模型</span>
+              </div>
+            </template>
+
+            <el-input v-else v-model="form.models" type="textarea" :rows="5" placeholder="每行一个，格式 modelId 或 modelId:上下文tokens，如&#10;deepseek-chat:64000&#10;deepseek-reasoner" />
+          </div>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
@@ -166,18 +550,452 @@ async function handleTest(row) {
 </template>
 
 <style scoped>
-.panel-header {
+/* ---------- 统计条 ---------- */
+.stats-bar {
   display: flex;
-  justify-content: flex-end;
+  align-items: stretch;
+  gap: 0;
+  padding: 12px 0;
+  border-bottom: 1px dashed var(--aibase-stroke);
+  margin-bottom: 14px;
+}
+.stat-block {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 20px;
+  min-width: 0;
+}
+.stat-block + .stat-block {
+  border-left: 1px solid var(--aibase-stroke);
+}
+.stat-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  background: var(--aibase-bg);
+  color: var(--aibase-text);
+  flex-shrink: 0;
+}
+.stat-icon.accent { background: rgba(79, 110, 247, 0.1); color: var(--aibase-accent); }
+.stat-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.stat-num {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--aibase-text);
+}
+.stat-num.accent { color: var(--aibase-accent); }
+.stat-label {
+  font-size: 12px;
+  color: var(--aibase-muted);
+}
+
+/* ---------- 工具栏 ---------- */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.search { width: 280px; }
+.spacer { flex: 1; }
+
+/* ---------- 卡片网格 ---------- */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 14px;
+  min-height: 120px;
+}
+.provider-card {
+  border: 1px solid var(--aibase-stroke);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
-  margin-bottom: 12px;
+  min-height: 210px;
+  background: #fff;
+  cursor: pointer;
+  transition: box-shadow 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+.provider-card:hover {
+  border-color: var(--aibase-accent);
+  box-shadow: 0 6px 20px rgba(79, 110, 247, 0.14);
+  transform: translateY(-2px);
+}
+.provider-card:active {
+  transform: translateY(0);
+}
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-bottom: 2px;
+}
+.chevron {
+  color: var(--aibase-muted);
+  font-size: 13px;
+  flex-shrink: 0;
+  transition: transform 0.18s ease, color 0.18s ease;
+}
+.provider-card:hover .chevron {
+  color: var(--aibase-accent);
+  transform: translateX(2px);
+}
+.p-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.p-name {
+  font-size: 15px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.compat-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  padding: 5px 9px;
+  background: var(--aibase-bg);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.compat-row.empty {
+  opacity: 0.55;
+  font-style: italic;
+}
+.compat-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+.compat-badge {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.compat-badge.o { background: #10a37f; }
+.compat-badge.a { background: #d97757; }
+.compat-url {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--aibase-text);
+}
+.card-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--aibase-stroke);
+  margin-top: auto;
+  min-height: 26px;
+}
+.foot-tip {
+  font-size: 12px;
+  flex: 1;
+}
+.card-models {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-content: flex-start;
+  min-height: 22px;
 }
 .model-chip {
-  font-size: 12px;
+  font-size: 11px;
   background: var(--aibase-bg);
-  border-radius: 4px;
-  padding: 1px 6px;
-  margin: 2px 0;
-  display: inline-block;
+  border: 1px solid var(--aibase-stroke);
+  border-radius: 5px;
+  padding: 1px 7px;
+  color: var(--aibase-text);
+  cursor: default;
 }
+.muted-chip {
+  color: var(--aibase-muted);
+  font-style: italic;
+}
+.card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--aibase-stroke);
+  margin-top: auto;
+  min-height: 26px;
+}
+.empty-state {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: center;
+  padding: 30px 0;
+}
+
+/* ---------- 详情抽屉 ---------- */
+.drawer-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 4px 2px;
+}
+.drawer-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--aibase-stroke);
+}
+.drawer-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  object-fit: contain;
+  background: var(--aibase-bg);
+  padding: 6px;
+}
+.drawer-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.drawer-name {
+  font-size: 17px;
+  font-weight: 700;
+}
+.drawer-sub {
+  font-size: 12px;
+}
+.endpoint-block {
+  border: 1px solid var(--aibase-stroke);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.endpoint-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.endpoint-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  object-fit: contain;
+}
+.endpoint-url {
+  font-size: 12.5px;
+  color: var(--aibase-text);
+  background: var(--aibase-bg);
+  border-radius: 8px;
+  padding: 7px 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.endpoint-empty {
+  font-size: 12.5px;
+  font-style: italic;
+}
+.endpoint-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 6px;
+}
+.drawer-models {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.drawer-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--aibase-stroke);
+  margin-top: auto;
+}
+.foot-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+/* ---------- 图标选择器 ---------- */
+.icon-picker-wrap {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.icon-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.icon-search {
+  width: 240px;
+}
+.icon-group-title {
+  font-size: 12px;
+  color: var(--aibase-muted);
+  margin-top: 2px;
+}
+.icon-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  max-height: 168px;
+  overflow: auto;
+  padding: 2px;
+}
+.icon-item {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--aibase-stroke);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: #fff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.icon-item:hover {
+  border-color: var(--aibase-accent);
+}
+.icon-item.active {
+  border-color: var(--aibase-accent);
+  box-shadow: 0 0 0 2px rgba(79, 110, 247, 0.2);
+}
+.icon-item img {
+  max-width: 26px;
+  max-height: 26px;
+}
+.icon-item .check {
+  position: absolute;
+  right: -4px;
+  top: -4px;
+  background: var(--aibase-accent);
+  color: #fff;
+  border-radius: 50%;
+  font-size: 11px;
+  padding: 1px;
+}
+.icon-remove {
+  position: absolute;
+  left: -4px;
+  top: -4px;
+  background: #f56c6c;
+  color: #fff;
+  border-radius: 50%;
+  font-size: 9px;
+  padding: 1px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.icon-item:hover .icon-remove {
+  opacity: 1;
+}
+
+/* ---------- 模型编辑器 ---------- */
+.model-editor {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ref-list {
+  max-height: 180px;
+  overflow: auto;
+  border: 1px solid var(--aibase-stroke);
+  border-radius: 8px;
+}
+.ref-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.ref-item:hover {
+  background: rgba(79, 110, 247, 0.06);
+}
+.ref-id {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ref-ctx {
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.ref-add {
+  color: var(--aibase-accent);
+  flex-shrink: 0;
+}
+.ref-hint {
+  font-size: 12px;
+}
+.selected-models {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 26px;
+}
+.tag-ctx {
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+/* ---------- 其他 ---------- */
+.hint { font-size: 12px; margin-left: 10px; color: var(--aibase-muted); }
+.muted { color: var(--aibase-muted); }
+.mono { font-family: monospace; }
 </style>

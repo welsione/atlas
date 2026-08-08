@@ -113,6 +113,17 @@ export class PluginLoader implements OnApplicationBootstrap {
     return result
   }
 
+  /** 手动全量重载（POST /api/plugins/reload）：卸载全部外部插件 → 重新加载 → 同步注册表。 */
+  async reloadAll(): Promise<void> {
+    for (const type of this.registry.types()) {
+      const loaded = this.registry.byType(type)
+      if (loaded && !loaded.builtin) this.registry.unregister(type)
+    }
+    await this.loadExternal()
+    this.service.syncDefs()
+    this.logger.log(`插件全量重载完成：${this.registry.types().length} 个`)
+  }
+
   /** 加载单个外部插件目录：读 manifest → 动态 import entry → 注册。 */
   async loadExternalDir(pluginDir: string, artifact: string, hash: string): Promise<LoadedPlugin | null> {
     try {
@@ -145,6 +156,7 @@ export class PluginLoader implements OnApplicationBootstrap {
         artifact,
         artifactHash: hash,
         version: manifest.version ?? '0.0.0',
+        icon: manifest.icon ?? '',
         builtin: false,
         module: mod,
       }
@@ -164,16 +176,18 @@ function hashOf(file: string): string {
   return createHash('sha256').update(readFileSync(file)).digest('hex').slice(0, 16)
 }
 
-/** 插件目录内容哈希：manifest + 入口 + ui 目录（任何文件变化触发热替换）。 */
+/** 插件目录内容哈希：manifest + 入口 + ui 目录（任何文件变化触发热替换）。
+ *  递归排除 node_modules（依赖目录，避免全量哈希拖慢扫描）。 */
 function dirHash(pluginDir: string): string {
   const hash = createHash('sha256')
   const walk = (dir: string, prefix: string): void => {
     for (const name of readdirSync(dir).sort()) {
+      if (name === 'node_modules') continue
       const full = join(dir, name)
       const rel = prefix ? `${prefix}/${name}` : name
       if (statSync(full).isDirectory()) {
         walk(full, rel)
-      } else if (rel !== 'node_modules' && !name.endsWith('.map')) {
+      } else if (!name.endsWith('.map')) {
         hash.update(rel)
         hash.update(readFileSync(full))
       }

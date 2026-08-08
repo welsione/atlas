@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common'
 import { DB } from '../db/database.module.js'
 import type Database from 'better-sqlite3'
 import type { Dataset, DatasetSensitivity, Secret } from '@atlas/types'
+import { now } from '../common/utils.js'
 
 export interface DatasetRow {
   id: number
@@ -96,6 +97,14 @@ export class DatasetRepository {
       .map(rowToDataset)
   }
 
+  /** 精确查找（app + 插件 + key），避免全表扫描 content_json 大字段。 */
+  findDatasetByKey(appId: number, pluginType: string, datasetKey: string): Dataset | undefined {
+    const row = this.db
+      .prepare('SELECT * FROM datasets WHERE app_id = ? AND plugin_type = ? AND dataset_key = ?')
+      .get(appId, pluginType, datasetKey) as DatasetRow | undefined
+    return row ? rowToDataset(row) : undefined
+  }
+
   findById(id: number): Dataset | undefined {
     const row = this.db.prepare('SELECT * FROM datasets WHERE id = ?').get(id) as DatasetRow | undefined
     return row ? rowToDataset(row) : undefined
@@ -119,12 +128,15 @@ export class DatasetRepository {
   }
 
   // ---------- secrets ----------
-  insertSecret(datasetId: number, keyName: string, ciphertext: string, now: string): void {
+  insertSecret(datasetId: number, keyName: string, ciphertext: string, nowTs: string): void {
+    const version = (this.db
+      .prepare('SELECT COALESCE(MAX(secret_version), 0) + 1 v FROM secrets WHERE dataset_id = ? AND key_name = ?')
+      .get(datasetId, keyName) as { v: number }).v
     this.db
       .prepare(
-        'INSERT INTO secrets (dataset_id, key_name, ciphertext, secret_version, active, created_at, updated_at) VALUES (?,?,?,1,1,?,?)',
+        'INSERT INTO secrets (dataset_id, key_name, ciphertext, secret_version, active, created_at, updated_at) VALUES (?,?,?,?,1,?,?)',
       )
-      .run(datasetId, keyName, ciphertext, now, now)
+      .run(datasetId, keyName, ciphertext, version, nowTs, nowTs)
   }
 
   findActiveSecrets(datasetId: number): Array<{ id: number; key_name: string; ciphertext: string; created_at: string }> {
@@ -136,7 +148,7 @@ export class DatasetRepository {
   deactivateSecret(datasetId: number, keyName: string): void {
     this.db
       .prepare('UPDATE secrets SET active = 0, updated_at = ? WHERE dataset_id = ? AND key_name = ? AND active = 1')
-      .run(new Date().toISOString().slice(0, 19).replace('T', ' '), datasetId, keyName)
+      .run(now(), datasetId, keyName)
   }
 
   // ---------- grants ----------
@@ -145,13 +157,13 @@ export class DatasetRepository {
       .prepare(
         'INSERT OR IGNORE INTO dataset_app_grants (dataset_id, app_id, granted_at) VALUES (?,?,?)',
       )
-      .run(datasetId, appId, new Date().toISOString().slice(0, 19).replace('T', ' '))
+      .run(datasetId, appId, now())
   }
 
   revokeGrant(datasetId: number, appId: number): void {
     this.db
       .prepare('UPDATE dataset_app_grants SET revoked_at = ? WHERE dataset_id = ? AND app_id = ? AND revoked_at IS NULL')
-      .run(new Date().toISOString().slice(0, 19).replace('T', ' '), datasetId, appId)
+      .run(now(), datasetId, appId)
   }
 
   hasGrant(datasetId: number, appId: number): boolean {
@@ -174,13 +186,13 @@ export class DatasetRepository {
       .prepare(
         'INSERT INTO dataset_download_logs (dataset_id, app_id, token, ip, user_agent, bytes, downloaded_at) VALUES (?,?,?,?,?,?,?)',
       )
-      .run(datasetId, appId ?? 0, token, ip ?? '', ua ?? '', bytes, new Date().toISOString().slice(0, 19).replace('T', ' '))
+      .run(datasetId, appId ?? 0, token, ip ?? '', ua ?? '', bytes, now())
   }
 
   insertSecretAccessLog(secretId: number, datasetId: number, appId: number, ip: string): void {
     this.db
       .prepare('INSERT INTO secret_access_logs (secret_id, dataset_id, app_id, ip, accessed_at) VALUES (?,?,?,?,?)')
-      .run(secretId, datasetId, appId, ip ?? '', new Date().toISOString().slice(0, 19).replace('T', ' '))
+      .run(secretId, datasetId, appId, ip ?? '', now())
   }
 
   insertAccessLog(
@@ -204,7 +216,7 @@ export class DatasetRepository {
       .run(
         ownerAppId, consumerAppId ?? 0, resourceType, resourceId, token ?? '',
         endpoint, httpStatus, bytes, ip ?? '', ua ?? '',
-        new Date().toISOString().slice(0, 19).replace('T', ' '),
+        now(),
       )
   }
 

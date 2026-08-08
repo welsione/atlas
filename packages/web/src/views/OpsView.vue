@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { Refresh, Search } from '@element-plus/icons-vue'
+import { Refresh, Search, RefreshLeft } from '@element-plus/icons-vue'
 import { appApi } from '../services/appApi'
 import { opsApi, type OpsLogRow, type OpsOverview } from '../services/opsApi'
 import type { App } from '../types'
@@ -17,7 +17,7 @@ const filters = ref<{ appId?: number; pluginType: string; level: string }>({
   level: '',
 })
 const page = ref(1)
-const size = 20
+const size = ref(20)
 
 async function fetchOverview() {
   try {
@@ -35,7 +35,7 @@ async function fetchLogs() {
       pluginType: filters.value.pluginType || undefined,
       level: filters.value.level || undefined,
       page: page.value,
-      size,
+      size: size.value,
     })
     rows.value = result.rows
     total.value = result.total
@@ -56,6 +56,11 @@ onMounted(async () => {
 function search() {
   page.value = 1
   fetchLogs()
+}
+
+function resetFilters() {
+  filters.value = { appId: undefined, pluginType: '', level: '' }
+  search()
 }
 
 function detailOf(row: OpsLogRow): string {
@@ -83,7 +88,9 @@ const totalErrors = () => overview.value.byPlugin.reduce((s, p) => s + Number(p.
         <h1 class="page-title">运维台</h1>
         <p class="page-desc">跨应用工作日志：插件通过 env.ops() 写入，平台统一查看</p>
       </div>
-      <el-button :icon="Refresh" circle :loading="loading" @click="search" />
+      <el-tooltip content="刷新" placement="bottom">
+        <el-button :icon="Refresh" circle :loading="loading" @click="search" />
+      </el-tooltip>
     </div>
 
     <!-- 概览 -->
@@ -96,12 +103,13 @@ const totalErrors = () => overview.value.byPlugin.reduce((s, p) => s + Number(p.
       </div>
       <div class="overview-card surface">
         <div class="overview-title">近 24h 趋势（共 {{ overview.hourly.reduce((s, h) => s + h.count, 0) }} 条，错误 {{ totalErrors() }}）</div>
-        <div class="trend">
+        <div v-if="overview.hourly.length" class="trend">
           <div v-for="(h, i) in overview.hourly" :key="i" class="trend-col" :title="`${h.bucket}：${h.count} 条（错误 ${h.errors}）`">
             <div class="trend-bar" :style="{ height: `${(h.count / maxHourly()) * 100}%` }" :class="{ 'is-error': h.errors > 0 }" />
             <div class="trend-label">{{ String(h.bucket).slice(11, 13) }}时</div>
           </div>
         </div>
+        <div v-else class="trend-empty">近 24h 暂无工作日志</div>
       </div>
       <div class="overview-card surface">
         <div class="overview-title">按插件（近 7 天）</div>
@@ -115,7 +123,7 @@ const totalErrors = () => overview.value.byPlugin.reduce((s, p) => s + Number(p.
 
     <!-- 日志列表 -->
     <div class="surface filter-bar">
-      <el-select v-model="filters.appId" placeholder="全部应用" clearable filterable style="width: 200px" @change="search">
+      <el-select v-model="filters.appId" placeholder="全部应用" clearable filterable style="width: 180px" @change="search">
         <el-option v-for="a in apps" :key="a.id" :label="a.name" :value="a.id" />
       </el-select>
       <el-input v-model="filters.pluginType" placeholder="插件类型" clearable style="width: 160px" @keyup.enter="search" @clear="search" />
@@ -125,6 +133,9 @@ const totalErrors = () => overview.value.byPlugin.reduce((s, p) => s + Number(p.
         <el-option label="ERROR" value="ERROR" />
       </el-select>
       <el-button type="primary" :icon="Search" @click="search">查询</el-button>
+      <el-tooltip content="重置筛选" placement="top">
+        <el-button :icon="RefreshLeft" @click="resetFilters" />
+      </el-tooltip>
     </div>
 
     <div class="surface">
@@ -155,11 +166,13 @@ const totalErrors = () => overview.value.byPlugin.reduce((s, p) => s + Number(p.
       </el-table>
       <div class="pager">
         <el-pagination
-          layout="total, prev, pager, next"
+          layout="total, sizes, prev, pager, next"
           :total="total"
           :page-size="size"
+          :page-sizes="[20, 50, 100]"
           :current-page="page"
           @current-change="(p: number) => { page = p; fetchLogs() }"
+          @size-change="(s: number) => { size = s; page = 1; fetchLogs() }"
         />
       </div>
     </div>
@@ -248,6 +261,15 @@ const totalErrors = () => overview.value.byPlugin.reduce((s, p) => s + Number(p.
   align-items: center;
   justify-content: space-between;
   padding: 5px 0;
+}
+
+.trend-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 96px;
+  color: var(--aibase-muted);
+  font-size: 13px;
 }
 
 .filter-bar {

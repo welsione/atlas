@@ -35,4 +35,12 @@ export class PluginWatcher implements OnApplicationBootstrap, OnModuleDestroy {
   onModuleDestroy(): void {
     if (this.timer) clearInterval(this.timer)
   }
+
+  /** 手动 reload 后重置 known 基线（避免与下次扫描重复热替换）。 */
+  resyncKnown(): void {
+    this.known.clear()
+    for (const [name, hash] of this.loader.externalHashes()) {
+      this.known.set(name, hash)
+    }
+  }
 }
