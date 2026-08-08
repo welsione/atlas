@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { ArrowRight, Monitor, Cpu, Warning, List } from '@element-plus/icons-vue'
+import { ArrowRight, Monitor, Cpu, Warning, List, Box, Grid } from '@element-plus/icons-vue'
 import { appApi } from '../services/appApi'
 import { opsApi } from '../services/opsApi'
 import { pluginApi } from '../services/pluginApi'
@@ -48,21 +48,25 @@ const maxHourly = () => Math.max(1, ...overview.value.hourly.map((h) => h.count)
 
     <!-- 平台核心卡片 -->
     <div class="card-grid">
-      <div class="stat-card" @click="apps[0] && emit('open-space', apps[0])">
-        <el-icon class="stat-icon"><Monitor /></el-icon>
-        <div class="stat-num">{{ apps.length }}</div>
-        <div class="stat-label">应用总数</div>
-      </div>
+      <el-tooltip :content="apps.length ? `点击进入「${apps[0].name}」应用空间` : '暂无应用，先到应用管理创建'" placement="top">
+        <div class="stat-card" @click="apps[0] && emit('open-space', apps[0])">
+          <el-icon class="stat-icon"><Grid /></el-icon>
+          <div class="stat-num">{{ apps.length }}</div>
+          <div class="stat-label">应用总数</div>
+        </div>
+      </el-tooltip>
       <div class="stat-card">
         <el-icon class="stat-icon"><Cpu /></el-icon>
         <div class="stat-num">{{ instanceCount }}</div>
         <div class="stat-label">插件实例</div>
       </div>
-      <div class="stat-card">
-        <el-icon class="stat-icon"><Warning /></el-icon>
-        <div class="stat-num" :class="{ 'is-error': overview.levels.ERROR > 0 }">{{ overview.levels.ERROR }}</div>
-        <div class="stat-label">工作日志错误（近 7 天）</div>
-      </div>
+      <el-tooltip content="近 7 天 ERROR 级工作日志数量（见运维台）" placement="top">
+        <div class="stat-card">
+          <el-icon class="stat-icon" :class="{ 'is-error': overview.levels.ERROR > 0 }"><Warning /></el-icon>
+          <div class="stat-num" :class="{ 'is-error': overview.levels.ERROR > 0 }">{{ overview.levels.ERROR }}</div>
+          <div class="stat-label">工作日志错误（近 7 天）</div>
+        </div>
+      </el-tooltip>
       <div class="stat-card">
         <el-icon class="stat-icon"><List /></el-icon>
         <div class="stat-num">{{ overview.hourly.reduce((s, h) => s + h.count, 0) }}</div>
@@ -76,11 +80,17 @@ const maxHourly = () => Math.max(1, ...overview.value.hourly.map((h) => h.count)
     </div>
     <div v-if="consoleSlots.length" class="card-grid plugin-cards">
       <div v-for="slot in consoleSlots" :key="slot.key" class="plugin-card surface">
-        <PluginMount :load="slot.load" :plugin-type="slot.key.slice('plugin:'.length)" :refresh="() => undefined" />
+        <div class="plugin-card-head">
+          <img v-if="typeof slot.icon === 'string' && slot.icon" :src="slot.icon" class="plugin-card-icon" alt="" />
+          <span class="plugin-card-title">{{ slot.label }}</span>
+        </div>
+        <PluginMount :load="slot.load" :plugin-type="slot.key.slice('plugin:'.length)" mode="console" :refresh="() => undefined" />
       </div>
     </div>
     <div v-else class="empty-hint surface">
-      当前没有插件注册控制台卡片。插件在 UI manifest 的 slots 中声明 slot: console 后生效。
+      <el-icon class="empty-icon"><Box /></el-icon>
+      <div>当前没有插件注册控制台卡片。</div>
+      <div class="empty-sub">插件在 UI manifest 的 slots 中声明 <code class="mono">slot: console</code> 后生效，与应用空间 Tab 同一机制。</div>
     </div>
   </div>
 </template>
@@ -106,10 +116,33 @@ const maxHourly = () => Math.max(1, ...overview.value.hourly.map((h) => h.count)
   transform: translateY(-2px);
 }
 
+.plugin-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px 0;
+}
+
+.plugin-card-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  flex-shrink: 0;
+}
+
+.plugin-card-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+
 .stat-icon {
   font-size: 22px;
   color: var(--aibase-accent);
   margin-bottom: 12px;
+}
+
+.stat-icon.is-error {
+  color: #f56c6c;
 }
 
 .stat-num {
@@ -141,9 +174,25 @@ const maxHourly = () => Math.max(1, ...overview.value.hourly.map((h) => h.count)
 }
 
 .empty-hint {
-  padding: 32px;
+  padding: 40px 32px;
   text-align: center;
   color: var(--aibase-muted);
   border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.empty-icon {
+  font-size: 32px;
+  color: var(--aibase-accent);
+  opacity: 0.5;
+}
+
+.empty-sub {
+  font-size: 12px;
+  color: var(--aibase-muted);
+  opacity: 0.8;
 }
 </style>

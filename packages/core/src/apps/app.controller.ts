@@ -20,9 +20,10 @@ export class AppController {
   }
 
   @Post()
-  create(@Body() body: { name?: string; description?: string }) {
+  create(@Body() body: { name?: string; description?: string; pluginTypes?: string[] }) {
     try {
-      return ok(this.service.create(body?.name ?? '', body?.description ?? ''))
+      const types = Array.isArray(body?.pluginTypes) ? body.pluginTypes.filter((t) => typeof t === 'string') : undefined
+      return ok(this.service.create(body?.name ?? '', body?.description ?? '', types))
     } catch (e) {
       return error(400, (e as Error).message)
     }

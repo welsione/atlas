@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common'
 import { createHash, randomBytes } from 'node:crypto'
 import { AppRepository, type AppRow } from './app.repository.js'
 import { NotFoundError, ValidationError } from '../common/response.js'
+import { now } from '../common/utils.js'
 import type { App, AppStatus, CreateAppResult } from '@atlas/types'
 import { PluginService } from '../plugins/plugin.service.js'
 
@@ -14,10 +15,6 @@ export class AppService {
     @Inject(AppRepository) private readonly repository: AppRepository,
     private readonly pluginService: PluginService,
   ) {}
-
-  static now(): string {
-    return new Date().toISOString().slice(0, 19).replace('T', ' ')
-  }
 
   static hashSecret(secret: string): string {
     return createHash('sha256').update(secret).digest('hex')
@@ -36,13 +33,13 @@ export class AppService {
     }
   }
 
-  create(name: string, description = ''): CreateAppResult {
+  create(name: string, description = '', pluginTypes?: string[]): CreateAppResult {
     if (!name?.trim()) {
       throw new ValidationError('应用名称不能为空')
     }
     const appId = `app_${randomBytes(12).toString('hex')}`
     const secret = randomBytes(32).toString('hex')
-    const now = AppService.now()
+    const nowTs = now()
     const id = this.repository.insert({
       app_id: appId,
       name: name.trim(),
@@ -50,12 +47,13 @@ export class AppService {
       app_secret_hash: AppService.hashSecret(secret),
       status: 'ACTIVE',
       token_ttl_seconds: 86400,
-      created_at: now,
-      updated_at: now,
+      created_at: nowTs,
+      updated_at: nowTs,
     })
-    this.repository.insertCredential(id, AppService.hashSecret(secret), now)
-    this.pluginService.autoInstantiate(id)
-    this.logger.log(`创建应用：${name}（${appId}）`)
+    this.repository.insertCredential(id, AppService.hashSecret(secret), nowTs)
+    // 创建时勾选插件：仅实例化指定类型；未提供则全部（默认行为）
+    this.pluginService.autoInstantiate(id, pluginTypes)
+    this.logger.log(`创建应用：${name}（${appId}，实例化插件 ${pluginTypes?.length ?? '全部'} 个）`)
     return { app: AppService.toApp(this.repository.findById(id)!), secret }
   }
 
@@ -92,9 +90,9 @@ export class AppService {
     if (!row) throw new NotFoundError(`应用不存在: ${id}`)
     const secret = randomBytes(32).toString('hex')
     const hash = AppService.hashSecret(secret)
-    const now = AppService.now()
-    this.repository.updateSecret(id, hash, now)
-    this.repository.insertCredential(id, hash, now)
+    const nowTs = now()
+    this.repository.updateSecret(id, hash, nowTs)
+    this.repository.insertCredential(id, hash, nowTs)
     this.logger.warn(`应用凭证轮换：app=${row.app_id}`)
     return { app: AppService.toApp(this.repository.findById(id)!), secret }
   }
@@ -102,8 +100,8 @@ export class AppService {
   revoke(id: number): App {
     const row = this.repository.findById(id)
     if (!row) throw new NotFoundError(`应用不存在: ${id}`)
-    const now = AppService.now()
-    this.repository.updateStatus(id, 'REVOKED', now)
+    const nowTs = now()
+    this.repository.updateStatus(id, 'REVOKED', nowTs)
     // 历史凭证全部失效（吊销后不可恢复校验）
     this.repository.revokeAllCredentials(id)
     this.logger.warn(`应用吊销：app=${row.app_id}`)
@@ -113,15 +111,16 @@ export class AppService {
   activate(id: number): App {
     const row = this.repository.findById(id)
     if (!row) throw new NotFoundError(`应用不存在: ${id}`)
-    const now = AppService.now()
-    this.repository.updateStatus(id, 'ACTIVE', now)
+    const nowTs = now()
+    this.repository.updateStatus(id, 'ACTIVE', nowTs)
     return AppService.toApp(this.repository.findById(id)!)
   }
 
+  /** 删除应用：级联清理全部挂靠数据（实例/数据集/文件/日志/凭证），防孤儿数据。 */
   remove(id: number): void {
     const row = this.repository.findById(id)
     if (!row) throw new NotFoundError(`应用不存在: ${id}`)
-    this.repository.delete(id)
-    this.logger.warn(`删除应用：app=${row.app_id}`)
+    this.repository.deleteCascade(id)
+    this.logger.warn(`删除应用（级联清理）：app=${row.app_id}，${row.name}`)
   }
 }

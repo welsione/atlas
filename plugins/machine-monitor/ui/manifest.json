@@ -1,0 +1,18 @@
+{
+  "pluginType": "machine-monitor",
+  "name": "机器监控",
+  "version": "1.0.0",
+  "slots": [
+    {
+      "slot": "console",
+      "title": "机器监控",
+      "entry": "entry.3a6f2a99.js"
+    },
+    {
+      "slot": "system-menu",
+      "title": "机器监控",
+      "entry": "entry.3a6f2a99.js"
+    }
+  ],
+  "entry": "entry.3a6f2a99.js"
+}

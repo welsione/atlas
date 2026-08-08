@@ -13,6 +13,7 @@ interface PluginDefRow {
   artifact: string
   artifact_hash: string
   version: string
+  icon: string
   loaded: number
   builtin: number
   created_at: string
@@ -40,6 +41,7 @@ export const rowToDef = (r: PluginDefRow): PluginDef => ({
   artifact: r.artifact,
   artifactHash: r.artifact_hash,
   version: r.version,
+  icon: r.icon ?? '',
   loaded: r.loaded === 1,
   builtin: r.builtin === 1,
   createdAt: r.created_at,
@@ -65,17 +67,17 @@ export class PluginRepository {
     this.db
       .prepare(
         `INSERT INTO plugins (plugin_type, name, description, default_data_scope, scope_override_allowed,
-           artifact, artifact_hash, version, loaded, builtin, created_at, updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+           artifact, artifact_hash, version, icon, loaded, builtin, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
          ON CONFLICT(plugin_type) DO UPDATE SET
            name=excluded.name, description=excluded.description,
            default_data_scope=excluded.default_data_scope, scope_override_allowed=excluded.scope_override_allowed,
            artifact=excluded.artifact, artifact_hash=excluded.artifact_hash, version=excluded.version,
-           loaded=excluded.loaded, updated_at=excluded.updated_at`,
+           icon=excluded.icon, loaded=excluded.loaded, updated_at=excluded.updated_at`,
       )
       .run(
         def.pluginType, def.name, def.description, def.defaultDataScope, def.scopeOverrideAllowed ? 1 : 0,
-        def.artifact, def.artifactHash, def.version, def.loaded ? 1 : 0, def.builtin ? 1 : 0,
+        def.artifact, def.artifactHash, def.version, def.icon ?? '', def.loaded ? 1 : 0, def.builtin ? 1 : 0,
         def.createdAt, def.updatedAt,
       )
   }
@@ -126,6 +128,12 @@ export class PluginRepository {
     this.db.prepare('DELETE FROM plugin_instances WHERE app_id = ?').run(appId)
   }
 
+  /** 一次查询应用的全部插件实例（供概览合并，避免 N+1）。 */
+  findAllInstancesByApp(appId: number): PluginInstance[] {
+    return (this.db.prepare('SELECT * FROM plugin_instances WHERE app_id = ?').all(appId) as PluginInstanceRow[])
+      .map(rowToInstance)
+  }
+
   updateInstanceConfig(id: number, configJson: string): void {
     this.db
       .prepare('UPDATE plugin_instances SET config_json = ?, updated_at = ? WHERE id = ?')
@@ -162,6 +170,10 @@ export class PluginRepository {
       .all(instanceId, entityId) as Array<{ entity_key: string; value_json: string }>
   }
 
+  /**
+   * 按存储作用域键清理通用存储（instance_id 列语义 = scopeKey：0=共享 / appId=独立）。
+   * 删除 APP_LOCAL 实例时传 appId；共享实例删除时数据保留（不调用）。
+   */
   storeDeleteByScope(scopeKey: number): void {
     this.db.prepare('DELETE FROM plugin_store WHERE instance_id = ?').run(scopeKey)
   }

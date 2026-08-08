@@ -15,4 +15,6 @@ Atlas 官方插件。
 1. 复制 `plugins/template/` 到 `plugins/my-plugin/`
 2. 实现 `src/index.ts`（类型来自 `@atlas/types`）
 3. 声明端点/数据集/UI（可选）
-4. 提交 PR 到 Atlas 仓库（或独立发布后放入 `AIBASE_DATA_DIR/plugins/`）
+4. 提交 PR 到 Atlas 仓库（或独立发布后放入 `AIBASE_PLUGINS_DIR/`）
+
+> 完整插件开发规范见 [`docs/plugin-development.md`](../../docs/plugin-development.md)。

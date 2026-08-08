@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS plugins (
     artifact TEXT NOT NULL DEFAULT '',        -- 外部 jar 文件名；内置为 ''
     artifact_hash TEXT NOT NULL DEFAULT '',   -- jar SHA-256（识别同一插件不同拷贝/更新）
     version TEXT NOT NULL DEFAULT '',
+    icon TEXT NOT NULL DEFAULT '',             -- 插件图标：data:/http(s)/icons/xxx.svg（相对路径经 /_pluginui/{type}/icons/ 服务）
     loaded INTEGER NOT NULL DEFAULT 1,        -- 软卸载：loaded=0 数据全保留
     builtin INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,

@@ -3,6 +3,7 @@ import type { NextFunction, Request, Response } from 'express'
 import { CONFIG, type AIBaseConfig } from '../config.js'
 import { AuthService } from './auth.service.js'
 import { IpRuleRepository } from './ip-rule.repository.js'
+import { clientIp } from '../common/utils.js'
 
 /**
  * 统一安全过滤器（全局中间件）：
@@ -30,7 +31,7 @@ export class SecurityMiddleware implements NestMiddleware {
     res.setHeader('X-Content-Type-Options', 'nosniff')
     res.setHeader('X-Frame-Options', 'DENY')
 
-    const ip = clientIp(req)
+    const ip = clientIp(req, this.config.trustProxy)
     if (this.ipRuleRepository.isBlocked(ip)) {
       res.status(403).json({ code: 403, message: '该 IP 已被禁止访问', data: null })
       return
@@ -56,12 +57,4 @@ export class SecurityMiddleware implements NestMiddleware {
   private isPublic(path: string): boolean {
     return SecurityMiddleware.PUBLIC_PREFIXES.some((p) => path.startsWith(p))
   }
-}
-
-export function clientIp(req: Request): string {
-  const fwd = req.header('x-forwarded-for')
-  if (fwd && fwd.trim() !== '') {
-    return fwd.split(',')[0].trim()
-  }
-  return req.socket.remoteAddress ?? ''
 }

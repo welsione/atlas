@@ -1,7 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
 import { Inject } from '@nestjs/common'
 import { DB } from '../db/database.module.js'
-import { PluginRepository } from './plugin.repository.js'
+import { now } from '../common/utils.js'
 import type Database from 'better-sqlite3'
 
 /**
@@ -9,12 +9,7 @@ import type Database from 'better-sqlite3'
  */
 @Injectable()
 export class OpsLogService {
-  private readonly logger = new Logger(OpsLogService.name)
-
-  constructor(
-    @Inject(DB) private readonly db: Database.Database,
-    private readonly repository: PluginRepository,
-  ) {}
+  constructor(@Inject(DB) private readonly db: Database.Database) {}
 
   write(appId: number | null, pluginType: string, level: string, message: string, detail?: Record<string, unknown>): void {
     const normalized = level?.toUpperCase() === 'WARN' || level?.toUpperCase() === 'ERROR'
@@ -32,8 +27,7 @@ export class OpsLogService {
       .prepare(
         'INSERT INTO ops_logs (app_id, plugin_type, level, message, detail_json, created_at) VALUES (?,?,?,?,?,?)',
       )
-      .run(appId ?? 0, pluginType ?? '', normalized, message, detailJson,
-        new Date().toISOString().slice(0, 19).replace('T', ' '))
+      .run(appId ?? 0, pluginType ?? '', normalized, message, detailJson, now())
   }
 
   query(

@@ -21,6 +21,7 @@ import { DatasetService } from '../datasets/dataset.service.js'
 import { PluginFileRegistry } from './plugin-file.registry.js'
 import type { LoadedPlugin } from './types.js'
 import { NotFoundError, ValidationError } from '../common/response.js'
+import { now } from '../common/utils.js'
 import { CONFIG, type AIBaseConfig } from '../config.js'
 
 
@@ -41,16 +42,12 @@ export class PluginService {
     private readonly fileRegistry: PluginFileRegistry,
   ) {}
 
-  static now(): string {
-    return new Date().toISOString().slice(0, 19).replace('T', ' ')
-  }
-
   // ---------- 注册表同步 ----------
 
   /** 启动时同步已加载插件到注册表（def 表）。 */
   syncDefs(): void {
     for (const loaded of this.registry.all()) {
-      this.upsertDef(loaded.plugin, loaded.plugin.type, loaded.artifact, loaded.artifactHash, loaded.version, true)
+      this.upsertDef(loaded.plugin, loaded.plugin.type, loaded.artifact, loaded.artifactHash, loaded.version, loaded.icon, true)
     }
     this.logger.log('插件注册表同步完成')
   }
@@ -61,9 +58,10 @@ export class PluginService {
     artifact: string,
     artifactHash: string,
     version: string,
+    icon: string,
     loaded: boolean,
   ): void {
-    const now = PluginService.now()
+    const nowTs = now()
     this.repository.upsertDef({
       pluginType,
       name: plugin.name,
@@ -73,16 +71,17 @@ export class PluginService {
       artifact,
       artifactHash,
       version,
+      icon,
       loaded,
       builtin: artifact === 'builtin',
-      createdAt: now,
-      updatedAt: now,
+      createdAt: nowTs,
+      updatedAt: nowTs,
     })
   }
 
   /** 外部插件注册后记录（热加载）。 */
   recordExternal(loaded: LoadedPlugin): void {
-    this.upsertDef(loaded.plugin, loaded.plugin.type, loaded.artifact, loaded.artifactHash, loaded.version, true)
+    this.upsertDef(loaded.plugin, loaded.plugin.type, loaded.artifact, loaded.artifactHash, loaded.version, loaded.icon, true)
   }
 
   // ---------- 实例生命周期 ----------
@@ -95,7 +94,7 @@ export class PluginService {
     if (existing) {
       if (requestedScope && requestedScope !== existing.dataScope) {
         existing.dataScope = this.resolveScope(plugin, requestedScope)
-        existing.updatedAt = PluginService.now()
+        existing.updatedAt = now()
         this.repository.updateInstance({
           id: existing.id, app_id: existing.appId, plugin_type: existing.pluginType,
           data_scope: existing.dataScope, config_json: existing.configJson,
@@ -104,7 +103,7 @@ export class PluginService {
       }
       if (!existing.enabled) {
         existing.enabled = true
-        existing.updatedAt = PluginService.now()
+        existing.updatedAt = now()
         this.repository.updateInstance({
           id: existing.id, app_id: existing.appId, plugin_type: existing.pluginType,
           data_scope: existing.dataScope, config_json: existing.configJson,
@@ -115,10 +114,10 @@ export class PluginService {
       return existing
     }
     const scope = requestedScope ? this.resolveScope(plugin, requestedScope) : plugin.defaultDataScope
-    const now = PluginService.now()
+    const nowTs = now()
     const id = this.repository.insertInstance({
       app_id: appId, plugin_type: pluginType, data_scope: scope,
-      config_json: '{}', enabled: 1, created_at: now, updated_at: now,
+      config_json: '{}', enabled: 1, created_at: nowTs, updated_at: nowTs,
     })
     try {
       const env = this.environmentOf(appId, id, pluginType, scope)
@@ -146,7 +145,7 @@ export class PluginService {
     const inst = this.requireInstance(appId, pluginType)
     if (inst.enabled) {
       inst.enabled = false
-      inst.updatedAt = PluginService.now()
+      inst.updatedAt = now()
       this.repository.updateInstance({
         id: inst.id, app_id: inst.appId, plugin_type: inst.pluginType,
         data_scope: inst.dataScope, config_json: inst.configJson,
@@ -168,15 +167,21 @@ export class PluginService {
       }
     }
     if (inst.dataScope === 'APP_LOCAL') {
+      // 清理该应用作用域的通用存储（instance_id=appId）；共享 store（0）保留
       this.repository.storeDeleteByScope(appId)
     }
     this.repository.deleteInstance(inst.id)
     this.logger.log(`删除插件实例：app=${appId}，type=${pluginType}`)
   }
 
-  /** 创建应用时自动为所有已注册插件创建默认实例。 */
-  autoInstantiate(appId: number): void {
+  /**
+   * 创建应用时自动实例化插件：默认全部已注册插件；可传 pluginTypes 精确指定（创建应用勾选场景）。
+   * 未注册/未加载的插件类型静默跳过。
+   */
+  autoInstantiate(appId: number, pluginTypes?: string[]): void {
+    const want = pluginTypes && pluginTypes.length > 0 ? new Set(pluginTypes) : null
     for (const def of this.repository.findAllDefs()) {
+      if (want && !want.has(def.pluginType)) continue
       if (!this.repository.findInstance(appId, def.pluginType)) {
         this.enableInstance(appId, def.pluginType)
       }
@@ -196,9 +201,10 @@ export class PluginService {
   // ---------- 环境与查询 ----------
 
   instanceOverview(appId: number): Array<{ plugin: import('@atlas/types').PluginDef; instance: import('@atlas/types').PluginInstance | null; runtimeLoaded: boolean }> {
+    const instances = new Map(this.repository.findAllInstancesByApp(appId).map((i) => [i.pluginType, i]))
     return this.repository.findAllDefs().map((def) => ({
       plugin: def,
-      instance: this.repository.findInstance(appId, def.pluginType) ?? null,
+      instance: instances.get(def.pluginType) ?? null,
       runtimeLoaded: this.registry.byType(def.pluginType) !== undefined,
     }))
   }
@@ -284,7 +290,7 @@ class PlatformPluginEnvironment implements PluginEnvironment {
       get: async <T = unknown>(entityKey: string, entityId = '') =>
         (this.repository.storeGet(scopeKey, entityKey, entityId) as T | null) ?? null,
       put: async (entityKey: string, value: unknown, entityId = '') =>
-        this.repository.storePut(scopeKey, entityKey, entityId, JSON.stringify(value), PluginService.now()),
+        this.repository.storePut(scopeKey, entityKey, entityId, JSON.stringify(value), now()),
       remove: async (entityKey: string, entityId = '') =>
         this.repository.storeRemove(scopeKey, entityKey, entityId),
       list: async <T = unknown>(entityId = '') =>

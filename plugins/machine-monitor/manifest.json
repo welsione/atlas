@@ -1,0 +1,1 @@
+{"pluginType":"machine-monitor","name":"机器监控","description":"部署机器性能监控（CPU/内存/磁盘/负载/进程，系统级全局共享）","version":"1.0.0","defaultDataScope":"GLOBAL_SHARED","entry":"src/index.ts","icon":"icons/monitor.svg"}

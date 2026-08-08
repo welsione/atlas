@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { Refresh } from '@element-plus/icons-vue'
+import { Refresh, Connection, DataLine, Select, CircleClose, User, Monitor } from '@element-plus/icons-vue'
 import { monitorApi, type MonitorOverview, type MonitorRow, type MonitorRange } from '../../services/monitorApi'
 
 const props = defineProps<{ appId: number }>()
@@ -62,17 +62,31 @@ const statusTag = (s: number) => (s >= 400 ? 'danger' : s === 304 ? 'warning' : 
         <el-radio-button value="7d">7 天</el-radio-button>
         <el-radio-button value="all">全部</el-radio-button>
       </el-radio-group>
-      <el-button :icon="Refresh" circle :loading="loading" @click="fetchAll" />
+      <el-tooltip content="刷新" placement="bottom">
+        <el-button :icon="Refresh" circle :loading="loading" @click="fetchAll" />
+      </el-tooltip>
     </div>
 
     <!-- 统计卡片 -->
     <div class="stat-grid">
-      <div class="stat-card surface"><div class="stat-num">{{ overview.total }}</div><div class="stat-label">总调用</div></div>
-      <div class="stat-card surface"><div class="stat-num">{{ fmtBytes(overview.totalBytes) }}</div><div class="stat-label">流量</div></div>
-      <div class="stat-card surface"><div class="stat-num">{{ overview.notModified }}（{{ notModifiedRate }}%）</div><div class="stat-label">304 命中</div></div>
-      <div class="stat-card surface"><div class="stat-num" :class="{ 'is-error': overview.failures > 0 }">{{ overview.failures }}（{{ failureRate }}%）</div><div class="stat-label">失败</div></div>
-      <div class="stat-card surface"><div class="stat-num">{{ overview.activeApps }}</div><div class="stat-label">活跃消费应用</div></div>
-      <div class="stat-card surface"><div class="stat-num">{{ overview.activeIps }}</div><div class="stat-label">活跃 IP</div></div>
+      <el-tooltip content="数据面消费总调用次数" placement="top">
+        <div class="stat-card surface"><el-icon class="stat-icon"><Connection /></el-icon><div class="stat-num">{{ overview.total }}</div><div class="stat-label">总调用</div></div>
+      </el-tooltip>
+      <el-tooltip content="响应体累计流量（不含 304）" placement="top">
+        <div class="stat-card surface"><el-icon class="stat-icon"><DataLine /></el-icon><div class="stat-num">{{ fmtBytes(overview.totalBytes) }}</div><div class="stat-label">流量</div></div>
+      </el-tooltip>
+      <el-tooltip content="条件请求命中（304）占比，越高缓存越有效" placement="top">
+        <div class="stat-card surface"><el-icon class="stat-icon"><Select /></el-icon><div class="stat-num">{{ overview.notModified }}（{{ notModifiedRate }}%）</div><div class="stat-label">304 命中</div></div>
+      </el-tooltip>
+      <el-tooltip content="4xx/5xx 失败请求数与占比" placement="top">
+        <div class="stat-card surface"><el-icon class="stat-icon" :class="{ 'is-error': overview.failures > 0 }"><CircleClose /></el-icon><div class="stat-num" :class="{ 'is-error': overview.failures > 0 }">{{ overview.failures }}（{{ failureRate }}%）</div><div class="stat-label">失败</div></div>
+      </el-tooltip>
+      <el-tooltip content="携带有效应用令牌的消费方数量" placement="top">
+        <div class="stat-card surface"><el-icon class="stat-icon"><User /></el-icon><div class="stat-num">{{ overview.activeApps }}</div><div class="stat-label">活跃消费应用</div></div>
+      </el-tooltip>
+      <el-tooltip content="去重后的客户端 IP 数量" placement="top">
+        <div class="stat-card surface"><el-icon class="stat-icon"><Monitor /></el-icon><div class="stat-num">{{ overview.activeIps }}</div><div class="stat-label">活跃 IP</div></div>
+      </el-tooltip>
     </div>
 
     <!-- 趋势 -->
@@ -92,7 +106,7 @@ const statusTag = (s: number) => (s >= 400 ? 'danger' : s === 304 ? 'warning' : 
       <div class="surface section">
         <div class="section-title">端点分布</div>
         <el-table :data="endpoints" size="small" empty-text="暂无">
-          <el-table-column prop="endpoint" label="端点" />
+          <el-table-column prop="endpoint" label="端点" show-overflow-tooltip />
           <el-table-column prop="count" label="调用" width="70" />
           <el-table-column prop="bytes" label="流量" width="80">
             <template #default="{ row }">{{ fmtBytes(Number(row.bytes)) }}</template>
@@ -106,7 +120,7 @@ const statusTag = (s: number) => (s >= 400 ? 'danger' : s === 304 ? 'warning' : 
       <div class="surface section">
         <div class="section-title">Top 资源</div>
         <el-table :data="topResources" size="small" empty-text="暂无">
-          <el-table-column label="资源" min-width="120">
+          <el-table-column label="资源" min-width="120" show-overflow-tooltip>
             <template #default="{ row }">{{ row.name || `${row.resource_type}#${row.resource_id}` }}</template>
           </el-table-column>
           <el-table-column prop="count" label="调用" width="70" />
@@ -123,7 +137,7 @@ const statusTag = (s: number) => (s >= 400 ? 'danger' : s === 304 ? 'warning' : 
       <div class="surface section">
         <div class="section-title">Top IP</div>
         <el-table :data="topIps" size="small" empty-text="暂无">
-          <el-table-column prop="ip" label="IP" />
+          <el-table-column prop="ip" label="IP" show-overflow-tooltip />
           <el-table-column prop="count" label="调用" width="80" />
           <el-table-column prop="bytes" label="流量" width="90">
             <template #default="{ row }">{{ fmtBytes(Number(row.bytes)) }}</template>
@@ -152,7 +166,7 @@ const statusTag = (s: number) => (s >= 400 ? 'danger' : s === 304 ? 'warning' : 
       <el-table :data="recent" size="small" empty-text="暂无">
         <el-table-column prop="accessed_at" label="时间" width="170" />
         <el-table-column prop="endpoint" label="端点" width="100" />
-        <el-table-column label="资源" min-width="120">
+        <el-table-column label="资源" min-width="120" show-overflow-tooltip>
           <template #default="{ row }">{{ row.name || `${row.resource_type}#${row.resource_id}` }}</template>
         </el-table-column>
         <el-table-column label="状态" width="80">
@@ -187,6 +201,16 @@ const statusTag = (s: number) => (s >= 400 ? 'danger' : s === 304 ? 'warning' : 
 .stat-card {
   padding: 16px;
   border-radius: 12px;
+}
+
+.stat-icon {
+  font-size: 18px;
+  color: var(--aibase-accent);
+  margin-bottom: 8px;
+}
+
+.stat-icon.is-error {
+  color: #f56c6c;
 }
 
 .stat-num {

@@ -4,6 +4,8 @@ import { ok, error, ValidationError, NotFoundError } from '../common/response.js
 import { PluginService } from './plugin.service.js'
 import { PluginRegistry } from './plugin.registry.js'
 import { PluginUiService } from './plugin-ui.service.js'
+import { PluginLoader } from './plugin.loader.js'
+import { PluginWatcher } from './plugin.watcher.js'
 
 /** 插件注册表端点（平台级）。 */
 @Controller('/api/plugins')
@@ -12,6 +14,8 @@ export class PluginController {
     private readonly service: PluginService,
     private readonly registry: PluginRegistry,
     private readonly uiService: PluginUiService,
+    private readonly loader: PluginLoader,
+    private readonly watcher: PluginWatcher,
   ) {}
 
   @Get()
@@ -36,8 +40,14 @@ export class PluginController {
   }
 
   @Post('reload')
-  reload() {
-    return ok(null)
+  async reload() {
+    try {
+      await this.loader.reloadAll()
+      this.watcher.resyncKnown()
+      return ok(null)
+    } catch (e) {
+      return error(500, (e as Error).message)
+    }
   }
 }
 

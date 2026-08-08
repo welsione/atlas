@@ -43,6 +43,8 @@ export interface PluginDef {
   description: string
   defaultDataScope: DataScope
   scopeOverrideAllowed: boolean
+  /** 插件图标：data: URI / http(s) URL / 相对路径（icons/xxx.svg，经平台图标服务）。 */
+  icon: string
   artifact: string
   artifactHash: string
   version: string
@@ -289,7 +291,7 @@ export interface AibasePlugin {
 }
 
 // ---------- 插件 UI（前端 slot 契约，与后端共享） ----------
-export type PluginSlotName = 'app-space' | 'console'
+export type PluginSlotName = 'app-space' | 'console' | 'system-menu'
 
 export interface PluginUiSlot {
   slot: PluginSlotName

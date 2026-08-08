@@ -8,5 +8,6 @@ coverage/
 .vendor-tmp/
 .build-tmp/
 data/
+!plugins/providers/data/
 .DS_Store
 *.log

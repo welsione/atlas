@@ -11,7 +11,9 @@ const config = loadConfig()
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule)
-  app.enableCors()
+  // CORS：默认全开（本地开发）；AIBASE_CORS_ORIGIN 逗号分隔限定来源（生产建议）
+  const origins = config.corsOrigin.split(',').map((s) => s.trim()).filter(Boolean)
+  app.enableCors(origins.includes('*') ? {} : { origin: origins })
   const logger = new Logger('Bootstrap')
 
   // 前端静态资源（构建产物）：优先 core/static，回退 workspace web/dist

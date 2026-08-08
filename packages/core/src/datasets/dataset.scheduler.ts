@@ -1,26 +1,38 @@
-import { Injectable, Logger } from '@nestjs/common'
-import { Cron } from '@nestjs/schedule'
+import { Inject, Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common'
 import { DatasetRepository } from './dataset.repository.js'
 import { DatasetService } from './dataset.service.js'
 import { PluginService } from '../plugins/plugin.service.js'
 import { OpsLogService } from '../plugins/ops-log.service.js'
+import { CONFIG, type AIBaseConfig } from '../config.js'
 
 /**
- * 数据集定时刷新：扫描 SCHEDULED 数据集，调用插件 DatasetSource 重渲染，
+ * 数据集定时刷新：按配置间隔扫描 SCHEDULED 数据集，调用插件 DatasetSource 重渲染，
  * 内容哈希变化才 bump 版本（幂等）。结果写入运维台工作日志。
  */
 @Injectable()
-export class DatasetScheduler {
+export class DatasetScheduler implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(DatasetScheduler.name)
+  private timer: NodeJS.Timeout | null = null
 
   constructor(
+    @Inject(CONFIG) private readonly config: AIBaseConfig,
     private readonly repository: DatasetRepository,
     private readonly datasetService: DatasetService,
     private readonly pluginService: PluginService,
     private readonly opsLogService: OpsLogService,
   ) {}
 
-  @Cron('*/30 * * * * *')
+  onApplicationBootstrap(): void {
+    this.timer = setInterval(() => {
+      this.refreshScheduled().catch((e) => this.logger.warn(`数据集扫描异常: ${(e as Error).message}`))
+    }, this.config.datasetRefreshIntervalMs)
+    this.timer.unref()
+  }
+
+  onModuleDestroy(): void {
+    if (this.timer) clearInterval(this.timer)
+  }
+
   async refreshScheduled(): Promise<void> {
     for (const d of this.repository.findScheduled()) {
       try {
