@@ -19,7 +19,7 @@ plugins/
   providers/ prompts/ model-files/ machine-monitor/   # 目录插件（前后端一体）
   template/   # 插件模板（加载器恒跳过）
 data/
-  plugins/    # 外部插件目录（运行时热加载，AIBASE_PLUGINS_DIR 可覆盖）
+  plugins/    # 外部插件目录（运行时热加载，ATLAS_PLUGINS_DIR 可覆盖）
 ```
 
 ## 快速开始
@@ -40,13 +40,13 @@ npm run dev              # 后端（http://127.0.0.1:18081）
 
 ### 插件（前后端一体）
 
-**目录插件**（无内置概念，全部从仓库根 `plugins/` 加载，`AIBASE_PLUGINS_DIR` 可覆盖；`template` 目录被加载器跳过）：
+**目录插件**（无内置概念，全部从仓库根 `plugins/` 加载，`ATLAS_PLUGINS_DIR` 可覆盖；`template` 目录被加载器跳过）：
 
 ```
 plugins/weather/
   manifest.json    # {pluginType, name, description, version, defaultDataScope, icon, entry}
   icons/           # 插件图标（manifest.icon 相对路径指向这里，可选）
-  src/index.ts     # export default: AibasePlugin（Node 22 type-stripping 直接运行）
+  src/index.ts     # export default: AtlasPlugin（Node 22 type-stripping 直接运行）
   ui/              # manifest.json（slots: app-space Tab / console 卡片）+ entry.<hash>.js
   ui-src/          # 前端面板源码（npm run ui:build → ui/）
 ```
@@ -61,15 +61,39 @@ plugins/weather/
 - **插件开发**：复制 `plugins/template/` 起步，完整规范见 [docs/plugin-development.md](docs/plugin-development.md)（含 SPI 契约、env API、UI slot、安全规范、FAQ）
 
 ### 数据集（版本化数据分发）
-内容哈希驱动版本，应用轮询 meta、变化才下载（304）：
+内容哈希驱动版本：内容变更才 bump 版本，消费方轮询 meta、变化才下载（`If-None-Match` → 304 免流量）。
+
+#### 密级与访问控制
 
 | 级别 | 访问 | 存储 |
 |---|---|---|
 | PUBLIC | token 直达（防穷举） | 明文 |
-| INTERNAL | Bearer 应用令牌 + 白名单 | 明文 |
-| SECRET | 令牌 + 逐项授权 + 审计 | **信封加密**（KEK=AIBASE_ENC_KEY → 每数据集随机 DEK → AES-256-GCM），明文永不落库 |
+| INTERNAL | Bearer 应用令牌 + 白名单授权 | 明文 |
+| SECRET | 令牌 + 逐项授权 + **每次访问审计** | **信封加密**（KEK=ATLAS_ENC_KEY → 每数据集随机 DEK → AES-256-GCM），明文永不落库 |
 
-刷新：手动或定时（SCHEDULED，插件 `datasetSource()` 重渲染）。
+外部访问统一走数据面 `/api/v1/datasets/{token}/...`（公开前缀，无需平台登录）：
+
+| 端点 | 说明 |
+|---|---|
+| `GET /meta` | 元信息（名称/敏感度/版本/内容哈希/资产数/更新时间） |
+| `GET /data` | 内容 JSON（ETag/304、限流、审计） |
+| `GET /secrets` | SECRET 级敏感凭证（Bearer + 白名单，逐次审计，明文取用） |
+| `GET /assets/{path}` | 文件资产下载（同密级鉴权，Content-Type/ETag，文本类自动 `charset=utf-8`） |
+
+匿名访问 meta 各密级均开放；data/assets 按密级鉴权（PUBLIC 直达，INTERNAL/SECRET 需 Bearer 应用令牌且消费方应用在授权白名单内）；secrets 仅 SECRET 级。应用空间可对数据集做「跨应用授权」（grants）、撤销与审计查看。
+
+#### 资产（文件数据）
+数据集除 JSON 内容外可携带文件资产（`assets_json` 清单 + 下载端点），密级管理/授权/审计与内容完全一致：
+- **手动数据集**：管理面 `POST/DELETE /api/apps/{appId}/datasets/{id}/assets` 上传/删除（multipart 或 base64，单文件 ≤64MB），磁盘存储于 `{dataDir}/dataset-files/{datasetId}/`
+- **插件注册数据集**：插件声明 `assets()` 清单 + `assetSource()` 懒加载字节（core 不落盘，如供应商图标读插件目录、模型文件经 `env.files()`），内容即时生效
+
+#### 插件注册数据集
+插件通过 `AtlasPlugin.datasets()` 声明数据集（如供应商配置、模型文件），平台在实例启用/启动补同步时自动创建并持续维护：
+- **管理面内容锁定**：不可删除、不可编辑内容/名称（交由插件管理），仅可调整敏感度（密级管理）；授权白名单、审计查看保留
+- 内容（`render`）、敏感凭证（`secrets`，SECRET 级自动同步/停用）、资产清单（`assets`）均由插件声明，数据变更后 `env.datasets().refresh(key)` 即时同步
+
+#### 手动数据集管理（应用空间 → 数据集）
+新建/管理抽屉：名称/描述/内容 JSON 编辑、敏感度调整、文件上传、访问方式（URL + curl 示例一键复制）、刷新、删除。刷新模式 `MANUAL`（手动）或 `SCHEDULED`（定时，插件渲染源）。
 
 ### 控制台 / 运维台
 - **控制台**（默认首页）：统计卡片 + 插件注册的 console slot 卡片；侧边栏渲染系统级插件（system-menu slot）菜单项
@@ -79,16 +103,16 @@ plugins/weather/
 
 | 变量 | 说明 |
 |---|---|
-| `AIBASE_PORT` | 端口（默认 18081） |
-| `AIBASE_DATA_DIR` | 数据目录（默认 ./data） |
-| `AIBASE_PLUGINS_DIR` | 插件目录（默认仓库根 plugins/） |
-| `AIBASE_ENC_KEY` | 数据集信封加密 KEK（SECRET 级必配） |
-| `AIBASE_ADMIN_PASSWORD` | 管理登录密码（与 KEY 均未配置时管理接口开放，仅限本地开发） |
-| `AIBASE_ADMIN_KEY` | 固定管理 Token（请求头 X-AIBase-Key） |
-| `AIBASE_PLUGIN_SCAN_INTERVAL_MS` | 插件扫描间隔（默认 10000） |
+| `ATLAS_PORT` | 端口（默认 18081） |
+| `ATLAS_DATA_DIR` | 数据目录（默认 ./data） |
+| `ATLAS_PLUGINS_DIR` | 插件目录（默认仓库根 plugins/） |
+| `ATLAS_ENC_KEY` | 数据集信封加密 KEK（SECRET 级必配） |
+| `ATLAS_ADMIN_PASSWORD` | 管理登录密码（与 KEY 均未配置时管理接口开放，仅限本地开发） |
+| `ATLAS_ADMIN_KEY` | 固定管理 Token（请求头 X-Atlas-Key） |
+| `ATLAS_PLUGIN_SCAN_INTERVAL_MS` | 插件扫描间隔（默认 10000） |
 
 ## 主要 API
 
-- 管理面：`/api/apps`（应用 CRUD/凭证轮换吊销）、`/api/plugins`（注册表/卸载）、`/api/apps/{appId}/plugins/...`（实例与内置插件数据）、`/api/apps/{appId}/datasets/...`、`/api/ops/...`（运维台）
-- 数据面（公开）：`/api/v1/app/auth`（令牌换发）、`/api/v1/datasets/{token}/meta|data|secrets`、`/api/files/{token}/meta|download`（模型文件公开下载）
+- 管理面：`/api/apps`（应用 CRUD/凭证轮换吊销）、`/api/plugins`（注册表/卸载）、`/api/apps/{appId}/plugins/...`（实例与内置插件数据）、`/api/apps/{appId}/datasets...`（数据集 CRUD/敏感度/内容/资产上传删除/授权/审计/刷新）、`/api/ops/...`（运维台）
+- 数据面（公开）：`/api/v1/app/auth`（应用凭证换令牌）、`/api/v1/datasets/{token}/meta|data|secrets|assets/{path}`（数据集消费）、`/api/v1/app/{appId}/plugins/{type}/ep/{path}`（插件数据面网关，应用凭证 Bearer 鉴权）、`/api/files/{token}/meta|download`（插件文件公开托管下载）
 - 插件 UI：`/api/plugins/ui`（清单，管理认证）、`/_pluginui/{type}/{path}`（资源，公开）

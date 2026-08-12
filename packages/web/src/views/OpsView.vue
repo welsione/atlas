@@ -239,7 +239,7 @@ const totalErrors = () => overview.value.byPlugin.reduce((s, p) => s + Number(p.
 .trend-bar {
   width: 100%;
   max-width: 22px;
-  background: var(--aibase-accent);
+  background: var(--atlas-accent);
   border-radius: 3px 3px 0 0;
   opacity: 0.85;
   flex: 1;
@@ -252,7 +252,7 @@ const totalErrors = () => overview.value.byPlugin.reduce((s, p) => s + Number(p.
 
 .trend-label {
   font-size: 10px;
-  color: var(--aibase-muted);
+  color: var(--atlas-muted);
   margin-top: 4px;
 }
 
@@ -268,7 +268,7 @@ const totalErrors = () => overview.value.byPlugin.reduce((s, p) => s + Number(p.
   align-items: center;
   justify-content: center;
   height: 96px;
-  color: var(--aibase-muted);
+  color: var(--atlas-muted);
   font-size: 13px;
 }
 
@@ -288,7 +288,7 @@ const totalErrors = () => overview.value.byPlugin.reduce((s, p) => s + Number(p.
 }
 
 .muted {
-  color: var(--aibase-muted);
+  color: var(--atlas-muted);
 }
 
 .detail-text {

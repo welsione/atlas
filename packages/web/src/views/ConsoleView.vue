@@ -104,8 +104,8 @@ const maxHourly = () => Math.max(1, ...overview.value.hourly.map((h) => h.count)
 }
 
 .stat-card {
-  background: var(--aibase-surface);
-  border: 1px solid var(--aibase-stroke);
+  background: var(--atlas-surface);
+  border: 1px solid var(--atlas-stroke);
   border-radius: 12px;
   padding: 20px;
   cursor: pointer;
@@ -137,7 +137,7 @@ const maxHourly = () => Math.max(1, ...overview.value.hourly.map((h) => h.count)
 
 .stat-icon {
   font-size: 22px;
-  color: var(--aibase-accent);
+  color: var(--atlas-accent);
   margin-bottom: 12px;
 }
 
@@ -156,7 +156,7 @@ const maxHourly = () => Math.max(1, ...overview.value.hourly.map((h) => h.count)
 
 .stat-label {
   font-size: 12px;
-  color: var(--aibase-muted);
+  color: var(--atlas-muted);
   margin-top: 4px;
 }
 
@@ -176,7 +176,7 @@ const maxHourly = () => Math.max(1, ...overview.value.hourly.map((h) => h.count)
 .empty-hint {
   padding: 40px 32px;
   text-align: center;
-  color: var(--aibase-muted);
+  color: var(--atlas-muted);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
@@ -186,13 +186,13 @@ const maxHourly = () => Math.max(1, ...overview.value.hourly.map((h) => h.count)
 
 .empty-icon {
   font-size: 32px;
-  color: var(--aibase-accent);
+  color: var(--atlas-accent);
   opacity: 0.5;
 }
 
 .empty-sub {
   font-size: 12px;
-  color: var(--aibase-muted);
+  color: var(--atlas-muted);
   opacity: 0.8;
 }
 </style>

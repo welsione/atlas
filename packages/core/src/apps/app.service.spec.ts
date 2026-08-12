@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from '@jest/globals'
 import { Test } from '@nestjs/testing'
+import { EventEmitterModule } from '@nestjs/event-emitter'
 import type { Database as SqliteDatabase } from 'better-sqlite3'
 import BetterSqlite3 from 'better-sqlite3'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -10,7 +11,10 @@ import { DB } from '../db/database.module.js'
 import { SchemaInitializer } from '../db/schema-initializer.js'
 import { AppRepository } from './app.repository.js'
 import { PluginService } from '../plugins/plugin.service.js'
+import { PluginRegistry } from '../plugins/plugin.registry.js'
 import { AppService } from './app.service.js'
+import { PlatformEventEmitter } from '../spi/platform-event-emitter.js'
+import { ExtensionRegistry } from '../spi/extension.registry.js'
 
 describe('AppService', () => {
   let db: SqliteDatabase
@@ -18,7 +22,7 @@ describe('AppService', () => {
   let dir: string
 
   beforeAll(async () => {
-    dir = mkdtempSync(join(tmpdir(), 'aibase-test-'))
+    dir = mkdtempSync(join(tmpdir(), 'atlas-test-'))
     db = new BetterSqlite3(join(dir, 'test.db'))
     const config = {
       dataDir: dir,
@@ -38,11 +42,15 @@ describe('AppService', () => {
     }
     await new SchemaInitializer(config).initialize(db)
     const moduleRef = await Test.createTestingModule({
+      imports: [EventEmitterModule.forRoot()],
       providers: [
         { provide: CONFIG, useValue: config },
         { provide: DB, useValue: db },
         AppRepository,
         AppService,
+        PlatformEventEmitter,
+        PluginRegistry,
+        ExtensionRegistry,
         { provide: PluginService, useValue: { autoInstantiate: () => undefined } },
       ],
     }).compile()

@@ -4,9 +4,10 @@ import type { Request, Response } from 'express'
 import { ok, error } from '../common/response.js'
 import { PluginFileRegistry } from '../plugins/plugin-file.registry.js'
 import { clientIp, createRateLimiter, now } from '../common/utils.js'
+import { textContentType } from './plugin-dispatch.utils.js'
 import { DB } from '../db/database.module.js'
 import type Database from 'better-sqlite3'
-import { CONFIG, type AIBaseConfig } from '../config.js'
+import { CONFIG, type AtlasConfig } from '../config.js'
 
 /** IP 限流：每 IP 每分钟 120 次。 */
 const downloadLimiter = createRateLimiter(120, 60_000)
@@ -18,9 +19,9 @@ const downloadLimiter = createRateLimiter(120, 60_000)
 @Controller('/api/files')
 export class PluginFileDownloadController {
   constructor(
-    private readonly registry: PluginFileRegistry,
+    @Inject(PluginFileRegistry) private readonly registry: PluginFileRegistry,
     @Inject(DB) private readonly db: Database.Database,
-    @Inject(CONFIG) private readonly config: AIBaseConfig,
+    @Inject(CONFIG) private readonly config: AtlasConfig,
   ) {}
 
   @Get(':token/meta')
@@ -62,7 +63,7 @@ export class PluginFileDownloadController {
     this.registry.touch(row.token)
     this.logAccess(row, 'download', 200, data.length, ip, req.header('user-agent') ?? '')
     res.setHeader('ETag', etag)
-    res.setHeader('Content-Type', mimeOf(row.rel_path))
+    res.setHeader('Content-Type', textContentType(mimeOf(row.rel_path)))
     return res.send(data)
   }
 

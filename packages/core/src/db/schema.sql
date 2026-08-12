@@ -1,5 +1,5 @@
 -- =====================================================================
--- AIBase 平台 Schema（SQLite，幂等执行）
+-- Atlas 平台 Schema（SQLite，幂等执行）
 -- 范式：以应用为核心的多租户插件化平台
 -- =====================================================================
 
@@ -106,14 +106,15 @@ CREATE TABLE IF NOT EXISTS dataset_app_grants (
 -- ---------- 通用插件存储（简单插件零建表） ----------
 CREATE TABLE IF NOT EXISTS plugin_store (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    instance_id INTEGER NOT NULL,
+    instance_id INTEGER NOT NULL,          -- 0=全局共享 / appId=应用独立
+    plugin_type TEXT NOT NULL DEFAULT '',  -- 隔离不同插件，防跨插件同 key 碰撞
     entity_id TEXT NOT NULL DEFAULT '',
     entity_key TEXT NOT NULL,
     value_json TEXT NOT NULL DEFAULT '{}',
     version INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    UNIQUE(instance_id, entity_id, entity_key)
+    UNIQUE(instance_id, plugin_type, entity_id, entity_key)
 );
 
 -- ---------- 审计 ----------
@@ -181,101 +182,9 @@ CREATE INDEX IF NOT EXISTS idx_ops_logs_app ON ops_logs(app_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_ops_logs_type ON ops_logs(plugin_type, created_at);
 
 -- =====================================================================
--- 内置插件数据表
+-- 插件业务表（providers/prompts/prompt_versions/model_files/download_logs/upload_logs）
+-- 已迁出至各插件 schemaDdl，由 SchemaBootstrapService 在 core schema 之后幂等创建。
 -- =====================================================================
-
--- providers 插件：GLOBAL_SHARED 默认（app_id NULL=全局共享；实例覆盖为 APP_LOCAL 时 app_id=空间）
-CREATE TABLE IF NOT EXISTS providers (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    app_id INTEGER,                            -- NULL = 共享
-    name TEXT NOT NULL,
-    provider_type TEXT NOT NULL DEFAULT 'OPENAI_COMPATIBLE',
-    api_key TEXT NOT NULL DEFAULT '',          -- AES 加密（仅平台/网关内部使用，不进数据集）
-    base_url TEXT NOT NULL DEFAULT '',
-    icon TEXT NOT NULL DEFAULT '',
-    icon_color TEXT NOT NULL DEFAULT '',
-    models_json TEXT NOT NULL DEFAULT '[]',
-    default_model TEXT NOT NULL DEFAULT '',
-    max_tokens INTEGER,
-    timeout_seconds INTEGER NOT NULL DEFAULT 240,
-    extra_config TEXT NOT NULL DEFAULT '{}',
-    enabled INTEGER NOT NULL DEFAULT 1,
-    is_default INTEGER NOT NULL DEFAULT 0,
-    sort_order INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_providers_scope ON providers(app_id, enabled);
-
--- prompts 插件：APP_LOCAL（始终带 app_id）
-CREATE TABLE IF NOT EXISTS prompts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    app_id INTEGER NOT NULL,
-    name TEXT NOT NULL,
-    category TEXT NOT NULL DEFAULT 'default',
-    description TEXT NOT NULL DEFAULT '',
-    content TEXT NOT NULL,
-    variables_json TEXT NOT NULL DEFAULT '[]',
-    version INTEGER NOT NULL DEFAULT 1,
-    enabled INTEGER NOT NULL DEFAULT 1,
-    sort_order INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_prompts_scope ON prompts(app_id, category);
-
-CREATE TABLE IF NOT EXISTS prompt_versions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    prompt_id INTEGER NOT NULL,
-    version INTEGER NOT NULL,
-    content TEXT NOT NULL,
-    created_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_prompt_versions_prompt ON prompt_versions(prompt_id);
-
--- model-files 插件：APP_LOCAL（始终带 app_id）；公开下载走 /api/files/{token}/...
-CREATE TABLE IF NOT EXISTS model_files (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    app_id INTEGER NOT NULL,
-    name TEXT NOT NULL,
-    category TEXT NOT NULL DEFAULT 'default',
-    description TEXT NOT NULL DEFAULT '',
-    kind TEXT NOT NULL DEFAULT 'FILE',
-    storage_root TEXT NOT NULL,
-    token TEXT NOT NULL DEFAULT '',
-    files_json TEXT NOT NULL DEFAULT '[]',
-    total_size INTEGER NOT NULL DEFAULT 0,
-    file_count INTEGER NOT NULL DEFAULT 1,
-    version INTEGER NOT NULL DEFAULT 1,
-    content_hash TEXT NOT NULL DEFAULT '',
-    download_count INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_model_files_scope ON model_files(app_id, category);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_model_files_token ON model_files(token);
-
-CREATE TABLE IF NOT EXISTS download_logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    file_id INTEGER NOT NULL,
-    ip TEXT NOT NULL DEFAULT '',
-    user_agent TEXT NOT NULL DEFAULT '',
-    bytes INTEGER NOT NULL DEFAULT 0,
-    downloaded_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_download_logs_file ON download_logs(file_id, downloaded_at);
-CREATE INDEX IF NOT EXISTS idx_download_logs_ip ON download_logs(ip, downloaded_at);
-
-CREATE TABLE IF NOT EXISTS upload_logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    file_id INTEGER NOT NULL,
-    ip TEXT NOT NULL DEFAULT '',
-    user_agent TEXT NOT NULL DEFAULT '',
-    bytes INTEGER NOT NULL DEFAULT 0,
-    uploaded_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_upload_logs_file ON upload_logs(file_id, uploaded_at);
-CREATE INDEX IF NOT EXISTS idx_upload_logs_ip ON upload_logs(ip, uploaded_at);
 
 -- ---------- 安全：IP 规则 + 安全设置（管理端） ----------
 CREATE TABLE IF NOT EXISTS ip_rules (

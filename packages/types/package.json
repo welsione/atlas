@@ -4,6 +4,16 @@
   "private": true,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./spi/model-gateway": {
+      "types": "./dist/spi/model-gateway.d.ts",
+      "default": "./dist/spi/model-gateway.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json"
   },

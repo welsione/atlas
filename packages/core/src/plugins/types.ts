@@ -1,8 +1,8 @@
-import type { AibasePlugin, DataScope } from '@atlas/types'
+import type { AtlasPlugin, DataScope } from '@atlas/types'
 
 /** 插件运行时注册项。 */
 export interface LoadedPlugin {
-  plugin: AibasePlugin
+  plugin: AtlasPlugin
   /** 来源标识：builtin / 外部目录名。 */
   artifact: string
   artifactHash: string

@@ -8736,7 +8736,7 @@ function Bg(e) {
 nn.closeAll = jg;
 nn.closeAllByPlacement = Bg;
 nn._context = null;
-const Es = ng(nn, "$message"), _c = "aibase-token", Cn = be.create({
+const Es = ng(nn, "$message"), _c = "atlas-token", Cn = be.create({
   baseURL: "",
   timeout: 3e4
 });
@@ -8752,7 +8752,7 @@ Cn.interceptors.response.use(
   (e) => {
     var n, r, s;
     if (((n = e.response) == null ? void 0 : n.status) === 401)
-      return localStorage.removeItem(_c), window.dispatchEvent(new CustomEvent("aibase:unauthorized")), Es.warning("请先登录"), Promise.reject(e);
+      return localStorage.removeItem(_c), window.dispatchEvent(new CustomEvent("atlas:unauthorized")), Es.warning("请先登录"), Promise.reject(e);
     const t = ((s = (r = e.response) == null ? void 0 : r.data) == null ? void 0 : s.message) || e.message || "网络错误";
     return Es.error(t), Promise.reject(e);
   }

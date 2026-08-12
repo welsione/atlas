@@ -1,10 +1,10 @@
 import { createHmac, createHash, timingSafeEqual } from 'node:crypto'
 import { Inject, Injectable, Logger } from '@nestjs/common'
-import { CONFIG, type AIBaseConfig } from '../config.js'
+import { CONFIG, type AtlasConfig } from '../config.js'
 
 /**
- * 管理认证：登录签发 HMAC 签名 token，双通道校验（Bearer token / X-AIBase-Key）。
- * 与 Java 版行为一致：AIBASE_ADMIN_PASSWORD（登录密码）与 AIBASE_ADMIN_KEY（固定管理 Token）；
+ * 管理认证：登录签发 HMAC 签名 token，双通道校验（Bearer token / X-Atlas-Key）。
+ * 与 Java 版行为一致：ATLAS_ADMIN_PASSWORD（登录密码）与 ATLAS_ADMIN_KEY（固定管理 Token）；
  * 两者均未配置时管理接口开放（本地开发模式）。
  */
 @Injectable()
@@ -13,12 +13,12 @@ export class AuthService {
   private static readonly TOKEN_TTL_MS = 12 * 60 * 60 * 1000
   private readonly hmacKey: Buffer
 
-  constructor(@Inject(CONFIG) private readonly config: AIBaseConfig) {
+  constructor(@Inject(CONFIG) private readonly config: AtlasConfig) {
     this.hmacKey = createHash('sha256')
-      .update(this.config.encKey || 'aibase-auth')
+      .update(this.config.encKey || 'atlas-auth')
       .digest()
     if (!this.authEnabled()) {
-      this.logger.warn('未配置 AIBASE_ADMIN_PASSWORD / AIBASE_ADMIN_KEY，管理接口未启用认证（仅限本地开发）')
+      this.logger.warn('未配置 ATLAS_ADMIN_PASSWORD / ATLAS_ADMIN_KEY，管理接口未启用认证（仅限本地开发）')
     }
   }
 

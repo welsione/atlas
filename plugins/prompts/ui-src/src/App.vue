@@ -320,7 +320,7 @@ function fmtTime(ts) {
   max-width: 320px;
 }
 .preview {
-  color: var(--aibase-muted);
+  color: var(--atlas-muted);
   font-size: 13px;
 }
 .var-chips {
@@ -363,13 +363,13 @@ function fmtTime(ts) {
 .render-var-name.required { color: #f56c6c; }
 .star { margin-left: 2px; }
 .render-result {
-  background: var(--aibase-bg);
+  background: var(--atlas-bg);
   border-radius: 8px;
   padding: 12px;
 }
 .render-title {
   font-size: 12px;
-  color: var(--aibase-muted);
+  color: var(--atlas-muted);
   margin-bottom: 6px;
 }
 .render-content {
@@ -382,5 +382,5 @@ function fmtTime(ts) {
   font-size: 12px;
   margin-top: 6px;
 }
-.muted { color: var(--aibase-muted); }
+.muted { color: var(--atlas-muted); }
 </style>

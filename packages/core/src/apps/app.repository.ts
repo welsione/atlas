@@ -3,6 +3,7 @@ import { DB } from '../db/database.module.js'
 import type Database from 'better-sqlite3'
 import type { App, AppStatus } from '@atlas/types'
 import { now } from '../common/utils.js'
+import { ExtensionRegistry } from '../spi/extension.registry.js'
 
 /** 应用行（DB 下划线 → 驼峰映射在 service 层做）。 */
 export interface AppRow {
@@ -19,7 +20,10 @@ export interface AppRow {
 
 @Injectable()
 export class AppRepository {
-  constructor(@Inject(DB) private readonly db: Database.Database) {}
+  constructor(
+    @Inject(DB) private readonly db: Database.Database,
+    @Inject(ExtensionRegistry) private readonly extensions: ExtensionRegistry,
+  ) {}
 
   insert(row: Omit<AppRow, 'id'>): number {
     const info = this.db
@@ -64,6 +68,10 @@ export class AppRepository {
   deleteCascade(appId: number): void {
     const db = this.db
     const tx = db.transaction(() => {
+      // 插件声明的级联清理表（cleanupTables()）：DELETE FROM table WHERE column = appId
+      for (const { table, column } of this.extensions.allCleanupTables()) {
+        db.prepare(`DELETE FROM ${table} WHERE ${column ?? 'app_id'} = ?`).run(appId)
+      }
       const dsIds = (db.prepare('SELECT id FROM datasets WHERE app_id = ?').all(appId) as Array<{ id: number }>).map((r) => r.id)
       for (const dsId of dsIds) {
         db.prepare('DELETE FROM secrets WHERE dataset_id = ?').run(dsId)
@@ -71,23 +79,12 @@ export class AppRepository {
         db.prepare('DELETE FROM dataset_download_logs WHERE dataset_id = ?').run(dsId)
         db.prepare('DELETE FROM secret_access_logs WHERE dataset_id = ?').run(dsId)
       }
+      // 被删应用作为消费方的授权（其他应用数据集上的 grant）一并清理
+      db.prepare('DELETE FROM dataset_app_grants WHERE app_id = ?').run(appId)
       db.prepare('DELETE FROM datasets WHERE app_id = ?').run(appId)
 
-      const promptIds = (db.prepare('SELECT id FROM prompts WHERE app_id = ?').all(appId) as Array<{ id: number }>).map((r) => r.id)
-      for (const pid of promptIds) {
-        db.prepare('DELETE FROM prompt_versions WHERE prompt_id = ?').run(pid)
-      }
-      db.prepare('DELETE FROM prompts WHERE app_id = ?').run(appId)
-
-      const fileIds = (db.prepare('SELECT id FROM model_files WHERE app_id = ?').all(appId) as Array<{ id: number }>).map((r) => r.id)
-      for (const fid of fileIds) {
-        db.prepare('DELETE FROM download_logs WHERE file_id = ?').run(fid)
-        db.prepare('DELETE FROM upload_logs WHERE file_id = ?').run(fid)
-      }
-      db.prepare('DELETE FROM model_files WHERE app_id = ?').run(appId)
-
-      // providers：NULL = 全局共享（保留），实例覆盖为 APP_LOCAL 时 app_id=空间（删除）
-      db.prepare('DELETE FROM providers WHERE app_id = ?').run(appId)
+      // 注：providers/prompts/prompt_versions/model_files/download_logs/upload_logs
+      // 已迁出为插件表，由各插件 cleanupTables() 经上方 allCleanupTables() 清理。
 
       // 插件实例 + 其作用域通用存储（instance_id 语义=scopeKey：appId=独立 / 0=共享保留）
       db.prepare('DELETE FROM plugin_instances WHERE app_id = ?').run(appId)
@@ -103,12 +100,7 @@ export class AppRepository {
     tx()
   }
 
-  /** 历史凭证过久自动失效：revoked 超过窗口后删除（轮换保留语义）。 */
-  pruneCredentials(retainDays: number): void {
-    this.db
-      .prepare("DELETE FROM app_credentials WHERE active = 0 AND updated_at < datetime('now', ?)")
-      .run(`-${retainDays} days`)
-  }
+  /** 历史凭证过久自动失效：由 LogCleanupService 定时清理（宽限+保留策略）。 */
 
   insertCredential(appId: number, secretHash: string, nowTs: string): void {
     this.db

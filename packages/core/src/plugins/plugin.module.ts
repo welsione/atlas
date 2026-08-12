@@ -7,20 +7,25 @@ import { PluginWatcher } from './plugin.watcher.js'
 import { OpsLogService } from './ops-log.service.js'
 import { PluginController, PluginInstanceController } from './plugin.controller.js'
 import { PluginDispatchController } from './plugin.dispatch.controller.js'
+import { PluginDataController } from './plugin-data.controller.js'
 import { PluginUiService } from './plugin-ui.service.js'
 import { PluginUiController } from './plugin-ui.controller.js'
 import { OpsController } from './ops.controller.js'
 import { PluginFileRegistry } from './plugin-file.registry.js'
 import { PluginFileDownloadController } from './plugin-file-download.controller.js'
 import { DatasetModule } from '../datasets/dataset.module.js'
+import { SpiModule } from '../spi/spi.module.js'
 
 @Global()
 @Module({
-  imports: [forwardRef(() => DatasetModule)],
+  // SpiModule 提供 PlatformEventEmitter / ExtensionRegistry / 门面 / PluginSpiRegistry，
+  // PluginService 构造期依赖它们；显式 import 建立依赖边，确保 SpiModule 先于 PluginModule 实例化。
+  imports: [SpiModule, forwardRef(() => DatasetModule)],
   controllers: [
     PluginController,
     PluginInstanceController,
     PluginDispatchController,
+    PluginDataController,
     PluginUiController,
     OpsController,
     PluginFileDownloadController,

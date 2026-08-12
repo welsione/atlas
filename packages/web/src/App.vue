@@ -1,20 +1,41 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { Grid, Cpu, Lock, HomeFilled, Tools } from '@element-plus/icons-vue'
+import { computed, onMounted, ref } from 'vue'
+import { Grid, Cpu, Lock, HomeFilled, Tools, SwitchButton } from '@element-plus/icons-vue'
 import ConsoleView from './views/ConsoleView.vue'
 import AppsView from './views/AppsView.vue'
 import AppSpaceView from './views/AppSpaceView.vue'
 import PluginsAdminView from './views/PluginsAdminView.vue'
 import SecurityView from './views/SecurityView.vue'
 import OpsView from './views/OpsView.vue'
+import LoginView from './views/LoginView.vue'
 import PluginMount from './plugin-host/PluginMount.vue'
 import { useSlotsOf } from './plugin-host/slotRegistry'
+import { AUTH_TOKEN_KEY } from './services/http'
 import type { App } from './types'
 
 type MenuKey = 'console' | 'apps' | 'plugins' | 'security' | 'ops' | `plugin:${string}`
 
 const current = ref<MenuKey>('console')
 const activeApp = ref<App | null>(null)
+
+/** 管理认证门：未通过鉴权时渲染登录页，不展示任何管理数据。 */
+const authed = ref(false)
+function handleAuthed() {
+  authed.value = true
+}
+function logout() {
+  localStorage.removeItem(AUTH_TOKEN_KEY)
+  authed.value = false
+  current.value = 'console'
+  activeApp.value = null
+}
+
+onMounted(() => {
+  // 401（token 失效/被吊销）→ 回落到登录页
+  window.addEventListener('atlas:unauthorized', () => {
+    authed.value = false
+  })
+})
 
 /** 系统级插件侧边菜单（全局插件声明 system-menu slot 后出现）。 */
 const systemMenuSlots = useSlotsOf('system-menu')
@@ -36,7 +57,8 @@ function switchMenu(key: MenuKey) {
 </script>
 
 <template>
-  <el-container class="layout">
+  <LoginView v-if="!authed" @authed="handleAuthed" />
+  <el-container v-else class="layout">
     <el-aside width="200px" class="sidebar">
       <div class="brand">
         <img src="/icons/atlas.svg" class="brand-logo" alt="Atlas" />
@@ -66,6 +88,11 @@ function switchMenu(key: MenuKey) {
           <el-icon><Lock /></el-icon><span>安全设置</span>
         </el-menu-item>
       </el-menu>
+      <div class="sidebar-footer">
+        <el-button text class="logout-btn" @click="logout">
+          <el-icon><SwitchButton /></el-icon><span>退出登录</span>
+        </el-button>
+      </div>
     </el-aside>
     <el-main class="main">
       <!-- 系统级插件面板（全局插件，无应用上下文） -->
@@ -91,8 +118,8 @@ function switchMenu(key: MenuKey) {
 }
 
 .sidebar {
-  background: var(--aibase-surface);
-  border-right: 1px solid var(--aibase-stroke);
+  background: var(--atlas-surface);
+  border-right: 1px solid var(--atlas-stroke);
 }
 
 .brand {
@@ -100,7 +127,7 @@ function switchMenu(key: MenuKey) {
   align-items: center;
   gap: 10px;
   padding: 16px;
-  border-bottom: 1px solid var(--aibase-stroke);
+  border-bottom: 1px solid var(--atlas-stroke);
 }
 
 .brand-logo {
@@ -119,6 +146,23 @@ function switchMenu(key: MenuKey) {
   padding-top: 8px;
 }
 
+.sidebar {
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 12px 8px;
+  border-top: 1px solid var(--atlas-stroke);
+}
+
+.logout-btn {
+  width: 100%;
+  justify-content: flex-start;
+  color: var(--atlas-muted);
+}
+
 .menu-plugin-icon {
   width: 16px;
   height: 16px;
@@ -127,6 +171,6 @@ function switchMenu(key: MenuKey) {
 
 .main {
   padding: 0;
-  background: var(--aibase-bg);
+  background: var(--atlas-bg);
 }
 </style>

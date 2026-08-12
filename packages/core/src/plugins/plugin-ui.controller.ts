@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Req, Res } from '@nestjs/common'
+import { Controller, Get, Param, Req, Res, Inject } from '@nestjs/common'
 import type { Request, Response } from 'express'
 import { ok } from '../common/response.js'
 import { PluginRegistry } from './plugin.registry.js'
@@ -12,8 +12,8 @@ import { PluginUiService } from './plugin-ui.service.js'
 @Controller()
 export class PluginUiController {
   constructor(
-    private readonly registry: PluginRegistry,
-    private readonly uiService: PluginUiService,
+    @Inject(PluginRegistry) private readonly registry: PluginRegistry,
+    @Inject(PluginUiService) private readonly uiService: PluginUiService,
   ) {}
 
   @Get('/api/plugins/ui')

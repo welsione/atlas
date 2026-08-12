@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 import { DB } from '../db/database.module.js'
 import type Database from 'better-sqlite3'
 import { NotFoundError, ValidationError } from '../common/response.js'
-import { CONFIG, type AIBaseConfig } from '../config.js'
+import { CONFIG, type AtlasConfig } from '../config.js'
 
 export interface PluginFileTokenRow {
   id: number
@@ -30,7 +30,7 @@ export interface PluginFileTokenRow {
 export class PluginFileRegistry {
   constructor(
     @Inject(DB) private readonly db: Database.Database,
-    @Inject(CONFIG) private readonly config: AIBaseConfig,
+    @Inject(CONFIG) private readonly config: AtlasConfig,
   ) {}
 
   publish(

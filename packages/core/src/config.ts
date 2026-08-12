@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 
 /** 平台配置：全部来自环境变量（默认本地开发）。 */
-export interface AIBaseConfig {
+export interface AtlasConfig {
   port: number
   dataDir: string
   dbPath: string
@@ -10,7 +10,7 @@ export interface AIBaseConfig {
   encKey: string
   /** 管理密码（登录用）。 */
   adminPassword: string
-  /** 固定管理 Token（X-AIBase-Key 头）。 */
+  /** 固定管理 Token（X-Atlas-Key 头）。 */
   adminKey: string
   authEnabled: boolean
   pluginScanIntervalMs: number
@@ -27,7 +27,7 @@ export interface AIBaseConfig {
 }
 
 /** 默认开发加密密钥：仅本地开发模式（未启用认证）允许。 */
-const DEV_ENC_KEY = 'aibase-dev-encryption-key-change-me'
+const DEV_ENC_KEY = 'atlas-dev-encryption-key-change-me'
 
 function env(name: string, def = ''): string {
   return process.env[name] ?? def
@@ -64,45 +64,45 @@ function repoRootOf(): string {
   return process.cwd()
 }
 
-export function loadConfig(overrides: Partial<AIBaseConfig> = {}): AIBaseConfig {
-  const dataDir = resolve(env('AIBASE_DATA_DIR', './data'))
+export function loadConfig(overrides: Partial<AtlasConfig> = {}): AtlasConfig {
+  const dataDir = resolve(env('ATLAS_DATA_DIR', './data'))
   if (!existsSync(dataDir)) {
     mkdirSync(dataDir, { recursive: true })
   }
-  const encKey = env('AIBASE_ENC_KEY', DEV_ENC_KEY)
-  const adminPassword = env('AIBASE_ADMIN_PASSWORD', '')
-  const adminKey = env('AIBASE_ADMIN_KEY', '')
-  const config: AIBaseConfig = {
-    port: int('AIBASE_PORT', 18081),
+  const encKey = env('ATLAS_ENC_KEY', DEV_ENC_KEY)
+  const adminPassword = env('ATLAS_ADMIN_PASSWORD', '')
+  const adminKey = env('ATLAS_ADMIN_KEY', '')
+  const config: AtlasConfig = {
+    port: int('ATLAS_PORT', 18081),
     dataDir,
-    dbPath: env('AIBASE_DB', resolve(dataDir, 'aibase.db')),
+    dbPath: env('ATLAS_DB', resolve(dataDir, 'atlas.db')),
     encKey,
     adminPassword,
     adminKey,
     authEnabled: adminPassword !== '' || adminKey !== '',
-    pluginScanIntervalMs: int('AIBASE_PLUGIN_SCAN_INTERVAL_MS', 10000),
-    datasetRefreshIntervalMs: int('AIBASE_DATASET_REFRESH_INTERVAL_MS', 60000),
+    pluginScanIntervalMs: int('ATLAS_PLUGIN_SCAN_INTERVAL_MS', 10000),
+    datasetRefreshIntervalMs: int('ATLAS_DATASET_REFRESH_INTERVAL_MS', 60000),
     pluginsDir: (() => {
-      const explicit = env('AIBASE_PLUGINS_DIR')
+      const explicit = env('ATLAS_PLUGINS_DIR')
       if (explicit) return resolve(explicit)
       const repoPlugins = join(repoRootOf(), 'plugins')
       return existsSync(repoPlugins) ? repoPlugins : resolve(dataDir, 'plugins')
     })(),
-    trustProxy: bool('AIBASE_TRUST_PROXY'),
-    devResetDb: bool('AIBASE_DEV_RESET_DB'),
-    corsOrigin: env('AIBASE_CORS_ORIGIN', '*'),
-    keepLogDays: int('AIBASE_KEEP_LOG_DAYS', 30),
+    trustProxy: bool('ATLAS_TRUST_PROXY'),
+    devResetDb: bool('ATLAS_DEV_RESET_DB'),
+    corsOrigin: env('ATLAS_CORS_ORIGIN', '*'),
+    keepLogDays: int('ATLAS_KEEP_LOG_DAYS', 30),
     ...overrides,
   }
   // 生产安全闸门：启用认证即视为生产，禁止使用默认开发密钥（SECRET 加密/HMAC 形同虚设）
   if (config.authEnabled && config.encKey === DEV_ENC_KEY) {
-    throw new Error('AIBASE_ENC_KEY 未配置：启用认证（生产）时必须显式设置加密密钥，禁止使用默认开发密钥')
+    throw new Error('ATLAS_ENC_KEY 未配置：启用认证（生产）时必须显式设置加密密钥，禁止使用默认开发密钥')
   }
   return config
 }
 
 /** 配置提供者（Nest DI）。 */
-export const CONFIG = Symbol('AIBaseConfig')
+export const CONFIG = Symbol('AtlasConfig')
 
 export const configProvider = {
   provide: CONFIG,

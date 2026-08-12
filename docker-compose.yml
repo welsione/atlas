@@ -1,19 +1,28 @@
-# AIBase：AI 服务基础组件（供应商配置 + 提示词管理）
-# 服务器部署：docker compose pull && docker compose up -d
+# Atlas：AI 服务基础组件（供应商配置 + 提示词管理）
+# 服务器部署：docker compose build && docker compose up -d
 services:
-  aibase:
-    image: ghcr.io/welsione/aibase:latest
-    container_name: aibase
+  atlas:
+    build: .
+    image: atlas:latest
+    container_name: atlas
     restart: unless-stopped
+    security_opt:
+      # CentOS 7 (kernel 3.10) 上 Docker 默认 seccomp 会拦截 better-sqlite3 所需 syscall（SQLITE_IOERR_WRITE）
+      - seccomp:unconfined
     ports:
       - "18081:18081"
     environment:
       # API Key 加密密钥（Base64 编码 32 字节）：生产必须设置，可用 openssl rand -base64 32 生成
-      AIBASE_ENC_KEY: ${AIBASE_ENC_KEY:-}
-      AIBASE_PORT: "18081"
-      AIBASE_DATA_DIR: /app/data
+      ATLAS_ENC_KEY: ${ATLAS_ENC_KEY:-}
+      # 管理登录密码（未设置且未设 ATLAS_ADMIN_KEY 时管理接口开放，仅限本地开发）
+      ATLAS_ADMIN_PASSWORD: ${ATLAS_ADMIN_PASSWORD:-}
+      # 固定管理 Token（X-Atlas-Key 请求头）
+      ATLAS_ADMIN_KEY: ${ATLAS_ADMIN_KEY:-}
+      ATLAS_PORT: "18081"
+      ATLAS_DATA_DIR: /app/data
+      ATLAS_PLUGINS_DIR: /app/plugins
     volumes:
-      - aibase-data:/app/data
+      - atlas-data:/app/data
 
 volumes:
-  aibase-data:
+  atlas-data:

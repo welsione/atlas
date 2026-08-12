@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atlas 平台化架构 · 现状与演进方案</title>
+<style>
+  :root{
+    --bg:#0f1220; --bg2:#151a2e; --card:#1a2040; --card2:#202748;
+    --ink:#e8ecff; --muted:#9aa3c7; --line:#2a335c;
+    --brand:#6c7bff; --brand2:#9b6cff; --teal:#2dd4bf; --amber:#f5a623; --red:#ff5d6c;
+    --ok:#34d399; --ok-bg:rgba(52,211,153,.12);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--ink);line-height:1.7;font-size:15px}
+  a{color:var(--brand);text-decoration:none}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+
+  /* Hero */
+  .hero{position:relative;padding:72px 0 56px;overflow:hidden;
+    background:radial-gradient(1200px 500px at 20% -10%,rgba(108,123,255,.28),transparent 60%),
+               radial-gradient(900px 420px at 90% 0%,rgba(155,108,255,.22),transparent 55%);}
+  .hero::after{content:"";position:absolute;inset:auto 0 0 0;height:1px;
+    background:linear-gradient(90deg,transparent,var(--line),transparent)}
+  .badge{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--teal);
+    border:1px solid var(--line);background:rgba(45,212,191,.08);padding:5px 12px;border-radius:100px;margin-bottom:20px}
+  .badge .dot{width:7px;height:7px;border-radius:50%;background:var(--teal);box-shadow:0 0 10px var(--teal)}
+  .hero h1{font-size:40px;font-weight:800;letter-spacing:-.5px;line-height:1.2}
+  .hero h1 .grad{background:linear-gradient(90deg,var(--brand),var(--brand2));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero p.sub{color:var(--muted);font-size:17px;max-width:780px;margin-top:14px}
+  .hero .meta{margin-top:22px;display:flex;flex-wrap:wrap;gap:10px}
+  .chip{font-size:13px;color:var(--muted);border:1px solid var(--line);padding:6px 12px;border-radius:8px;background:rgba(255,255,255,.02)}
+
+  nav.toc{position:sticky;top:0;z-index:50;backdrop-filter:blur(10px);background:rgba(15,18,32,.82);border-bottom:1px solid var(--line)}
+  nav.toc .wrap{display:flex;gap:6px;overflow-x:auto;padding:10px 0}
+  nav.toc a{font-size:13px;color:var(--muted);padding:6px 12px;border-radius:7px;white-space:nowrap}
+  nav.toc a:hover{color:var(--ink);background:rgba(255,255,255,.05)}
+  section{padding:52px 0;border-bottom:1px solid var(--line)}
+  .kicker{font-size:12.5px;letter-spacing:2px;color:var(--brand);font-weight:700;text-transform:uppercase}
+  h2{font-size:28px;font-weight:800;margin:6px 0 8px;letter-spacing:-.3px}
+  .lead{color:var(--muted);max-width:840px;margin-bottom:26px}
+  h3{font-size:18px;font-weight:700;margin:26px 0 10px;display:flex;align-items:center;gap:8px}
+  h3 .n{display:inline-flex;width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,var(--brand),var(--brand2));
+    color:#fff;font-size:12px;align-items:center;justify-content:center;font-weight:700}
+
+  .grid{display:grid;gap:14px}
+  .g2{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+  .g3{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .card h4{font-size:15px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+  .card p{color:var(--muted);font-size:13.5px}
+  .card p b{color:var(--ink);font-weight:600}
+  .tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:100px;margin-right:6px;vertical-align:1px}
+  .tag.done{background:rgba(52,211,153,.13);color:var(--teal);border:1px solid rgba(52,211,153,.3)}
+  .tag.prop{background:rgba(245,166,35,.14);color:var(--amber);border:1px solid rgba(245,166,35,.3)}
+  .tag.core{background:rgba(108,123,255,.15);color:var(--brand);border:1px solid rgba(108,123,255,.3)}
+
+  /* Architecture */
+  .arch{display:flex;flex-direction:column;gap:16px;margin:10px 0 6px}
+  .core-box{background:var(--card2);border:1px solid var(--brand);border-radius:14px;padding:18px}
+  .core-box .ttl{font-weight:800;color:var(--brand);margin-bottom:12px;display:flex;justify-content:space-between;font-size:14px}
+  .core-box .ttl .badge-mini{font-size:10.5px;background:rgba(108,123,255,.15);padding:2px 8px;border-radius:100px}
+  .plug-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+  .plug{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;text-align:center}
+  .plug .ic{font-size:20px}
+  .plug .nm{font-size:13px;font-weight:700;margin-top:4px}
+  .plug .sub{font-size:11px;color:var(--muted)}
+  .arrow{display:flex;align-items:center;justify-content:center;gap:10px;color:var(--muted);font-size:13px}
+  .arrow .ln{flex:1;max-width:120px;height:0;border-top:2px dashed var(--line)}
+  .arrow .lbl{color:var(--brand);font-weight:600;white-space:nowrap}
+  .arrow-big{text-align:center;color:var(--brand);font-size:15px;font-weight:700;padding:6px 0}
+
+  pre{background:#0b0e1c;border:1px solid var(--line);border-radius:12px;padding:16px;overflow-x:auto;
+    font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.6;margin:10px 0}
+  code{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace}
+  pre .c{color:#5b658a} pre .k{color:#c792ea} pre .s{color:#a5d6ff} pre .f{color:#82aaff} pre .t{color:#ffcb6b}
+
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.5px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-weight:600;font-size:12px;letter-spacing:.5px;text-transform:uppercase;background:rgba(255,255,255,.02)}
+  td code{color:var(--teal);font-size:12px}
+  tr:hover td{background:rgba(255,255,255,.02)}
+
+  .phase{display:flex;gap:16px;margin:14px 0}
+  .phase .num{flex:0 0 40px;height:40px;border-radius:11px;background:linear-gradient(135deg,var(--brand),var(--brand2));
+    color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:16px}
+  .phase .body{flex:1}
+  .phase .body h4{font-size:15px;font-weight:700}
+  .phase .body ul{margin:6px 0 0 18px;color:var(--muted);font-size:13.5px}
+  .phase .body li{margin-bottom:4px}
+  .phase .body li b{color:var(--ink)}
+
+  .callout{border-left:3px solid var(--brand);background:rgba(108,123,255,.06);padding:12px 16px;border-radius:0 10px 10px 0;margin:14px 0;font-size:14px}
+  .callout.ok{border-color:var(--ok);background:var(--ok-bg)}
+  .callout.warn{border-color:var(--amber);background:rgba(245,166,35,.08)}
+  .callout b{color:var(--ink)}
+
+  footer{padding:40px 0;color:var(--muted);font-size:13px;text-align:center}
+  @media(max-width:640px){.hero h1{font-size:30px}}
+</style>
+</head>
+<body>
+
+<!-- ============ HERO ============ -->
+<header class="hero">
+  <div class="wrap">
+    <span class="badge"><span class="dot"></span>重新调研 · 基于当前最新代码 · 待确认</span>
+    <h1>Atlas 平台化架构：<span class="grad">现状全景 + 演进方案</span></h1>
+    <p class="sub">平台内核做「基础能力」，其余能力由插件提供；平台已向插件开放<b>单向 SPI</b>（能力门面 + 事件订阅 + 声明式接入）。下一步提案：让插件也能<b>暴露 SPI</b>，供平台内核与其他插件交互（双向 SPI）。</p>
+    <div class="meta">
+      <span class="chip">NestJS monorepo · @atlas</span>
+      <span class="chip">SQLite · 插件动态加载</span>
+      <span class="chip">Vue 3 前端 × 3 slot</span>
+    </div>
+  </div>
+</header>
+
+<!-- ============ TOC ============ -->
+<nav class="toc"><div class="wrap">
+  <a href="#s1">① 现状全景</a>
+  <a href="#s2">② 已实现 · 平台单向 SPI</a>
+  <a href="#s3">③ 提案 · 插件双向 SPI</a>
+  <a href="#s4">④ 提案 · 插件表迁移</a>
+  <a href="#s5">⑤ 实施步骤</a>
+  <a href="#s6">⑥ 验证方式</a>
+</div></nav>
+
+<div class="wrap">
+
+<!-- ============ 现状全景 ============ -->
+<section id="s1">
+  <div class="kicker">重新调研结论</div>
+  <h2>① 现状全景：边界已成型，单向 SPI 已落地</h2>
+  <p class="lead">平台内核保留「基础能力」，业务能力（供应商 / 提示词 / 模型文件 / 机器监控）已全部插件化。平台已实现一整套向插件开放的<b>单向 SPI</b>，并有专门文档 <a href="docs/spi-development.md">docs/spi-development.md</a>。</p>
+
+  <div class="arch">
+    <div class="core-box">
+      <div class="ttl"><span>平台内核（基础能力）</span><span class="badge-mini">core 保留</span></div>
+      <div class="grid g3">
+        <div class="card" style="background:transparent;border-color:var(--line)"><h4>应用空间 apps</h4><p>多租户应用、凭证轮换/吊销/激活</p></div>
+        <div class="card" style="background:transparent;border-color:var(--line)"><h4>数据集 datasets</h4><p>版本化发布/消费、资产、SECRET 凭证</p></div>
+        <div class="card" style="background:transparent;border-color:var(--line)"><h4>接口监控聚合</h4><p>基于 api_access_logs 的数据面可观测</p></div>
+        <div class="card" style="background:transparent;border-color:var(--line)"><h4>安全 security</h4><p>管理认证、IP 黑名单、限流、审计</p></div>
+        <div class="card" style="background:transparent;border-color:var(--line)"><h4>插件运行时</h4><p>loader / registry / 分发 / UI 托管</p></div>
+        <div class="card" style="background:transparent;border-color:var(--line)"><h4>SPI 门面 env</h4><p>store / files / crypto / datasets / ops / config / instance</p></div>
+      </div>
+      <div class="callout ok" style="margin-top:14px"><b>已实现 · 单向 SPI 体系：</b>平台经 <code>env</code> 再开放 <code>events()</code>（事件订阅）+ <code>apps()/monitor()/security()/platform()</code>（能力门面）+ <code>schemaDdl/cleanupTables/logTables/publicUrls/resourceName</code>（声明式接入）。详见「②」。</div>
+    </div>
+    <div class="arrow"><span class="ln"></span><span class="lbl">env 单向注入（已实现）</span><span class="ln"></span></div>
+    <div class="plug-grid">
+      <div class="plug"><div class="ic">🛰️</div><div class="nm">providers 供应商</div><div class="sub">GLOBAL_SHARED · datasets+endpoints</div></div>
+      <div class="plug"><div class="ic">📝</div><div class="nm">prompts 提示词</div><div class="sub">APP_LOCAL · endpoints</div></div>
+      <div class="plug"><div class="ic">📁</div><div class="nm">model-files 模型文件</div><div class="sub">APP_LOCAL · datasets+endpoints</div></div>
+      <div class="plug"><div class="ic">📊</div><div class="nm">machine-monitor 机器监控</div><div class="sub">GLOBAL_SHARED · datasetSource+endpoints</div></div>
+    </div>
+  </div>
+
+  <h3><span class="n">!</span>关键残留：插件业务表仍硬编码在 core</h3>
+  <p>所有插件均未声明 <code>schemaDdl</code>，以下 6 张表仍定义在 <code>core/src/db/schema.sql</code> —— 这是「核心仍携带插件业务结构」的边界污染，提案见「④」。</p>
+  <div class="grid g3">
+    <div class="card"><h4>providers</h4><p>供应商插件业务表</p></div>
+    <div class="card"><h4>prompts / prompt_versions</h4><p>提示词插件业务表</p></div>
+    <div class="card"><h4>model_files / download_logs / upload_logs</h4><p>模型文件插件业务表</p></div>
+  </div>
+</section>
+
+<!-- ============ 已实现单向SPI ============ -->
+<section id="s2">
+  <div class="kicker">已实现</div>
+  <h2>② 平台单向 SPI：现状（已落地）</h2>
+  <p class="lead">平台核心功能不仅是「被动被插件调用」，而是主动向插件开放三类 SPI：能力门面、事件订阅、声明式接入。契约定义在 <code>packages/types/src/index.ts</code>，运行时在 <code>SpiModule</code>（@Global）+ <code>PlatformPluginEnvironment</code>。</p>
+
+  <h3><span class="n">1</span>能力门面（插件 → 主动调平台）</h3>
+  <table>
+    <tr><th>门面</th><th>能力</th></tr>
+    <tr><td><code>env.apps()</code></td><td>应用空间读取 / 创建：<code>list / get / create</code></td></tr>
+    <tr><td><code>env.monitor()</code></td><td>数据面聚合读取 + <code>registerMetric</code> 自定义指标（绑定调用方 appId）</td></tr>
+    <tr><td><code>env.security()</code></td><td>公开前缀注册 + IP 黑名单管理</td></tr>
+    <tr><td><code>env.platform()</code></td><td>平台版本 / 安全子集配置 / 元信息</td></tr>
+  </table>
+
+  <h3><span class="n">2</span>事件订阅（平台 → 被动通知插件）</h3>
+  <p>基于 <code>@nestjs/event-emitter</code> 的类型化事件总线，核心服务生命周期变更时 <code>emit</code>，插件用 <code>env.events().on()</code> 订阅，实例销毁自动退订。</p>
+  <div class="grid g3">
+    <div class="card"><h4>应用事件</h4><p><code>app.created / updated / activated / revoked / deleted / secret.rotated</code></p></div>
+    <div class="card"><h4>数据集事件</h4><p><code>dataset.created / updated / published / deleted</code></p></div>
+    <div class="card"><h4>插件事件</h4><p><code>plugin.loaded / unloaded / enabled / disabled / deleted</code></p></div>
+  </div>
+
+  <h3><span class="n">3</span>声明式接入（AtlasPlugin 钩子）</h3>
+  <table>
+    <tr><th>钩子</th><th>职责</th></tr>
+    <tr><td><code>schemaDdl()</code></td><td>启动幂等建表（CREATE TABLE IF NOT EXISTS，失败隔离）</td></tr>
+    <tr><td><code>cleanupTables()</code></td><td>应用删除时同事务级联清理插件表</td></tr>
+    <tr><td><code>logTables()</code></td><td>声明插件日志表，纳入 LogCleanupService 定时清理</td></tr>
+    <tr><td><code>publicUrls()</code></td><td>注册公开 URL 前缀，SecurityMiddleware 放行</td></tr>
+    <tr><td><code>resourceName()</code></td><td>监控聚合的插件资源类型显示名解析</td></tr>
+  </table>
+  <div class="callout ok"><b>关键点：</b>这是「平台 → 插件」的单向 SPI，已实现且有全套文档。<b>插件之间目前无直接调用</b>，靠「数据集 + GLOBAL_SHARED store」协作——这正是下一步要补的方向。</div>
+</section>
+
+<!-- ============ 提案双向SPI ============ -->
+<section id="s3">
+  <div class="kicker">提案</div>
+  <h2>③ 插件双向 SPI：可行，且推荐 <span class="tag prop">未实现 · 提案</span></h2>
+  <p class="lead">「插件本身暴露 SPI 供平台内核与其他插件交互」——<b>完全可行，是插件平台的标准演进方向</b>（类似 Home Assistant 的 integration、WordPress filter/action、LSP 的 capabilities）。在已实现的单向 SPI 之上，补齐反向：插件→插件、插件→内核。</p>
+
+  <div class="callout ok"><b>回答你的问题：</b>可以。设计上让插件用 <code>provides()</code> 声明自己暴露哪些「能力命名空间」，其他插件用 <code>env.spi()</code> 消费，平台内核用 <code>PluginSpiRegistry</code> 消费；配合 <code>dependsOn</code> 声明依赖、拓扑排序、作用域校验、null 降级。</div>
+
+  <h3><span class="n">1</span>插件 SPI 契约（packages/types）</h3>
+  <pre><code><span class="c">// 插件暴露一个 SPI 能力</span>
+export interface PluginSpiExport {
+  describe: string
+  create(env: PluginEnvironment): unknown   <span class="c">// 用提供方自己的 env 构建</span>
+}
+export interface PluginSpiDependency { pluginType: string; spi?: string }
+
+<span class="c">// AtlasPlugin 新增两个可选钩子</span>
+provides?:  () =&gt; Record&lt;string, PluginSpiExport&gt;   <span class="c">// namespace → 能力工厂</span>
+dependsOn?: () =&gt; PluginSpiDependency[]             <span class="c">// 依赖声明</span>
+
+<span class="c">// PluginEnvironment 新增消费方法</span>
+spi&lt;T = unknown&gt;(pluginType: string, namespace: string, targetAppId?: number): T | null</code></pre>
+
+  <div class="grid g2">
+    <div class="card"><h4>🛰️ 提供方示例 · providers 暴露「模型网关」</h4>
+      <pre style="margin:8px 0 0"><code>provides: () =&gt; ({
+  <span class="s">'model-gateway'</span>: {
+    describe: <span class="s">'OpenAI/Anthropic 兼容网关'</span>,
+    create: (env) =&gt; ({
+      async complete(req) {
+        <span class="k">const</span> list = <span class="k">await</span> env.store().get(<span class="s">'providers'</span>)
+        <span class="k">const</span> p = list.find(x =&gt; x.id === req.providerId)
+        <span class="k">const</span> key = env.crypto().decrypt(p.openai.apiKey)
+        <span class="c">// …… 调用远端模型</span>
+      }
+    })
+  }
+})</code></pre>
+    </div>
+    <div class="card"><h4>🔌 消费方示例 · 另一插件调用</h4>
+      <pre style="margin:8px 0 0"><code><span class="c">// 在 endpoint / handler 调用期求值（免疫 init 顺序）</span>
+handle: async (env) =&gt; {
+  <span class="k">const</span> gw = env.spi&lt;ModelGatewaySpi&gt;(<span class="s">'providers'</span>, <span class="s">'model-gateway'</span>)
+  <span class="k">if</span> (!gw) <span class="k">return</span> { ok: <span class="t">false</span>, reason: <span class="s">'能力不可用'</span> }  <span class="c">// 降级</span>
+  <span class="k">return</span> <span class="k">await</span> gw.complete({ providerId, messages })
+}</code></pre>
+    </div>
+  </div>
+
+  <h3><span class="n">2</span>类型化方案：双轨</h3>
+  <div class="grid g2">
+    <div class="card"><h4>一等能力 · 名义类型安全</h4><p>扩展 <code>@atlas/types</code>（新增 <code>types/src/spi/*</code>）定义接口，提供方 <code>create</code> 返回该类型，消费方 <code>env.spi&lt;ModelGatewaySpi&gt;(...)</code>。<b>运行时无跨插件 import</b>（插件是动态 import 隔离的），仅类型在编译期共享。</p></div>
+    <div class="card"><h4>第三方能力 · 鸭子类型</h4><p>消费方本地声明接口 + <code>env.spi&lt;LocalShape&gt;(...)</code>。<code>spi()</code> 泛型默认 <code>unknown</code>，不强转即得安全默认。</p></div>
+  </div>
+
+  <h3><span class="n">3</span>运行时注册中心（新文件）</h3>
+  <table>
+    <tr><th>方法</th><th>职责</th></tr>
+    <tr><td><code>register(pluginType, appId, scope, exports, buildEnv)</code></td><td>构建并缓存 SPI 对象，key = <code>${pluginType}@scopeKey</code></td></tr>
+    <tr><td><code>unregister(pluginType, appId?)</code></td><td>注销；不带 appId 清该类型全部实例</td></tr>
+    <tr><td><code>resolve(pluginType, namespace, consumerAppId)</code></td><td>解析；不可用一律返回 <code>null</code></td></tr>
+    <tr><td><code>namespacesOf(pluginType)</code></td><td>管理面展示某插件暴露的命名空间</td></tr>
+  </table>
+  <p style="color:var(--muted);font-size:13.5px;margin-top:8px">不依赖 <code>PluginService</code>（避免反向循环），由 PluginService 编排驱动。平台内核通过新的 <code>PLUGIN_SPI_REGISTRY</code> Symbol token 注入消费——沿用现有门面模式（<code>tokens.ts</code>）。</p>
+
+  <h3><span class="n">4</span>生命周期接入（编排权在 PluginService）</h3>
+  <div class="grid g3">
+    <div class="card"><h4>启用</h4><p><code>enableInstance</code> 构建 env 后，若 <code>provides()`</code> 非空则 <code>register</code>，SPI 即就绪。</p></div>
+    <div class="card"><h4>注销</h4><p><code>deleteInstance</code> / <code>unload</code> / 热替换时 <code>unregister</code>；订阅 <code>loaded/unloaded</code> 事件统一定清/重建。</p></div>
+    <div class="card"><h4>依赖拓扑</h4><p><code>autoInstantiate</code> 内对 <code>dependsOn</code> 拓扑排序（先启用被依赖方）+ <b>环检测</b>，发现环拒启并告警。</p></div>
+  </div>
+
+  <h3><span class="n">5</span>作用域与降级</h3>
+  <table>
+    <tr><th>提供方 scope</th><th>可被谁解析</th></tr>
+    <tr><td><code>GLOBAL_SHARED</code></td><td>任意 consumerAppId（数据本就共享），缓存于 <code>@0</code></td></tr>
+    <tr><td><code>APP_LOCAL</code></td><td>仅当 consumerAppId === 提供方 appId</td></tr>
+    <tr><td>未加载 / 未暴露 / 未启用</td><td>一律 <code>null</code>，消费方回退</td></tr>
+  </table>
+  <div class="callout warn"><b>安全红线：</b>SPI 是进程内、受信集群代码调用。<b>严禁新增 <code>/spi/:type/:ns</code> HTTP 透传路由</b>，只允许经插件自身声明的端点暴露；跨插件调用走 <code>ops()</code> 审计。</div>
+
+  <h3><span class="n">6</span>设计取舍</h3>
+  <div class="grid g2">
+    <div class="card"><h4>与现有协作互补</h4><p>默认仍鼓励「数据集 + GLOBAL_SHARED store」松耦合协作；SPI 留给操作型能力（网关 / 推理 / 嵌入）。两模式各司其职。</p></div>
+    <div class="card"><h4>前端维持 HTTP runtime</h4><p>不新增浏览器内 SPI 总线。前端插件是 <code>ui/</code> 静态包，经同一端点 / 数据集消费即可，避免与后端 SPI 重复。</p></div>
+  </div>
+</section>
+
+<!-- ============ 迁移 ============ -->
+<section id="s4">
+  <div class="kicker">提案</div>
+  <h2>④ 插件业务表迁移 <span class="tag prop">未实现 · 提案</span></h2>
+  <p class="lead">把 6 张插件表从 core 迁出，让 core schema 只含真正的平台基础表，插件彻底自治。用户已确认迁移方向。</p>
+  <div class="grid g2">
+    <div class="card"><h4>1 · 插件加 schemaDdl</h4><p>providers / prompts / model-files 各在 <code>src/index.ts</code> 加 <code>schemaDdl: () =&gt; [CREATE TABLE IF NOT EXISTS …]</code>（从 core schema 对应 DDL 复制，含索引）。</p></div>
+    <div class="card"><h4>2 · core 删除</h4><p><code>core/src/db/schema.sql</code> 删除这 6 张表的 CREATE。<code>LEGACY_TABLES</code> 保留（dev-reset 仍清，插件幂等重建）。</p></div>
+  </div>
+  <div class="callout ok"><b>平滑迁移：</b>插件 <code>schemaDdl</code> 是 <code>CREATE TABLE IF NOT EXISTS</code>，由 <code>SchemaBootstrapService</code> 在 core schema 之后执行 → 旧库已有表不重建、不丢数据，<b>无需数据迁移</b>。</div>
+</section>
+
+<!-- ============ 实施 ============ -->
+<section id="s5">
+  <div class="kicker">落地</div>
+  <h2>⑤ 实施步骤（分阶段）</h2>
+  <div class="phase"><div class="num">1</div><div class="body"><h4>契约与注册中心</h4><ul>
+    <li><code>types</code> 加 <code>provides</code> / <code>dependsOn</code> / <code>spi()</code> + <code>PluginSpiExport</code> / <code>PluginSpiDependency</code></li>
+    <li>新增 <code>types/src/spi/model-gateway.ts</code> 示例接口</li>
+    <li>新建 <code>core/src/spi/plugin-spi.registry.ts</code>；<code>tokens.ts</code> 加 <code>PLUGIN_SPI_REGISTRY</code>；<code>spi.module.ts</code> provide/export</li>
+  </ul></div></div>
+  <div class="phase"><div class="num">2</div><div class="body"><h4>生命周期接入</h4><ul>
+    <li><code>plugin.service.ts</code>：注入 registry；enableInstance 注册 / deleteInstance·unload 注销 / autoInstantiate 拓扑排序 + 环检测 / 订阅 loaded·unloaded 重建</li>
+    <li><code>PlatformPluginEnvironment</code> 加 <code>spi()</code></li>
+  </ul></div></div>
+  <div class="phase"><div class="num">3</div><div class="body"><h4>插件表迁移</h4><ul>
+    <li>providers / prompts / model-files 各加 <code>schemaDdl</code>；core <code>schema.sql</code> 删 6 表；<code>LEGACY_TABLES</code> 保留</li>
+  </ul></div></div>
+  <div class="phase"><div class="num">4</div><div class="body"><h4>示例与验证</h4><ul>
+    <li>给 providers 暴露 <code>model-gateway</code> SPI；写单测；更新 <code>docs/plugin-development.md</code> 与 <code>docs/spi-development.md</code></li>
+  </ul></div></div>
+</section>
+
+<!-- ============ 验证 ============ -->
+<section id="s6">
+  <div class="kicker">质量</div>
+  <h2>⑥ 验证方式</h2>
+  <div class="grid g2">
+    <div class="card"><h4>单测</h4><p>新增 <code>plugin-spi.registry.spec.ts</code>、扩展 <code>plugin.service.spec.ts</code> —— 覆盖 register / resolve / unregister、作用域、未加载→null、拓扑、环检测。</p></div>
+    <div class="card"><h4>集成</h4><p>启用 providers 后，第二插件 <code>env.spi('providers','model-gateway')</code> 拿到对象并调用；卸载 providers 后返回 null。</p></div>
+    <div class="card"><h4>迁移验证</h4><p><code>ATLAS_DEV_RESET_DB=1</code> 启动，确认 6 表由插件 schemaDdl 建成、core 无残留；旧库启动不丢数据。</p></div>
+    <div class="card"><h4>回归</h4><p>插件加载 / 热替换、数据集同步、端点分发、接口监控聚合不受影响（<code>npm test</code> 全绿）。</p></div>
+  </div>
+</section>
+
+</div>
+
+<footer>
+  Atlas 平台化架构 · 重新调研于当前最新代码 · 「已实现」vs「提案」已明确区分 · 待确认后进入分阶段实施
+</footer>
+
+</body>
+</html>

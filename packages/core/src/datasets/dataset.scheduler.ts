@@ -3,7 +3,7 @@ import { DatasetRepository } from './dataset.repository.js'
 import { DatasetService } from './dataset.service.js'
 import { PluginService } from '../plugins/plugin.service.js'
 import { OpsLogService } from '../plugins/ops-log.service.js'
-import { CONFIG, type AIBaseConfig } from '../config.js'
+import { CONFIG, type AtlasConfig } from '../config.js'
 
 /**
  * 数据集定时刷新：按配置间隔扫描 SCHEDULED 数据集，调用插件 DatasetSource 重渲染，
@@ -15,11 +15,11 @@ export class DatasetScheduler implements OnApplicationBootstrap, OnModuleDestroy
   private timer: NodeJS.Timeout | null = null
 
   constructor(
-    @Inject(CONFIG) private readonly config: AIBaseConfig,
-    private readonly repository: DatasetRepository,
-    private readonly datasetService: DatasetService,
-    private readonly pluginService: PluginService,
-    private readonly opsLogService: OpsLogService,
+    @Inject(CONFIG) private readonly config: AtlasConfig,
+    @Inject(DatasetRepository) private readonly repository: DatasetRepository,
+    @Inject(DatasetService) private readonly datasetService: DatasetService,
+    @Inject(PluginService) private readonly pluginService: PluginService,
+    @Inject(OpsLogService) private readonly opsLogService: OpsLogService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -50,7 +50,8 @@ export class DatasetScheduler implements OnApplicationBootstrap, OnModuleDestroy
   /** 手动/定时刷新入口：渲染 → 发布（哈希变则版本+1）。 */
   async refreshNow(d: import('@atlas/types').Dataset): Promise<boolean> {
     const env = this.pluginService.environmentOrNull(d.appId, d.pluginType)
-    if (!env || !env.datasetSource()) {
+    const registered = this.pluginService.datasetRegistration(d.appId, d.pluginType, d.datasetKey) !== null
+    if (!env || (!registered && !env.datasetSource())) {
       this.opsLogService.write(d.appId, d.pluginType, 'INFO', `数据集刷新跳过（无渲染源）：${d.name}`, {
         datasetKey: d.datasetKey,
         reason: 'no dataset source',

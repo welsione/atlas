@@ -134,6 +134,18 @@ export class PluginRepository {
       .map(rowToInstance)
   }
 
+  /** 全部已启用实例（启动后数据集注册补同步用）。 */
+  findAllEnabled(): PluginInstance[] {
+    return (this.db.prepare("SELECT * FROM plugin_instances WHERE enabled = 1").all() as PluginInstanceRow[])
+      .map(rowToInstance)
+  }
+
+  /** 某插件类型全部已启用实例（热替换后重建 SPI 用）。 */
+  findAllEnabledInstancesOf(pluginType: string): PluginInstance[] {
+    return (this.db.prepare('SELECT * FROM plugin_instances WHERE plugin_type = ? AND enabled = 1').all(pluginType) as PluginInstanceRow[])
+      .map(rowToInstance)
+  }
+
   updateInstanceConfig(id: number, configJson: string): void {
     this.db
       .prepare('UPDATE plugin_instances SET config_json = ?, updated_at = ? WHERE id = ?')
@@ -141,40 +153,40 @@ export class PluginRepository {
   }
 
   // ---------- plugin_store（通用存储） ----------
-  storeGet(instanceId: number, entityKey: string, entityId: string): unknown {
+  // 分区键：instance_id（0=全局共享 / appId=应用独立）+ plugin_type（隔离不同插件，防跨插件碰撞）
+  storeGet(instanceId: number, pluginType: string, entityKey: string, entityId: string): unknown {
     const row = this.db
-      .prepare('SELECT value_json FROM plugin_store WHERE instance_id = ? AND entity_id = ? AND entity_key = ?')
-      .get(instanceId, entityId, entityKey) as { value_json: string } | undefined
+      .prepare('SELECT value_json FROM plugin_store WHERE instance_id = ? AND plugin_type = ? AND entity_id = ? AND entity_key = ?')
+      .get(instanceId, pluginType, entityId, entityKey) as { value_json: string } | undefined
     return row ? JSON.parse(row.value_json) : null
   }
 
-  storePut(instanceId: number, entityKey: string, entityId: string, valueJson: string, now: string): void {
+  storePut(instanceId: number, pluginType: string, entityKey: string, entityId: string, valueJson: string, now: string): void {
     this.db
       .prepare(
-        `INSERT INTO plugin_store (instance_id, entity_id, entity_key, value_json, version, created_at, updated_at)
-         VALUES (?,?,?,?,1,?,?)
-         ON CONFLICT(instance_id, entity_id, entity_key) DO UPDATE SET value_json=excluded.value_json, updated_at=excluded.updated_at`,
+        `INSERT INTO plugin_store (instance_id, plugin_type, entity_id, entity_key, value_json, version, created_at, updated_at)
+         VALUES (?,?,?,?,?,1,?,?)
+         ON CONFLICT(instance_id, plugin_type, entity_id, entity_key) DO UPDATE SET value_json=excluded.value_json, updated_at=excluded.updated_at`,
       )
-      .run(instanceId, entityId, entityKey, valueJson, now, now)
+      .run(instanceId, pluginType, entityId, entityKey, valueJson, now, now)
   }
 
-  storeRemove(instanceId: number, entityKey: string, entityId: string): void {
+  storeRemove(instanceId: number, pluginType: string, entityKey: string, entityId: string): void {
     this.db
-      .prepare('DELETE FROM plugin_store WHERE instance_id = ? AND entity_id = ? AND entity_key = ?')
-      .run(instanceId, entityId, entityKey)
+      .prepare('DELETE FROM plugin_store WHERE instance_id = ? AND plugin_type = ? AND entity_id = ? AND entity_key = ?')
+      .run(instanceId, pluginType, entityId, entityKey)
   }
 
-  storeList(instanceId: number, entityId: string): Array<{ entity_key: string; value_json: string }> {
+  storeList(instanceId: number, pluginType: string, entityId: string): Array<{ entity_key: string; value_json: string }> {
     return this.db
-      .prepare('SELECT entity_key, value_json FROM plugin_store WHERE instance_id = ? AND entity_id = ?')
-      .all(instanceId, entityId) as Array<{ entity_key: string; value_json: string }>
+      .prepare('SELECT entity_key, value_json FROM plugin_store WHERE instance_id = ? AND plugin_type = ? AND entity_id = ?')
+      .all(instanceId, pluginType, entityId) as Array<{ entity_key: string; value_json: string }>
   }
 
-  /**
-   * 按存储作用域键清理通用存储（instance_id 列语义 = scopeKey：0=共享 / appId=独立）。
-   * 删除 APP_LOCAL 实例时传 appId；共享实例删除时数据保留（不调用）。
-   */
-  storeDeleteByScope(scopeKey: number): void {
-    this.db.prepare('DELETE FROM plugin_store WHERE instance_id = ?').run(scopeKey)
+  /** 删除某实例（应用+插件类型）的本地 store，仅清理该插件自身数据，不动兄弟插件。 */
+  storeDeleteInstance(scopeKey: number, pluginType: string): void {
+    this.db.prepare('DELETE FROM plugin_store WHERE instance_id = ? AND plugin_type = ?').run(scopeKey, pluginType)
   }
+
+  /** 按存储作用域键清理通用存储（instance_id 列语义 = scopeKey：0=共享 / appId=独立）。 */
 }

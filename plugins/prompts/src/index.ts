@@ -1,4 +1,4 @@
-import type { AibasePlugin, PluginEnvironment } from '@atlas/types'
+import type { AtlasPlugin, PluginEnvironment } from '@atlas/types'
 
 /**
  * prompts 插件：提示词模板管理（APP_LOCAL —— 每个应用独立）。
@@ -22,11 +22,41 @@ const now = (): string => new Date().toISOString().slice(0, 19).replace('T', ' '
 /** 保留的版本历史条数（超出丢弃最旧）。 */
 const MAX_HISTORY = 10
 
-const plugin: AibasePlugin = {
+const plugin: AtlasPlugin = {
   type: 'prompts',
   name: '提示词管理',
   describe: '提示词模板、变量渲染、版本历史',
   defaultDataScope: 'APP_LOCAL',
+
+  /** 插件自有表（从 core schema 迁出）：prompts / prompt_versions（历史遗留，当前数据走 plugin_store）。 */
+  schemaDdl: () => [
+    `CREATE TABLE IF NOT EXISTS prompts (
+       id INTEGER PRIMARY KEY AUTOINCREMENT,
+       app_id INTEGER NOT NULL,
+       name TEXT NOT NULL,
+       category TEXT NOT NULL DEFAULT 'default',
+       description TEXT NOT NULL DEFAULT '',
+       content TEXT NOT NULL,
+       variables_json TEXT NOT NULL DEFAULT '[]',
+       version INTEGER NOT NULL DEFAULT 1,
+       enabled INTEGER NOT NULL DEFAULT 1,
+       sort_order INTEGER NOT NULL DEFAULT 0,
+       created_at TEXT NOT NULL,
+       updated_at TEXT NOT NULL
+     );
+     CREATE INDEX IF NOT EXISTS idx_prompts_scope ON prompts(app_id, category);
+     CREATE TABLE IF NOT EXISTS prompt_versions (
+       id INTEGER PRIMARY KEY AUTOINCREMENT,
+       prompt_id INTEGER NOT NULL,
+       version INTEGER NOT NULL,
+       content TEXT NOT NULL,
+       created_at TEXT NOT NULL
+     );
+     CREATE INDEX IF NOT EXISTS idx_prompt_versions_prompt ON prompt_versions(prompt_id);`,
+  ],
+
+  /** 应用删除时级联清理本插件表（prompts；prompt_versions 无 app_id 列，历史遗留表不单独清理）。 */
+  cleanupTables: () => [{ table: 'prompts', column: 'app_id' }],
 
   endpoints: () => [
     {

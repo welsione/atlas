@@ -9,7 +9,7 @@ plugins/my-plugin/
 ├── manifest.json   # 插件声明（pluginType/name/description/version/defaultDataScope/icon/entry）
 ├── icons/          # 插件图标目录（可选；manifest.icon 相对路径指向这里）
 ├── src/
-│   └── index.ts    # AibasePlugin 实现（Node 22 原生运行 TS，无需编译）
+│   └── index.ts    # AtlasPlugin 实现（Node 22 原生运行 TS，无需编译）
 ├── ui/             # 前端面板构建产物（可选，npm run ui:build 自动生成）
 └── ui-src/         # 前端面板源码（可选；从 plugins/providers/ui-src 复制改造）
 ```
@@ -18,7 +18,7 @@ plugins/my-plugin/
 
 1. **声明**：改 `manifest.json` —— `pluginType` 全局唯一，`entry` 固定 `src/index.ts`
 2. **图标**（可选）：`icons/` 目录放 SVG/PNG，`manifest.json` 的 `icon` 写 `icons/xxx.svg`（或 data URI / http URL）；应用空间 Tab、插件实例表格、插件注册表、控制台卡片统一展示
-3. **实现**：改 `src/index.ts` —— `AibasePlugin.type` 必须与 `manifest.pluginType` 一致（不一致加载跳过）
+3. **实现**：改 `src/index.ts` —— `AtlasPlugin.type` 必须与 `manifest.pluginType` 一致（不一致加载跳过）
 4. **验证**：保存后约 10s 自动热加载（日志可见注册信息），端点即生效
 
 ## 核心契约速查
