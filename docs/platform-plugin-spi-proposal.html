@@ -146,7 +146,7 @@
         <div class="card" style="background:transparent;border-color:var(--line)"><h4>插件运行时</h4><p>loader / registry / 分发 / UI 托管</p></div>
         <div class="card" style="background:transparent;border-color:var(--line)"><h4>SPI 门面 env</h4><p>store / files / crypto / datasets / ops / config / instance</p></div>
       </div>
-      <div class="callout ok" style="margin-top:14px"><b>已实现 · 单向 SPI 体系：</b>平台经 <code>env</code> 再开放 <code>events()</code>（事件订阅）+ <code>apps()/monitor()/security()/platform()</code>（能力门面）+ <code>schemaDdl/cleanupTables/logTables/publicUrls/resourceName</code>（声明式接入）。详见「②」。</div>
+      <div class="callout ok" style="margin-top:14px"><b>已实现 · 单向 SPI 体系：</b>平台经 <code>env</code> 再开放 <code>events()</code>（事件订阅）+ <code>apps()/monitor()/security()/platform()</code>（能力门面）+ <code>schema.sql/cleanupTables/logTables/publicUrls/resourceName</code>（声明式接入）。详见「②」。</div>
     </div>
     <div class="arrow"><span class="ln"></span><span class="lbl">env 单向注入（已实现）</span><span class="ln"></span></div>
     <div class="plug-grid">
@@ -295,10 +295,10 @@ handle: async (env) =&gt; {
   <h2>④ 插件业务表迁移 <span class="tag prop">未实现 · 提案</span></h2>
   <p class="lead">把 6 张插件表从 core 迁出，让 core schema 只含真正的平台基础表，插件彻底自治。用户已确认迁移方向。</p>
   <div class="grid g2">
-    <div class="card"><h4>1 · 插件加 schemaDdl</h4><p>providers / prompts / model-files 各在 <code>src/index.ts</code> 加 <code>schemaDdl: () =&gt; [CREATE TABLE IF NOT EXISTS …]</code>（从 core schema 对应 DDL 复制，含索引）。</p></div>
+    <div class="card"><h4>1 · 插件放 schema.sql</h4><p>providers / prompts / model-files 各在插件目录加 <code>schema.sql</code>（从 core schema 对应 DDL 复制，含索引）；框架自动发现建表，禁止内联 <code>schemaDdl</code>（已移除）。</p></div>
     <div class="card"><h4>2 · core 删除</h4><p><code>core/src/db/schema.sql</code> 删除这 6 张表的 CREATE。<code>LEGACY_TABLES</code> 保留（dev-reset 仍清，插件幂等重建）。</p></div>
   </div>
-  <div class="callout ok"><b>平滑迁移：</b>插件 <code>schemaDdl</code> 是 <code>CREATE TABLE IF NOT EXISTS</code>，由 <code>SchemaBootstrapService</code> 在 core schema 之后执行 → 旧库已有表不重建、不丢数据，<b>无需数据迁移</b>。</div>
+  <div class="callout ok"><b>平滑迁移：</b>插件 <code>schema.sql</code> 是 <code>CREATE TABLE IF NOT EXISTS</code>，由 <code>SchemaBootstrapService</code> 在插件加载完成后执行 → 旧库已有表不重建、不丢数据，<b>无需数据迁移</b>。</div>
 </section>
 
 <!-- ============ 实施 ============ -->
@@ -315,7 +315,7 @@ handle: async (env) =&gt; {
     <li><code>PlatformPluginEnvironment</code> 加 <code>spi()</code></li>
   </ul></div></div>
   <div class="phase"><div class="num">3</div><div class="body"><h4>插件表迁移</h4><ul>
-    <li>providers / prompts / model-files 各加 <code>schemaDdl</code>；core <code>schema.sql</code> 删 6 表；<code>LEGACY_TABLES</code> 保留</li>
+    <li>providers / prompts / model-files 各加 <code>schema.sql</code>；core <code>schema.sql</code> 删 6 表；<code>LEGACY_TABLES</code> 保留</li>
   </ul></div></div>
   <div class="phase"><div class="num">4</div><div class="body"><h4>示例与验证</h4><ul>
     <li>给 providers 暴露 <code>model-gateway</code> SPI；写单测；更新 <code>docs/plugin-development.md</code> 与 <code>docs/spi-development.md</code></li>
@@ -329,7 +329,7 @@ handle: async (env) =&gt; {
   <div class="grid g2">
     <div class="card"><h4>单测</h4><p>新增 <code>plugin-spi.registry.spec.ts</code>、扩展 <code>plugin.service.spec.ts</code> —— 覆盖 register / resolve / unregister、作用域、未加载→null、拓扑、环检测。</p></div>
     <div class="card"><h4>集成</h4><p>启用 providers 后，第二插件 <code>env.spi('providers','model-gateway')</code> 拿到对象并调用；卸载 providers 后返回 null。</p></div>
-    <div class="card"><h4>迁移验证</h4><p><code>ATLAS_DEV_RESET_DB=1</code> 启动，确认 6 表由插件 schemaDdl 建成、core 无残留；旧库启动不丢数据。</p></div>
+    <div class="card"><h4>迁移验证</h4><p><code>ATLAS_DEV_RESET_DB=1</code> 启动，确认 6 表由插件 schema.sql 建成、core 无残留；旧库启动不丢数据。</p></div>
     <div class="card"><h4>回归</h4><p>插件加载 / 热替换、数据集同步、端点分发、接口监控聚合不受影响（<code>npm test</code> 全绿）。</p></div>
   </div>
 </section>

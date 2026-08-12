@@ -29,6 +29,11 @@ export class PluginController {
     )
   }
 
+  @Get('spi-overview')
+  spiOverview() {
+    return ok(this.service.spiOverview())
+  }
+
   @Post(':pluginType/unload')
   unload(@Param('pluginType') pluginType: string) {
     try {

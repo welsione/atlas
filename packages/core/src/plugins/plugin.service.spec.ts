@@ -340,4 +340,39 @@ describe('PluginService', () => {
     expect(service.repository.findInstance(82, 'test-cyc-a')).toBeUndefined()
     expect(service.repository.findInstance(82, 'test-cyc-b')).toBeUndefined()
   })
+
+  it('dependsOn 多环：两个独立环全部报告并全部拒绝（P2-4 回归）', () => {
+    const cycA: AtlasPlugin = {
+      type: 'test-cyc2-a', name: '环2A', describe: '', defaultDataScope: 'APP_LOCAL',
+      dependsOn: () => [{ pluginType: 'test-cyc2-b' }],
+    }
+    const cycB: AtlasPlugin = {
+      type: 'test-cyc2-b', name: '环2B', describe: '', defaultDataScope: 'APP_LOCAL',
+      dependsOn: () => [{ pluginType: 'test-cyc2-a' }],
+    }
+    const cycC: AtlasPlugin = {
+      type: 'test-cyc2-c', name: '环2C', describe: '', defaultDataScope: 'APP_LOCAL',
+      dependsOn: () => [{ pluginType: 'test-cyc2-d' }],
+    }
+    const cycD: AtlasPlugin = {
+      type: 'test-cyc2-d', name: '环2D', describe: '', defaultDataScope: 'APP_LOCAL',
+      dependsOn: () => [{ pluginType: 'test-cyc2-c' }],
+    }
+    registry.register({ plugin: cycA, artifact: 'builtin', artifactHash: '', version: '', builtin: true })
+    registry.register({ plugin: cycB, artifact: 'builtin', artifactHash: '', version: '', builtin: true })
+    registry.register({ plugin: cycC, artifact: 'builtin', artifactHash: '', version: '', builtin: true })
+    registry.register({ plugin: cycD, artifact: 'builtin', artifactHash: '', version: '', builtin: true })
+    service.syncDefs()
+
+    const logger = (service as unknown as { logger: { error: (m: string) => void } }).logger
+    const errorSpy = jest.spyOn(logger, 'error').mockImplementation(() => {})
+    service.autoInstantiate(84, ['test-cyc2-a', 'test-cyc2-b', 'test-cyc2-c', 'test-cyc2-d'])
+    errorSpy.mockRestore()
+
+    // 两个独立环成员均未被启用
+    expect(service.repository.findInstance(84, 'test-cyc2-a')).toBeUndefined()
+    expect(service.repository.findInstance(84, 'test-cyc2-b')).toBeUndefined()
+    expect(service.repository.findInstance(84, 'test-cyc2-c')).toBeUndefined()
+    expect(service.repository.findInstance(84, 'test-cyc2-d')).toBeUndefined()
+  })
 })

@@ -127,4 +127,59 @@ describe('PluginSpiRegistry', () => {
     }, makeEnv)
     expect(registry.namespacesOf('multi-ns').sort()).toEqual(['a', 'b'])
   })
+
+  it('resolve 带 minVersion：提供方版本低于要求 → null + warn（P2-2 回归）', () => {
+    const warnSpy = jest.spyOn((registry as unknown as { logger: { warn: (m: string) => void } }).logger, 'warn').mockImplementation(() => {})
+    registry.register('ver-ok', 1, 'GLOBAL_SHARED', {
+      ns: { describe: 'v', version: '1.5.0', create: () => ({ v: 1 }) },
+    }, makeEnv)
+    registry.register('ver-low', 2, 'GLOBAL_SHARED', {
+      ns: { describe: 'v', version: '1.2.0', create: () => ({ v: 2 }) },
+    }, makeEnv)
+    // 满足：1.5.0 >= 1.4.0
+    expect(registry.resolve('ver-ok', 'ns', 1, { minVersion: '1.4.0' })).not.toBeNull()
+    // 不满足：1.2.0 < 1.4.0 → null + warn
+    expect(registry.resolve('ver-low', 'ns', 2, { minVersion: '1.4.0' })).toBeNull()
+    const warned = warnSpy.mock.calls.map((c) => String(c[0]))
+    expect(warned.some((m) => m.includes('ver-low/ns') && m.includes('1.2.0'))).toBe(true)
+    warnSpy.mockRestore()
+  })
+
+  it('resolve 带 minVersion：提供方未声明 version 时正常解析（可选版本兼容）（P2-2）', () => {
+    registry.register('ver-none', 1, 'GLOBAL_SHARED', {
+      ns: { describe: 'v', create: () => ({ v: 3 }) },
+    }, makeEnv)
+    expect(registry.resolve('ver-none', 'ns', 1, { minVersion: '1.0.0' })).not.toBeNull()
+  })
+
+  it('providedNamespaces：返回命名空间及运行期注册状态（refs>0）（P2-1）', () => {
+    registry.register('topo-rc', 1, 'GLOBAL_SHARED', {
+      a: { describe: 'a', create: () => ({}) },
+      b: { describe: 'b', create: () => ({}) },
+    }, makeEnv)
+    registry.register('topo-rc', 2, 'GLOBAL_SHARED', {
+      a: { describe: 'a', create: () => ({}) },
+      b: { describe: 'b', create: () => ({}) },
+    }, makeEnv) // refs=2
+    const out = registry.providedNamespaces('topo-rc')
+    expect(out.map((r) => r.namespace).sort()).toEqual(['a', 'b'])
+    expect(out.every((r) => r.registered)).toBe(true)
+    registry.unregister('topo-rc', 1, 'GLOBAL_SHARED') // refs=1，仍注册
+    expect(registry.providedNamespaces('topo-rc').every((r) => r.registered)).toBe(true)
+    registry.unregister('topo-rc', 2, 'GLOBAL_SHARED') // refs=0，条目移除
+    expect(registry.providedNamespaces('topo-rc')).toEqual([])
+  })
+
+  it('审计回调：首次构建触发一次、缓存命中不触发（P2-3 回归）', () => {
+    const audits: Array<{ pluginType: string; namespace: string; consumerAppId: number }> = []
+    const hooked = new PluginSpiRegistry()
+    hooked.setAuditHook((ctx) => audits.push(ctx))
+    hooked.register('audited', 1, 'GLOBAL_SHARED', {
+      ns: { describe: 'a', create: () => ({}) },
+    }, makeEnv)
+    hooked.resolve('audited', 'ns', 1) // 首次构建 → 回调
+    hooked.resolve('audited', 'ns', 1) // 缓存命中 → 不回调
+    hooked.resolve('audited', 'ns', 9) // 共享实例，缓存命中 → 不回调
+    expect(audits).toEqual([{ pluginType: 'audited', namespace: 'ns', consumerAppId: 1 }])
+  })
 })

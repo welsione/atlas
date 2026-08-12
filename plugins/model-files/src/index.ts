@@ -37,50 +37,6 @@ const plugin: AtlasPlugin = {
   describe: '模型文件上传、固定下载链接（token 防穷举）、版本/HASH 条件下载',
   defaultDataScope: 'APP_LOCAL',
 
-  /** 插件自有表（从 core schema 迁出）：model_files / download_logs / upload_logs（历史遗留，当前数据走 plugin_store + files()）。 */
-  schemaDdl: () => [
-    `CREATE TABLE IF NOT EXISTS model_files (
-       id INTEGER PRIMARY KEY AUTOINCREMENT,
-       app_id INTEGER NOT NULL,
-       name TEXT NOT NULL,
-       category TEXT NOT NULL DEFAULT 'default',
-       description TEXT NOT NULL DEFAULT '',
-       kind TEXT NOT NULL DEFAULT 'FILE',
-       storage_root TEXT NOT NULL,
-       token TEXT NOT NULL DEFAULT '',
-       files_json TEXT NOT NULL DEFAULT '[]',
-       total_size INTEGER NOT NULL DEFAULT 0,
-       file_count INTEGER NOT NULL DEFAULT 1,
-       version INTEGER NOT NULL DEFAULT 1,
-       content_hash TEXT NOT NULL DEFAULT '',
-       download_count INTEGER NOT NULL DEFAULT 0,
-       created_at TEXT NOT NULL,
-       updated_at TEXT NOT NULL
-     );
-     CREATE INDEX IF NOT EXISTS idx_model_files_scope ON model_files(app_id, category);
-     CREATE UNIQUE INDEX IF NOT EXISTS idx_model_files_token ON model_files(token);
-     CREATE TABLE IF NOT EXISTS download_logs (
-       id INTEGER PRIMARY KEY AUTOINCREMENT,
-       file_id INTEGER NOT NULL,
-       ip TEXT NOT NULL DEFAULT '',
-       user_agent TEXT NOT NULL DEFAULT '',
-       bytes INTEGER NOT NULL DEFAULT 0,
-       downloaded_at TEXT NOT NULL
-     );
-     CREATE INDEX IF NOT EXISTS idx_download_logs_file ON download_logs(file_id, downloaded_at);
-     CREATE INDEX IF NOT EXISTS idx_download_logs_ip ON download_logs(ip, downloaded_at);
-     CREATE TABLE IF NOT EXISTS upload_logs (
-       id INTEGER PRIMARY KEY AUTOINCREMENT,
-       file_id INTEGER NOT NULL,
-       ip TEXT NOT NULL DEFAULT '',
-       user_agent TEXT NOT NULL DEFAULT '',
-       bytes INTEGER NOT NULL DEFAULT 0,
-       uploaded_at TEXT NOT NULL
-     );
-     CREATE INDEX IF NOT EXISTS idx_upload_logs_file ON upload_logs(file_id, uploaded_at);
-     CREATE INDEX IF NOT EXISTS idx_upload_logs_ip ON upload_logs(ip, uploaded_at);`,
-  ],
-
   /** 应用删除时级联清理本插件表（model_files 有 app_id；download_logs/upload_logs 按 file_id 关联，历史遗留表不单独清理）。 */
   cleanupTables: () => [{ table: 'model_files', column: 'app_id' }],
 

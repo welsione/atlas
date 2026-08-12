@@ -10,6 +10,8 @@ export interface LoadedPlugin {
   /** 插件图标声明（data:/http(s)/相对路径）。 */
   icon: string
   builtin: boolean
+  /** 插件自有建表 SQL（目录 schema.sql 内容，加载器自动读取；SchemaBootstrapService 启动执行）。 */
+  schemaSql?: string
   /** 外部插件的入口模块（动态 import 结果），用于卸载后引用。 */
   module?: unknown
 }

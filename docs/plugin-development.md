@@ -45,6 +45,7 @@ Atlas 是一个全 TypeScript 的 AI 服务基础平台，核心能力全部通�
 plugins/<type>/
 ├── manifest.json          # 插件声明（必填，含 icon）
 ├── icons/                 # 插件图标目录（可选，SVG/PNG，manifest.icon 相对路径指向这里）
+├── schema.sql             # 插件自有表建表 SQL（可选；框架自动建表，须幂等 CREATE TABLE IF NOT EXISTS）
 ├── src/
 │   └── index.ts           # AtlasPlugin 实现（必填，Node 22 直接运行）
 ├── ui/                    # 前端面板构建产物（可选；npm run ui:build 自动生成）
@@ -59,6 +60,9 @@ plugins/<type>/
         ├── App.vue        #   面板实现（props.appId）
         └── manifest.json  #   UI slot 声明
 ```
+
+**建表约定**：插件自有表放目录根 `schema.sql`（框架在插件加载完成后自动按 `;` 切分执行，
+单条失败隔离）。**禁止在 `src/index.ts` 内联 DDL**（`schemaDdl` 钩子已移除）。
 
 开发新插件：`cp -R plugins/template plugins/my-plugin`，然后逐项替换。
 
@@ -117,10 +121,8 @@ const plugin: AtlasPlugin = {
   defaultDataScope: 'APP_LOCAL',
   scopeOverrideAllowed: true,   // 可选：是否允许实例级覆盖作用域（仅 SHARED → LOCAL）
 
-  /** 可选：幂等建表 DDL，平台启动按注册顺序执行 */
-  schemaDdl: () => [
-    `CREATE TABLE IF NOT EXISTS my_plugin_item (...)`,
-  ],
+  /** 可选：应用删除时级联清理插件表（配合 schema.sql 建表） */
+  cleanupTables: () => [{ table: 'my_plugin_item', column: 'app_id' }],
 
   /** 可选：数据集内容渲染源（见 §8） */
   datasetSource: () => ({
@@ -167,8 +169,8 @@ export default plugin
 
 ### 生命周期
 1. **平台启动**：加载器扫描 `plugins/` 目录 → 校验 manifest（字段齐全、entry 存在、
-   导出 `AtlasPlugin`、type 与 manifest 一致）→ 注册到插件注册表。
-2. **实例启用**（某应用启用该插件）：`schemaDdl()` 已由平台执行过建表；
+   导出 `AtlasPlugin`、type 与 manifest 一致）→ 注册到插件注册表 → 执行插件目录 `schema.sql` 建表。
+2. **实例启用**（某应用启用该插件）：`cleanupTables()` 关联的插件表已由 `schema.sql` 建好；
    `init(env)` 以该实例上下文调用（种子数据、默认配置）。
 3. **运行期**：`endpoints()` 的 handler 按请求分发调用；`datasetSource()` 按调度刷新。
 4. **实例销毁/停用**：`destroy()` 调用。
