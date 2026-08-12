@@ -117,14 +117,13 @@ describe('SPI 门面', () => {
     expect(meta).not.toHaveProperty('encKey')
   })
 
-  it('ExtensionRegistry 聚合插件声明式扩展点（schemaDdl/cleanupTables/logTables/publicUrls/resourceName）', () => {
+  it('ExtensionRegistry 聚合插件声明式扩展点（schema.sql/cleanupTables/logTables/publicUrls/resourceName）', () => {
     registry.register({
       plugin: {
         type: 'test-spi-decl',
         name: 'SPI 声明',
         describe: '声明式扩展点测试',
         defaultDataScope: 'GLOBAL_SHARED',
-        schemaDdl: () => ['CREATE TABLE IF NOT EXISTS spi_item (id INTEGER PRIMARY KEY, app_id INTEGER)'],
         cleanupTables: () => [{ table: 'spi_item', column: 'app_id' }],
         logTables: () => [{ table: 'spi_item_log', column: 'created_at' }],
         publicUrls: () => ['/api/deep/'],
@@ -134,6 +133,7 @@ describe('SPI 门面', () => {
       artifactHash: '',
       version: '',
       builtin: true,
+      schemaSql: 'CREATE TABLE IF NOT EXISTS spi_item (id INTEGER PRIMARY KEY, app_id INTEGER);',
     })
 
     expect(extensions.allSchemaDdl()).toContain('CREATE TABLE IF NOT EXISTS spi_item (id INTEGER PRIMARY KEY, app_id INTEGER)')
@@ -144,23 +144,23 @@ describe('SPI 门面', () => {
     expect(extensions.resolveResourceName('DATASET', 1)).toBeNull()
   })
 
-  it('SchemaBootstrapService 执行插件 schemaDdl（幂等）', () => {
+  it('SchemaBootstrapService 执行插件 schema.sql（幂等）', () => {
     registry.register({
       plugin: {
         type: 'test-schema',
         name: 'Schema 测试',
-        describe: '启动建表',
+        describe: '建表测试',
         defaultDataScope: 'GLOBAL_SHARED',
-        schemaDdl: () => ['CREATE TABLE IF NOT EXISTS spi_boot (id INTEGER PRIMARY KEY, app_id INTEGER)'],
       },
       artifact: 'builtin',
       artifactHash: '',
       version: '',
       builtin: true,
+      schemaSql: 'CREATE TABLE IF NOT EXISTS spi_boot (id INTEGER PRIMARY KEY, app_id INTEGER);',
     })
     const svc = new SchemaBootstrapService(db, extensions)
-    svc.onApplicationBootstrap()
-    svc.onApplicationBootstrap() // 幂等：执行两次不报错
+    svc.execute()
+    svc.execute() // 幂等：执行两次不报错
     const cols = db.prepare("SELECT name FROM pragma_table_info('spi_boot')").all() as Array<{ name: string }>
     expect(cols.some((c) => c.name === 'app_id')).toBe(true)
   })

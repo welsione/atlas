@@ -63,10 +63,14 @@ export class PluginService implements OnApplicationBootstrap {
     @Inject(PLUGIN_SPI_REGISTRY) private readonly spiRegistry: PluginSpiRegistry,
   ) {}
 
-  /** 订阅热替换事件：unloaded 清 SPI、loaded 重建（对已启用实例）。 */
+  /** 订阅热替换事件：unloaded 清 SPI、loaded 重建（对已启用实例）；注入解析级审计回调。 */
   onApplicationBootstrap(): void {
     this.eventBus.on('plugin.unloaded', ({ pluginType }) => this.spiRegistry.unregister(pluginType))
     this.eventBus.on('plugin.loaded', ({ pluginType }) => this.rebuildSpiFor(pluginType))
+    // P2-3 跨插件调用审计：能力对象首次构建（缓存 miss）时记录一次，缓存命中不记
+    this.spiRegistry.setAuditHook(({ pluginType, namespace, consumerAppId }) => {
+      this.opsLogService.write(consumerAppId, pluginType, 'INFO', `跨插件 SPI 调用：${pluginType}/${namespace}`)
+    })
   }
 
   // ---------- 注册表同步 ----------
@@ -231,12 +235,13 @@ export class PluginService implements OnApplicationBootstrap {
       .map((d) => d.pluginType)
     if (pending.length === 0) return
 
-    const { order, cycle } = topoSortPlugins(pending, (t) => this.dependenciesOf(t))
-    if (cycle.length > 0) {
-      this.logger.error(`插件依赖存在环，已跳过启用: ${cycle.join(' → ')}`)
+    const { order, cycles } = topoSortPlugins(pending, (t) => this.dependenciesOf(t))
+    for (const cyc of cycles) {
+      this.logger.error(`插件依赖存在环，已跳过启用: ${cyc.join(' → ')}`)
     }
+    const inCycle = new Set(cycles.flat())
     for (const t of order) {
-      if (cycle.includes(t)) continue // 环成员拒绝启用
+      if (inCycle.has(t)) continue // 环成员拒绝启用
       this.enableInstance(appId, t)
     }
   }
@@ -247,15 +252,62 @@ export class PluginService implements OnApplicationBootstrap {
     const loaded = this.registry.byType(pluginType)
     const deps = loaded?.plugin.dependsOn?.() ?? []
     for (const d of deps) {
-      if (d.spi) {
-        const target = this.registry.byType(d.pluginType)
-        const exposed = target?.plugin.provides?.() ?? {}
-        if (!target || !exposed[d.spi]) {
-          this.logger.warn(`依赖声明不满足: ${pluginType} 依赖 ${d.pluginType}/${d.spi}（未加载或未暴露该能力）`)
-        }
+      const st = this.dependencyStatus(d)
+      if (d.spi && !st.satisfied) {
+        this.logger.warn(`依赖声明不满足: ${pluginType} 依赖 ${d.pluginType}/${d.spi}（${st.reason}）`)
       }
     }
     return [...new Set(deps.map((d: PluginSpiDependency) => d.pluginType))]
+  }
+
+  /** 单个依赖项的满足状态（结构化；供 spiOverview 管理面查询复用，不产生告警）。 */
+  private dependencyStatus(d: PluginSpiDependency): { pluginType: string; spi?: string; satisfied: boolean; reason?: string } {
+    const target = this.registry.byType(d.pluginType)
+    if (!target) return { pluginType: d.pluginType, spi: d.spi, satisfied: false, reason: 'NOT_LOADED' }
+    if (d.spi) {
+      const exposed = target.plugin.provides?.() ?? {}
+      if (!exposed[d.spi]) return { pluginType: d.pluginType, spi: d.spi, satisfied: false, reason: 'NOT_EXPOSED' }
+    }
+    return { pluginType: d.pluginType, spi: d.spi, satisfied: true }
+  }
+
+  // ---------- 管理面 SPI 拓扑（P2-1） ----------
+
+  /** SPI 拓扑概览：全部已加载插件的 provides/dependsOn 声明 + 运行时注册状态 + 依赖满足状态 + 环。动态计算，无新表。 */
+  spiOverview(): {
+    plugins: Array<{
+      pluginType: string
+      name: string
+      provides: Array<{ namespace: string; describe: string; registered: boolean }>
+      dependsOn: Array<{ pluginType: string; spi?: string; satisfied: boolean; reason?: string }>
+      loaded: boolean
+      instancesEnabled: number
+    }>
+    cycles: string[][]
+  } {
+    const loaded = this.registry.all()
+    const allTypes = loaded.map((l) => l.plugin.type)
+    const { cycles } = topoSortPlugins(allTypes, (t) => this.dependenciesOf(t))
+    return {
+      plugins: loaded.map((l) => {
+        const p = l.plugin
+        const declared = p.provides?.() ?? {}
+        const runtime = new Map(this.spiRegistry.providedNamespaces(p.type).map((r) => [r.namespace, r.registered]))
+        return {
+          pluginType: p.type,
+          name: p.name,
+          provides: Object.entries(declared).map(([namespace, exp]) => ({
+            namespace,
+            describe: exp.describe,
+            registered: runtime.get(namespace) ?? false,
+          })),
+          dependsOn: (p.dependsOn?.() ?? []).map((d) => this.dependencyStatus(d)),
+          loaded: true,
+          instancesEnabled: this.repository.findAllEnabledInstancesOf(p.type).length,
+        }
+      }),
+      cycles,
+    }
   }
 
   /** 卸载插件（软停用 loaded=0，实例/数据保留；重集成恢复）。 */
@@ -657,9 +709,9 @@ class PlatformPluginEnvironment implements PluginEnvironment {
     return this.platformFacade
   }
 
-  spi<T = unknown>(pluginType: string, namespace: string, targetAppId?: number): T | null {
+  spi<T = unknown>(pluginType: string, namespace: string, targetAppId?: number, opts?: { minVersion?: string }): T | null {
     // 缺省以当前实例 appId 作为消费方上下文；GLOBAL_SHARED 提供方任意 app 可解析，APP_LOCAL 仅同 app。
-    return this.spiRegistry.resolve<T>(pluginType, namespace, targetAppId ?? this.appId)
+    return this.spiRegistry.resolve<T>(pluginType, namespace, targetAppId ?? this.appId, opts)
   }
 
   /** 实例销毁/插件卸载时调用：自动退订本实例订阅的全部平台事件。 */
@@ -675,21 +727,36 @@ class PlatformPluginEnvironment implements PluginEnvironment {
 }
 
 /**
- * 拓扑排序插件启动顺序（被依赖方在前）。返回 { order, cycle }。
- * cycle 为检测到的环路径（若有）；环成员不保证顺序，由调用方决定是否启用。
+ * 拓扑排序插件启动顺序（被依赖方在前）。返回 { order, cycles }。
+ * cycles 为检测到的全部环路径（含自身环），环路径经旋转规范化去重；环成员不保证顺序，由调用方决定是否启用。
  */
-function topoSortPlugins(types: string[], depsOf: (t: string) => string[]): { order: string[]; cycle: string[] } {
+function topoSortPlugins(types: string[], depsOf: (t: string) => string[]): { order: string[]; cycles: string[][] } {
   const visited = new Set<string>()
   const visiting = new Set<string>()
   const order: string[] = []
-  let cycle: string[] = []
+  const cycles: string[][] = []
+
+  /** 环路径旋转到字典序最小，作为去重键（a→b→a 与 b→a→b 视为同一环）。 */
+  const normalize = (cyc: string[]): string => {
+    const n = cyc.length
+    let best = cyc.join('→')
+    for (let i = 1; i < n; i++) {
+      const r = [...cyc.slice(i), ...cyc.slice(0, i)].join('→')
+      if (r < best) best = r
+    }
+    return best
+  }
+  const seen = new Set<string>()
 
   const visit = (t: string, stack: string[]): void => {
-    if (cycle.length > 0) return
     if (visiting.has(t)) {
-      // 找到环：从栈中截取环路径
-      const start = stack.indexOf(t)
-      cycle = [...stack.slice(start), t]
+      // 找到 back edge：从栈中截取环路径，旋转去重后收集（多环可同时报告）
+      const cyc = [...stack.slice(stack.indexOf(t)), t]
+      const key = normalize(cyc)
+      if (!seen.has(key)) {
+        seen.add(key)
+        cycles.push(cyc)
+      }
       return
     }
     if (visited.has(t)) return
@@ -705,5 +772,5 @@ function topoSortPlugins(types: string[], depsOf: (t: string) => string[]): { or
   for (const t of types) {
     if (!visited.has(t) && !visiting.has(t)) visit(t, [])
   }
-  return { order, cycle }
+  return { order, cycles }
 }

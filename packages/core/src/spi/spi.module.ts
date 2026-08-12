@@ -35,6 +35,7 @@ import { MonitorModule } from '../monitor/monitor.module.js'
   exports: [
     PlatformEventEmitter,
     ExtensionRegistry,
+    SchemaBootstrapService,
     APP_FACADE,
     MONITOR_FACADE,
     SECURITY_FACADE,

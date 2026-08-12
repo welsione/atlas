@@ -6,6 +6,7 @@ import type { AtlasPlugin } from '@atlas/types'
 import { PluginRegistry } from './plugin.registry.js'
 import { PluginService } from './plugin.service.js'
 import { CONFIG, type AtlasConfig } from '../config.js'
+import { SchemaBootstrapService } from '../spi/schema-bootstrap.service.js'
 import type { LoadedPlugin, PluginManifest } from './types.js'
 import { createHash } from 'node:crypto'
 
@@ -25,11 +26,14 @@ export class PluginLoader implements OnApplicationBootstrap {
     @Inject(CONFIG) private readonly config: AtlasConfig,
     @Inject(PluginRegistry) private readonly registry: PluginRegistry,
     @Inject(PluginService) private readonly service: PluginService,
+    @Inject(SchemaBootstrapService) private readonly schemaBootstrap: SchemaBootstrapService,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
     // 目录插件启动加载（无内置插件：全部插件统一走目录加载管线）
     await this.loadExternal()
+    // 插件 schema.sql 建表：必须在插件注册完成之后执行
+    this.schemaBootstrap.execute()
     this.service.syncDefs()
     this.logger.log(`插件加载完成：${this.registry.types().length} 个`)
     // 存量已启用实例补同步插件注册数据集（幂等，不阻塞启动）
@@ -116,13 +120,14 @@ export class PluginLoader implements OnApplicationBootstrap {
     return result
   }
 
-  /** 手动全量重载（POST /api/plugins/reload）：卸载全部外部插件 → 重新加载 → 同步注册表。 */
+  /** 手动全量重载（POST /api/plugins/reload）：卸载全部外部插件 → 重新加载 → 同步注册表 → 重建表。 */
   async reloadAll(): Promise<void> {
     for (const type of this.registry.types()) {
       const loaded = this.registry.byType(type)
       if (loaded && !loaded.builtin) this.registry.unregister(type)
     }
     await this.loadExternal()
+    this.schemaBootstrap.execute()
     this.service.syncDefs()
     this.logger.log(`插件全量重载完成：${this.registry.types().length} 个`)
   }
@@ -161,6 +166,7 @@ export class PluginLoader implements OnApplicationBootstrap {
         version: manifest.version ?? '0.0.0',
         icon: manifest.icon ?? '',
         builtin: false,
+        schemaSql: readSchemaSql(pluginDir),
         module: mod,
       }
       if (this.registry.register(loaded)) {
@@ -177,6 +183,12 @@ export class PluginLoader implements OnApplicationBootstrap {
 
 function hashOf(file: string): string {
   return createHash('sha256').update(readFileSync(file)).digest('hex').slice(0, 16)
+}
+
+/** 读取插件目录 schema.sql（约定文件；不存在返回 undefined，平台跳过建表）。 */
+function readSchemaSql(pluginDir: string): string | undefined {
+  const schemaPath = join(pluginDir, 'schema.sql')
+  return existsSync(schemaPath) ? readFileSync(schemaPath, 'utf8') : undefined
 }
 
 /** 插件目录内容哈希：manifest + 入口 + ui 目录（任何文件变化触发热替换）。

@@ -407,8 +407,9 @@ export interface PluginEnvironment {
   security(): PluginSecurity
   /** 平台门面（SPI）：平台版本、配置、元信息。 */
   platform(): PluginPlatform
-  /** 消费其他插件暴露的能力（双向 SPI）；不可用返回 null。targetAppId 缺省为当前实例 appId。 */
-  spi<T = unknown>(pluginType: string, namespace: string, targetAppId?: number): T | null
+  /** 消费其他插件暴露的能力（双向 SPI）；不可用返回 null。targetAppId 缺省为当前实例 appId。
+   *  opts.minVersion：要求的契约版本下限（提供方 version 存在时按 semver 比较，不满足返回 null）。 */
+  spi<T = unknown>(pluginType: string, namespace: string, targetAppId?: number, opts?: { minVersion?: string }): T | null
 }
 
 export interface AtlasPlugin {
@@ -419,8 +420,6 @@ export interface AtlasPlugin {
   defaultDataScope: DataScope
   /** 仅允许覆盖：SHARED → LOCAL。 */
   scopeOverrideAllowed?: boolean
-  /** 幂等建表 DDL（平台启动按注册顺序执行）。 */
-  schemaDdl?: () => string[]
   datasetSource?: () => DatasetSource
   /** 数据集注册：实例启用时 core 自动创建/同步，复用数据集接口与密级管理。 */
   datasets?: () => PluginDatasetRegistration[]
@@ -462,6 +461,8 @@ export interface PluginResourceNameResolver {
 /** 插件暴露的能力工厂：create(env) 返回该命名空间的能力对象（类型见 @atlas/types/spi/*）。 */
 export interface PluginSpiExport {
   describe: string
+  /** 能力契约版本（非插件版本），破坏性变更时由提供方提升；消费方可经 env.spi(...,{minVersion}) 约束。 */
+  version?: string
   create(env: PluginEnvironment): unknown
 }
 

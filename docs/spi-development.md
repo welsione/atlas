@@ -19,7 +19,7 @@ Atlas 的核心功能 SPI 分三层，全部向后兼容、只追加：
 │ 插件（plugins/<type>/src/index.ts 导出 AtlasPlugin）                │
 │                                                                    │
 │  ① 能力门面（读/写核心服务）   ② 事件订阅（被动响应）   ③ 声明式接入   │
-│     env.apps()                env.events().on(...)    schemaDdl()   │
+│     env.apps()                env.events().on(...)    schema.sql    │
 │     env.monitor()                                         补表      │
 │     env.security()                                    cleanupTables()│
 │     env.platform()                                     级联清理      │
@@ -206,14 +206,11 @@ env.info(`运行于 ${meta.platform} v${meta.version}，认证${meta.authEnabled
 
 ## 4. 声明式扩展点（AtlasPlugin 追加钩子）
 
-下为 `AtlasPlugin` 新增的可选钩子（原有 `schemaDdl/datasetSource/datasets/endpoints/init/destroy` 不变）：
+下为 `AtlasPlugin` 新增的可选钩子（原有 `datasetSource/datasets/endpoints/init/destroy` 不变；建表不再走钩子，改由目录 `schema.sql` 文件自动发现）：
 
 ```ts
 interface AtlasPlugin {
   // ...原有
-  /** 幂等建表 DDL：平台启动按注册顺序执行（有失败隔离）。 */
-  schemaDdl?: () => string[]
-
   /** 应用删除时级联清理插件表（AppRepository.deleteCascade 事务内执行）。 */
   cleanupTables?: () => PluginCleanupTable[]
 
@@ -238,20 +235,22 @@ interface PluginResourceNameResolver {
 }
 ```
 
-### 4.1 schemaDdl() — 启动建表（已实现）
+### 4.1 schema.sql 文件 — 启动建表（框架级约束）
 
-平台启动后按插件注册顺序执行插件声明的幂等 DDL。**必须幂等**（`CREATE TABLE IF NOT EXISTS …`），
-单条失败仅记录 warning，不影响平台与其他插件。
+插件自有表统一放在插件目录的 **`schema.sql`** 文件（框架自动发现、插件零代码）。
+平台在插件加载完成后（`onApplicationBootstrap` / `reloadAll`）自动执行。**必须幂等**
+（`CREATE TABLE IF NOT EXISTS …`），按 `;` 切分逐语句执行，单条失败仅记录 warning，不影响平台与其他插件。
 
-```ts
-schemaDdl: () => [
-  `CREATE TABLE IF NOT EXISTS my_plugin_item (
-     id INTEGER PRIMARY KEY AUTOINCREMENT,
-     app_id INTEGER NOT NULL,
-     name TEXT NOT NULL
-   )`,
-]
+```sql
+-- plugins/my-plugin/schema.sql
+CREATE TABLE IF NOT EXISTS my_plugin_item (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  app_id INTEGER NOT NULL,
+  name TEXT NOT NULL
+);
 ```
+
+> 约定：建表 SQL **一律放 schema.sql**，禁止内联在 `src/index.ts` 里（`AtlasPlugin.schemaDdl` 钩子已移除）。
 
 ### 4.2 cleanupTables() — 应用删除级联清理
 
@@ -320,8 +319,8 @@ resourceName: () => [
   只应声明插件自己的资源，涂抹内置资源会导致平台行为异常。
 - **订阅须考虑销毁**：`init` 中订阅由平台自动清理；临时 env 订阅需插件自行管理。
 - **敏感字段**：经门面读取的配置为平台安全子集（**不含 encKey 等任何密钥**）。
-- **幂等**：`schemaDdl()` 必须幂等；`cleanupTables()` 应容忍表不存在（SQLite DELETE 对不存在表会报错，
-  建议用 `CREATE TABLE IF NOT EXISTS` + 仅在 schemaDdl 中建表）。
+- **幂等**：`schema.sql` 中建表必须幂等（`CREATE TABLE IF NOT EXISTS`）；`cleanupTables()` 应容忍表不存在（SQLite DELETE 对不存在表会报错，
+  建议用 `CREATE TABLE IF NOT EXISTS` + 仅在 schema.sql 中建表）。
 - **向后兼容**：所有新增 SPI 均为可选（`?.()`），未声明的插件不受影响。
 
 ## 9. 开发流程与验证
@@ -333,8 +332,8 @@ async init(env) {
   env.info(`平台 v${env.platform().meta().version}`)
 }
 
-# 2. 声明式接入（可选）
-schemaDdl: () => ['CREATE TABLE IF NOT EXISTS my_t (id INTEGER PRIMARY KEY, app_id INTEGER)'],
+# 2. 声明式接入（可选：schema.sql 文件 + 清理声明）
+#    插件目录放 schema.sql（框架自动建表），cleanupTables 声明应用删除级联清理
 cleanupTables: () => [{ table: 'my_t', column: 'app_id' }],
 
 # 3. 验证
@@ -353,4 +352,4 @@ cleanupTables: () => [{ table: 'my_t', column: 'app_id' }],
 - **自定义监控指标如何被采集？** `registerMetric` 注册的 `collect` 由平台按采集周期调用并汇聚；
   当前平台已内置接口监控聚合，自定义指标为增量扩展。
 - **改插件声明后热更新生效吗？** 生效。`ExtensionRegistry` 每次实时遍历当前已注册插件，
-  `publicUrls/logTables/cleanupTables/resourceName/schemaDdl` 在热更新后自动反映最新声明。
+  `publicUrls/logTables/cleanupTables/resourceName` 在热更新后自动反映最新声明；`schema.sql` 变更触发目录热替换，重载后重新建表。

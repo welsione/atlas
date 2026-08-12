@@ -18,7 +18,7 @@ export interface LogTableSpec {
 
 /**
  * 扩展注册中心：聚合「插件声明式扩展点」+「插件运行时动态注册」，供 core 内部消费。
- * - 声明式（AtlasPlugin 钩子）：schemaDdl / cleanupTables / logTables / publicUrls / resourceName。
+ * - 声明式（AtlasPlugin 钩子 + schema.sql 文件）：cleanupTables / logTables / publicUrls / resourceName。
  * - 运行时（env.security().publicUrl() / env.monitor().registerMetric()）。
  * - 内置种子：平台默认公开前缀、日志保留表、级联清理表。
  * 每次调用实时遍历当前已注册插件（热更新后自动反映最新声明），无需手动失效缓存。
@@ -84,11 +84,14 @@ export class ExtensionRegistry {
     return tables
   }
 
-  /** 全部插件 schemaDdl（按注册顺序，SchemaBootstrapService 启动执行）。 */
+  /** 全部插件建表 DDL（schema.sql 内容按 ';' 切分，SchemaBootstrapService 插件加载完成后执行）。 */
   allSchemaDdl(): string[] {
     const ddl: string[] = []
     for (const loaded of this.registry.all()) {
-      for (const stmt of loaded.plugin.schemaDdl?.() ?? []) ddl.push(stmt)
+      if (!loaded.schemaSql) continue
+      for (const stmt of loaded.schemaSql.split(';').map((s) => s.trim()).filter(Boolean)) {
+        ddl.push(stmt)
+      }
     }
     return ddl
   }

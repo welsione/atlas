@@ -3,6 +3,7 @@ import type { AtlasPlugin, PluginEnvironment } from '@atlas/types'
 /**
  * 插件模板：复制本目录即可开发新插件。
  * 目录结构：manifest.json（{pluginType, name, description, version, defaultDataScope, entry}）
+ *          + schema.sql（可选：插件自有表建表 SQL，框架自动执行，须幂等 CREATE TABLE IF NOT EXISTS）
  *          + src/index.ts（本文件）+ ui/（前端面板产物，可选）
  */
 const plugin: AtlasPlugin = {
