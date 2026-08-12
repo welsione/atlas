@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { AibasePlugin, PluginEnvironment } from '@atlas/types'
+import type { AtlasPlugin, PluginEnvironment } from '@atlas/types'
 
 /**
  * model-files 插件：模型文件管理（APP_LOCAL）。
@@ -31,11 +31,107 @@ interface ModelFile {
 
 const now = (): string => new Date().toISOString().slice(0, 19).replace('T', ' ')
 
-const plugin: AibasePlugin = {
+const plugin: AtlasPlugin = {
   type: 'model-files',
   name: '模型文件',
   describe: '模型文件上传、固定下载链接（token 防穷举）、版本/HASH 条件下载',
   defaultDataScope: 'APP_LOCAL',
+
+  /** 插件自有表（从 core schema 迁出）：model_files / download_logs / upload_logs（历史遗留，当前数据走 plugin_store + files()）。 */
+  schemaDdl: () => [
+    `CREATE TABLE IF NOT EXISTS model_files (
+       id INTEGER PRIMARY KEY AUTOINCREMENT,
+       app_id INTEGER NOT NULL,
+       name TEXT NOT NULL,
+       category TEXT NOT NULL DEFAULT 'default',
+       description TEXT NOT NULL DEFAULT '',
+       kind TEXT NOT NULL DEFAULT 'FILE',
+       storage_root TEXT NOT NULL,
+       token TEXT NOT NULL DEFAULT '',
+       files_json TEXT NOT NULL DEFAULT '[]',
+       total_size INTEGER NOT NULL DEFAULT 0,
+       file_count INTEGER NOT NULL DEFAULT 1,
+       version INTEGER NOT NULL DEFAULT 1,
+       content_hash TEXT NOT NULL DEFAULT '',
+       download_count INTEGER NOT NULL DEFAULT 0,
+       created_at TEXT NOT NULL,
+       updated_at TEXT NOT NULL
+     );
+     CREATE INDEX IF NOT EXISTS idx_model_files_scope ON model_files(app_id, category);
+     CREATE UNIQUE INDEX IF NOT EXISTS idx_model_files_token ON model_files(token);
+     CREATE TABLE IF NOT EXISTS download_logs (
+       id INTEGER PRIMARY KEY AUTOINCREMENT,
+       file_id INTEGER NOT NULL,
+       ip TEXT NOT NULL DEFAULT '',
+       user_agent TEXT NOT NULL DEFAULT '',
+       bytes INTEGER NOT NULL DEFAULT 0,
+       downloaded_at TEXT NOT NULL
+     );
+     CREATE INDEX IF NOT EXISTS idx_download_logs_file ON download_logs(file_id, downloaded_at);
+     CREATE INDEX IF NOT EXISTS idx_download_logs_ip ON download_logs(ip, downloaded_at);
+     CREATE TABLE IF NOT EXISTS upload_logs (
+       id INTEGER PRIMARY KEY AUTOINCREMENT,
+       file_id INTEGER NOT NULL,
+       ip TEXT NOT NULL DEFAULT '',
+       user_agent TEXT NOT NULL DEFAULT '',
+       bytes INTEGER NOT NULL DEFAULT 0,
+       uploaded_at TEXT NOT NULL
+     );
+     CREATE INDEX IF NOT EXISTS idx_upload_logs_file ON upload_logs(file_id, uploaded_at);
+     CREATE INDEX IF NOT EXISTS idx_upload_logs_ip ON upload_logs(ip, uploaded_at);`,
+  ],
+
+  /** 应用删除时级联清理本插件表（model_files 有 app_id；download_logs/upload_logs 按 file_id 关联，历史遗留表不单独清理）。 */
+  cleanupTables: () => [{ table: 'model_files', column: 'app_id' }],
+
+  /** 数据集注册：模型文件库整体发布为「模型文件」数据集，复用数据集接口与密级管理。 */
+  datasets: () => [
+    {
+      key: 'model-files',
+      name: '模型文件',
+      sensitivity: 'INTERNAL',
+      refreshMode: 'MANUAL',
+      render: async (env) => {
+        const list = (await env.store().get<ModelFile[]>('files')) ?? []
+        return JSON.stringify({
+          count: list.length,
+          totalSize: list.reduce((m, f) => m + f.totalSize, 0),
+          files: list.map((f) => ({
+            id: f.id,
+            name: f.name,
+            category: f.category,
+            description: f.description,
+            kind: f.kind,
+            version: f.version,
+            contentHash: f.contentHash,
+            fileCount: f.fileCount,
+            totalSize: f.totalSize,
+            updatedAt: f.updatedAt,
+            entries: f.files.map((e) => ({ path: e.path, sizeBytes: e.sizeBytes, checksum: e.checksum })),
+          })),
+        })
+      },
+      assets: async (env) => {
+        const list = (await env.store().get<ModelFile[]>('files')) ?? []
+        const out: Array<{ path: string; mime: string }> = []
+        for (const f of list) {
+          for (const e of f.files) out.push({ path: `${f.id}/${e.path}`, mime: mimeOf(e.path) })
+        }
+        return out
+      },
+      assetSource: async (env, path) => {
+        const idx = path.indexOf('/')
+        if (idx <= 0) return null
+        const id = path.slice(0, idx)
+        const rel = path.slice(idx + 1)
+        if (!id || !rel) return null
+        const list = (await env.store().get<ModelFile[]>('files')) ?? []
+        const row = list.find((f) => f.id === Number(id))
+        if (!row) return null
+        return env.files().read(`${id}/${rel}`)
+      },
+    },
+  ],
 
   endpoints: () => [
     {
@@ -53,7 +149,11 @@ const plugin: AibasePlugin = {
         let description = ''
         let updateId: number | undefined
         let updateToken: string | undefined
-        if (body && typeof body === 'object' && 'files' in (body as object) && Array.isArray((body as { files: Array<{ originalname: string; buffer: Buffer }> }).files)) {
+        if (
+          body && typeof body === 'object'
+          && 'files' in (body as object) && Array.isArray((body as { files: unknown[] }).files)
+          && (body as { files: Array<{ originalname?: string }> }).files[0]?.originalname !== undefined
+        ) {
           const req = body as { fields?: Record<string, string>; files: Array<{ originalname: string; buffer: Buffer }> }
           category = req.fields?.category ?? 'default'
           description = req.fields?.description ?? ''
@@ -86,6 +186,7 @@ const plugin: AibasePlugin = {
         let totalSize = 0
         for (const f of uploaded) {
           const safePath = f.path.replaceAll('\\', '/').replace(/^\.?\//, '')
+          if (safePath.includes('..') || safePath.startsWith('/')) throw new Error(`非法文件路径: ${f.path}`)
           await files.write(`${dirId}/${safePath}`, f.data)
           totalSize += f.data.length
           entries.push({ path: safePath, sizeBytes: f.data.length, checksum: createHash('sha256').update(f.data).digest('hex') })
@@ -136,6 +237,7 @@ const plugin: AibasePlugin = {
         }
         list.push(next)
         await store.put('files', list)
+        void env.datasets().refresh('model-files').catch(() => undefined)
         env.info(`模型文件上传：${next.name}（${entries.length} 个文件，${totalSize} 字节）`)
         return next
       },
@@ -151,6 +253,7 @@ const plugin: AibasePlugin = {
         for (const e of row.files) await files.remove(`${row.id}/${e.path}`)
         if (row.token) await files.unpublish(row.token)
         await store.put('files', list.filter((f) => f.id !== row.id))
+        void env.datasets().refresh('model-files').catch(() => undefined)
         return null
       },
     },
@@ -180,6 +283,8 @@ const plugin: AibasePlugin = {
         const row = list.find((f) => f.id === Number(params.id))
         if (!row) throw new Error(`模型文件不存在: ${params.id}`)
         if (row.fileCount > 1) throw new Error('目录（多文件）不支持公开托管，请按单文件上传')
+        // 重新发布前先撤销旧 token，防止孤儿公开 token 累积（旧 token 失效后仍可下载已删文件）
+        if (row.token) await files.unpublish(row.token)
         const published = await files.publish(`${row.id}/${row.files[0].path}`, row.name)
         row.token = published.token
         await store.put('files', list)
@@ -192,8 +297,14 @@ const plugin: AibasePlugin = {
 function mimeOf(path: string): string {
   const lower = path.toLowerCase()
   if (lower.endsWith('.json')) return 'application/json'
-  if (lower.endsWith('.txt')) return 'text/plain'
-  if (lower.endsWith('.bin')) return 'application/octet-stream'
+  if (lower.endsWith('.txt') || lower.endsWith('.md')) return 'text/plain'
+  if (lower.endsWith('.svg')) return 'image/svg+xml'
+  if (lower.endsWith('.png')) return 'image/png'
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg'
+  if (lower.endsWith('.webp')) return 'image/webp'
+  if (lower.endsWith('.bin') || lower.endsWith('.gguf') || lower.endsWith('.safetensors')) return 'application/octet-stream'
+  if (lower.endsWith('.zip')) return 'application/zip'
+  if (lower.endsWith('.tar') || lower.endsWith('.gz')) return 'application/gzip'
   return 'application/octet-stream'
 }
 

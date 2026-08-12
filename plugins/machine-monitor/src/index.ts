@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { statfsSync, readFileSync, existsSync } from 'node:fs'
 import os from 'node:os'
 import { promisify } from 'node:util'
-import type { AibasePlugin, PluginEnvironment } from '@atlas/types'
+import type { AtlasPlugin, PluginEnvironment } from '@atlas/types'
 
 /**
  * machine-monitor 插件：部署机器性能监控（系统级，GLOBAL_SHARED 全局一份）。
@@ -206,7 +206,7 @@ async function persist(env: PluginEnvironment, s: LiveSnapshot): Promise<void> {
   await store.put('history', next)
 }
 
-const plugin: AibasePlugin = {
+const plugin: AtlasPlugin = {
   type: 'machine-monitor',
   name: '机器监控',
   describe: '部署机器性能监控：CPU/内存/磁盘/负载/进程，控制台卡片 + 应用空间详情',
@@ -248,8 +248,8 @@ const plugin: AibasePlugin = {
       },
     },
     {
-      method: 'GET', path: 'processes', summary: 'Top 进程（按 CPU 排序）',
-      handle: async () => topProcesses(15),
+      method: 'GET', path: 'processes', summary: 'Top 进程（按 CPU 排序，前 100，前端分页）',
+      handle: async () => topProcesses(100),
     },
   ],
 }

@@ -15,7 +15,7 @@ execSync('npx vite build', { cwd: here, stdio: 'inherit' })
 console.log('[web] vendor 独立构建...')
 const vendorTmp = resolve(here, '.vendor-tmp')
 rmSync(vendorTmp, { recursive: true, force: true })
-for (const mode of ['vue-vendor', 'ep-vendor', 'icons-vendor', 'aibase-runtime']) {
+for (const mode of ['vue-vendor', 'ep-vendor', 'icons-vendor', 'atlas-runtime']) {
   execSync(
     `npx vite build --config vendor.vite.config.ts --mode ${mode} --outDir ${resolve(vendorTmp, mode)} --emptyOutDir`,
     { cwd: here, stdio: 'inherit' },
@@ -26,7 +26,7 @@ const dist = resolve(here, 'dist')
 const runtimeDir = resolve(dist, 'runtime')
 rmSync(runtimeDir, { recursive: true, force: true })
 mkdirSync(runtimeDir, { recursive: true })
-for (const mode of ['vue-vendor', 'ep-vendor', 'icons-vendor', 'aibase-runtime']) {
+for (const mode of ['vue-vendor', 'ep-vendor', 'icons-vendor', 'atlas-runtime']) {
   execSync(`cp -R ${resolve(vendorTmp, mode)}/. ${runtimeDir}/`)
 }
 rmSync(vendorTmp, { recursive: true, force: true })
@@ -35,7 +35,7 @@ rmSync(vendorTmp, { recursive: true, force: true })
 const stamp = Date.now().toString(36)
 const indexHtml = resolve(dist, 'index.html')
 const html = readFileSync(indexHtml, 'utf8').replace(
-  /\/runtime\/(vue-vendor|ep-vendor|icons-vendor|aibase-runtime)\.js/g,
+  /\/runtime\/(vue-vendor|ep-vendor|icons-vendor|atlas-runtime)\.js/g,
   (m) => `${m}?v=${stamp}`,
 )
 writeFileSync(indexHtml, html)

@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Refresh, Key, SwitchButton, CircleCheck, Delete, ArrowRight, CopyDocument, Lock, Check, InfoFilled } from '@element-plus/icons-vue'
+import { Plus, ArrowRight, Lock, Check, InfoFilled, Calendar } from '@element-plus/icons-vue'
 import { appApi } from '../services/appApi'
 import { pluginApi } from '../services/pluginApi'
 import { iconOf, pluginIconUrl } from '../plugin-host/slotRegistry'
+import { copyText } from '../clipboard'
 import type { App, PluginDef } from '../types'
 
 const emit = defineEmits<{ (e: 'open-space', app: App): void }>()
@@ -63,46 +64,6 @@ async function handleCreate() {
   }
 }
 
-async function handleRotate(app: App) {
-  try {
-    await ElMessageBox.confirm(`轮换后新凭证生效，旧凭证保留可校验。确认轮换「${app.name}」？`, '轮换凭证', { type: 'warning' })
-    const result = await appApi.rotate(app.id)
-    secretText.value = result.secret
-    secretDialog.value = true
-    await fetchAll()
-  } catch {
-    // 取消
-  }
-}
-
-async function handleRevoke(app: App) {
-  try {
-    await ElMessageBox.confirm(`吊销后应用凭证全部失效，令牌即时作废。确认吊销「${app.name}」？`, '吊销应用', { type: 'error' })
-    await appApi.revoke(app.id)
-    ElMessage.success('已吊销')
-    await fetchAll()
-  } catch {
-    // 取消
-  }
-}
-
-async function handleActivate(app: App) {
-  await appApi.activate(app.id)
-  ElMessage.success('已恢复')
-  await fetchAll()
-}
-
-async function handleRemove(app: App) {
-  try {
-    await ElMessageBox.confirm(`删除应用将级联清理其全部数据。确认删除「${app.name}」？`, '删除应用', { type: 'error' })
-    await appApi.remove(app.id)
-    ElMessage.success('已删除')
-    await fetchAll()
-  } catch {
-    // 取消
-  }
-}
-
 function statusTag(status: string) {
   return status === 'ACTIVE' ? 'success' : status === 'PAUSED' ? 'warning' : 'danger'
 }
@@ -111,14 +72,8 @@ function statusLabel(status: string) {
   return status === 'ACTIVE' ? '正常' : status === 'PAUSED' ? '暂停' : '已吊销'
 }
 
-function copySecret() {
-  navigator.clipboard?.writeText(secretText.value)
-  ElMessage.success('已复制')
-}
-
-async function copyAppId(appId: string) {
-  await navigator.clipboard?.writeText(appId)
-  ElMessage.success('App ID 已复制')
+async function copySecret() {
+  await copyText(secretText.value, '')
 }
 
 function togglePlugin(pluginType: string) {
@@ -145,60 +100,44 @@ function isPluginSelected(pluginType: string) {
     <div class="page-header">
       <div>
         <h1 class="page-title">应用管理</h1>
-        <p class="page-desc">应用为平台一级实体：一切数据、插件实例与数据集挂靠其上；凭证打包进应用，可轮换/吊销</p>
+        <p class="page-desc">应用为平台一级实体：一切数据、插件实例与数据集挂靠其上；点击卡片进入应用空间</p>
       </div>
       <el-button type="primary" :icon="Plus" @click="createVisible = true">创建应用</el-button>
     </div>
 
-    <div class="surface">
-      <el-table v-loading="loading" :data="apps" empty-text="暂无应用，点击右上角创建">
-        <el-table-column label="应用" min-width="240">
-          <template #default="{ row }">
-            <div class="app-cell">
-              <span class="app-name">{{ row.name }}</span>
-              <span class="app-id-row">
-                <code class="mono">{{ row.appId }}</code>
-                <el-tooltip content="复制 App ID" placement="top">
-                  <el-button size="small" text :icon="CopyDocument" @click.stop="copyAppId(row.appId)" />
-                </el-tooltip>
-              </span>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column prop="description" label="描述" min-width="160" show-overflow-tooltip />
-        <el-table-column label="状态" width="90">
-          <template #default="{ row }">
-            <el-tag size="small" :type="statusTag(row.status)">{{ statusLabel(row.status) }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="凭证" width="90">
-          <template #default="{ row }">
-            <el-tooltip content="凭证仅在创建/轮换时展示一次，此界面不保存明文" placement="top">
-              <el-icon class="cred-hint" :class="{ 'is-revoked': row.status === 'REVOKED' }"><Lock /></el-icon>
-            </el-tooltip>
-          </template>
-        </el-table-column>
-        <el-table-column prop="createdAt" label="创建时间" width="170" />
-        <el-table-column label="操作" width="330" fixed="right">
-          <template #default="{ row }">
-            <el-tooltip content="进入应用空间" placement="top">
-              <el-button size="small" type="primary" :icon="ArrowRight" @click="emit('open-space', row)">进入空间</el-button>
-            </el-tooltip>
-            <el-tooltip v-if="row.status === 'ACTIVE'" content="轮换后新凭证生效，旧凭证保留可校验" placement="top">
-              <el-button size="small" :icon="Key" @click="handleRotate(row)">轮换</el-button>
-            </el-tooltip>
-            <el-tooltip v-if="row.status === 'ACTIVE'" content="吊销后凭证全部失效，令牌即时作废" placement="top">
-              <el-button size="small" type="danger" plain :icon="SwitchButton" @click="handleRevoke(row)">吊销</el-button>
-            </el-tooltip>
-            <el-tooltip v-else-if="row.status === 'REVOKED'" content="恢复 ACTIVE 状态，需重新配置凭证" placement="top">
-              <el-button size="small" type="success" plain :icon="CircleCheck" @click="handleActivate(row)">恢复</el-button>
-            </el-tooltip>
-            <el-tooltip content="删除应用将级联清理其全部数据，不可恢复" placement="top">
-              <el-button size="small" type="danger" :icon="Delete" circle @click="handleRemove(row)" />
-            </el-tooltip>
-          </template>
-        </el-table-column>
-      </el-table>
+    <div v-loading="loading" class="app-grid">
+      <div
+        v-for="app in apps"
+        :key="app.id"
+        class="app-card"
+        role="button"
+        tabindex="0"
+        @click="emit('open-space', app)"
+        @keydown.enter.space.prevent="emit('open-space', app)"
+      >
+        <div class="card-head">
+          <span class="app-name" :title="app.name">{{ app.name }}</span>
+          <el-tag size="small" :type="statusTag(app.status)">{{ statusLabel(app.status) }}</el-tag>
+          <div class="spacer" />
+          <el-icon class="chevron"><ArrowRight /></el-icon>
+        </div>
+
+        <div v-if="app.description" class="app-desc" :title="app.description">{{ app.description }}</div>
+        <div v-else class="app-desc muted">暂无描述</div>
+
+        <div class="card-foot">
+          <span class="muted foot-item">
+            <el-icon><Calendar /></el-icon>
+            {{ app.createdAt }}
+          </span>
+          <div class="spacer" />
+          <span class="muted foot-tip">点击进入空间</span>
+        </div>
+      </div>
+
+      <div v-if="!loading && apps.length === 0" class="empty-state">
+        <el-empty description="暂无应用，点击右上角创建" :image-size="80" />
+      </div>
     </div>
 
     <!-- 创建应用（右侧抽屉） -->
@@ -303,31 +242,100 @@ function isPluginSelected(pluginType: string) {
 </template>
 
 <style scoped>
-.app-cell {
+.app-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+  min-height: 120px;
+}
+.app-card {
+  border: 1px solid var(--atlas-stroke);
+  border-radius: 12px;
+  padding: 16px 18px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 10px;
+  min-height: 150px;
+  background: var(--atlas-surface);
+  cursor: pointer;
+  transition: box-shadow 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
 }
-
+.app-card:hover {
+  border-color: var(--atlas-accent);
+  box-shadow: 0 6px 20px rgba(79, 110, 247, 0.14);
+  transform: translateY(-2px);
+}
+.app-card:active {
+  transform: translateY(0);
+}
+.app-card:focus-visible {
+  outline: 2px solid var(--atlas-accent);
+  outline-offset: 1px;
+}
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
 .app-name {
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-
-.app-id-row {
+.chevron {
+  color: var(--atlas-muted);
+  font-size: 14px;
+  flex-shrink: 0;
+  transition: transform 0.18s ease, color 0.18s ease;
+}
+.app-card:hover .chevron {
+  color: var(--atlas-accent);
+  transform: translateX(2px);
+}
+.app-desc {
+  font-size: 13px;
+  color: var(--atlas-text);
+  line-height: 1.6;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.app-desc.muted {
+  color: var(--atlas-muted);
+  opacity: 0.7;
+}
+.card-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--atlas-stroke);
+  margin-top: auto;
+  font-size: 12px;
+}
+.foot-item {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 5px;
+}
+.foot-tip {
+  flex-shrink: 0;
+}
+.empty-state {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: center;
+  padding: 40px 0;
+}
+.spacer {
+  flex: 1;
 }
 
-.cred-hint {
-  color: var(--aibase-muted);
-  font-size: 16px;
-}
-
-.cred-hint.is-revoked {
-  color: #f56c6c;
-}
-
+/* ---------- 创建抽屉（保留原有样式） ---------- */
 .plugin-picker {
   width: 100%;
 }
@@ -349,7 +357,7 @@ function isPluginSelected(pluginType: string) {
 
 .picker-sub {
   font-size: 12px;
-  color: var(--aibase-muted);
+  color: var(--atlas-muted);
 }
 
 .picker-empty-warn {
@@ -361,7 +369,7 @@ function isPluginSelected(pluginType: string) {
   border-radius: 8px;
   background: rgba(79, 110, 247, 0.05);
   border: 1px solid rgba(79, 110, 247, 0.18);
-  color: var(--aibase-muted);
+  color: var(--atlas-muted);
   font-size: 12px;
 }
 
@@ -381,9 +389,9 @@ function isPluginSelected(pluginType: string) {
   display: flex;
   align-items: stretch;
   min-height: 84px;
-  border: 1px solid var(--aibase-stroke);
+  border: 1px solid var(--atlas-stroke);
   border-radius: 10px;
-  background: var(--aibase-surface);
+  background: var(--atlas-surface);
   cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
   user-select: none;
@@ -395,14 +403,14 @@ function isPluginSelected(pluginType: string) {
 }
 
 .plugin-card:focus-visible {
-  outline: 2px solid var(--aibase-accent);
+  outline: 2px solid var(--atlas-accent);
   outline-offset: 1px;
 }
 
 .plugin-card.is-selected {
-  border-color: var(--aibase-accent);
+  border-color: var(--atlas-accent);
   background: rgba(79, 110, 247, 0.05);
-  box-shadow: 0 0 0 1px var(--aibase-accent) inset;
+  box-shadow: 0 0 0 1px var(--atlas-accent) inset;
 }
 
 .card-check {
@@ -412,7 +420,7 @@ function isPluginSelected(pluginType: string) {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: var(--aibase-accent);
+  background: var(--atlas-accent);
   color: #fff;
   display: flex;
   align-items: center;
@@ -422,7 +430,7 @@ function isPluginSelected(pluginType: string) {
 
 .card-check.is-empty {
   background: transparent;
-  border: 1px solid var(--aibase-stroke);
+  border: 1px solid var(--atlas-stroke);
 }
 
 .card-main {
@@ -438,8 +446,8 @@ function isPluginSelected(pluginType: string) {
   width: 36px;
   height: 36px;
   border-radius: 8px;
-  background: var(--aibase-bg);
-  border: 1px solid var(--aibase-stroke);
+  background: var(--atlas-bg);
+  border: 1px solid var(--atlas-stroke);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -485,19 +493,19 @@ function isPluginSelected(pluginType: string) {
 .card-desc {
   margin: 0;
   font-size: 12px;
-  color: var(--aibase-text);
+  color: var(--atlas-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .card-desc.muted {
-  color: var(--aibase-muted);
+  color: var(--atlas-muted);
   opacity: 0.7;
 }
 
 .card-type {
-  color: var(--aibase-muted);
+  color: var(--atlas-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -506,9 +514,9 @@ function isPluginSelected(pluginType: string) {
 .picker-empty {
   padding: 28px 16px;
   text-align: center;
-  color: var(--aibase-muted);
+  color: var(--atlas-muted);
   font-size: 13px;
-  border: 1px dashed var(--aibase-stroke);
+  border: 1px dashed var(--atlas-stroke);
   border-radius: 10px;
 }
 
@@ -530,7 +538,7 @@ function isPluginSelected(pluginType: string) {
 .drawer-count {
   font-size: 12px;
   font-weight: 600;
-  color: var(--aibase-accent);
+  color: var(--atlas-accent);
   background: rgba(79, 110, 247, 0.07);
   border-radius: 999px;
   padding: 3px 10px;
@@ -538,8 +546,8 @@ function isPluginSelected(pluginType: string) {
 }
 
 .drawer-count.is-zero {
-  color: var(--aibase-muted);
-  background: var(--aibase-bg);
+  color: var(--atlas-muted);
+  background: var(--atlas-bg);
 }
 
 .drawer-actions {

@@ -5,6 +5,7 @@ import { NotFoundError, ValidationError } from '../common/response.js'
 import { now } from '../common/utils.js'
 import type { App, AppStatus, CreateAppResult } from '@atlas/types'
 import { PluginService } from '../plugins/plugin.service.js'
+import { PlatformEventEmitter } from '../spi/platform-event-emitter.js'
 
 /** 应用服务：CRUD、凭证（SHA-256）、轮换/吊销/激活、凭证校验。 */
 @Injectable()
@@ -13,7 +14,8 @@ export class AppService {
 
   constructor(
     @Inject(AppRepository) private readonly repository: AppRepository,
-    private readonly pluginService: PluginService,
+    @Inject(PluginService) private readonly pluginService: PluginService,
+    @Inject(PlatformEventEmitter) private readonly eventBus: PlatformEventEmitter,
   ) {}
 
   static hashSecret(secret: string): string {
@@ -54,7 +56,9 @@ export class AppService {
     // 创建时勾选插件：仅实例化指定类型；未提供则全部（默认行为）
     this.pluginService.autoInstantiate(id, pluginTypes)
     this.logger.log(`创建应用：${name}（${appId}，实例化插件 ${pluginTypes?.length ?? '全部'} 个）`)
-    return { app: AppService.toApp(this.repository.findById(id)!), secret }
+    const result = { app: AppService.toApp(this.repository.findById(id)!), secret }
+    this.eventBus.emit('app.created', result.app)
+    return result
   }
 
   list(): App[] {
@@ -94,7 +98,10 @@ export class AppService {
     this.repository.updateSecret(id, hash, nowTs)
     this.repository.insertCredential(id, hash, nowTs)
     this.logger.warn(`应用凭证轮换：app=${row.app_id}`)
-    return { app: AppService.toApp(this.repository.findById(id)!), secret }
+    const app = AppService.toApp(this.repository.findById(id)!)
+    this.eventBus.emit('app.secret.rotated', { appId: id })
+    this.eventBus.emit('app.updated', app)
+    return { app, secret }
   }
 
   revoke(id: number): App {
@@ -105,7 +112,9 @@ export class AppService {
     // 历史凭证全部失效（吊销后不可恢复校验）
     this.repository.revokeAllCredentials(id)
     this.logger.warn(`应用吊销：app=${row.app_id}`)
-    return AppService.toApp(this.repository.findById(id)!)
+    const app = AppService.toApp(this.repository.findById(id)!)
+    this.eventBus.emit('app.revoked', app)
+    return app
   }
 
   activate(id: number): App {
@@ -113,7 +122,9 @@ export class AppService {
     if (!row) throw new NotFoundError(`应用不存在: ${id}`)
     const nowTs = now()
     this.repository.updateStatus(id, 'ACTIVE', nowTs)
-    return AppService.toApp(this.repository.findById(id)!)
+    const app = AppService.toApp(this.repository.findById(id)!)
+    this.eventBus.emit('app.activated', app)
+    return app
   }
 
   /** 删除应用：级联清理全部挂靠数据（实例/数据集/文件/日志/凭证），防孤儿数据。 */
@@ -122,5 +133,6 @@ export class AppService {
     if (!row) throw new NotFoundError(`应用不存在: ${id}`)
     this.repository.deleteCascade(id)
     this.logger.warn(`删除应用（级联清理）：app=${row.app_id}，${row.name}`)
+    this.eventBus.emit('app.deleted', { appId: id })
   }
 }

@@ -133,14 +133,14 @@ async function handleUnload(row: DefRow) {
   margin-top: 12px;
   padding: 12px 16px;
   border-radius: 10px;
-  background: var(--aibase-surface);
-  border: 1px dashed var(--aibase-stroke);
-  color: var(--aibase-muted);
+  background: var(--atlas-surface);
+  border: 1px dashed var(--atlas-stroke);
+  color: var(--atlas-muted);
   font-size: 13px;
 }
 
 .hint-icon {
   flex-shrink: 0;
-  color: var(--aibase-accent);
+  color: var(--atlas-accent);
 }
 </style>

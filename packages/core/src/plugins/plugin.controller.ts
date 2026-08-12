@@ -11,11 +11,11 @@ import { PluginWatcher } from './plugin.watcher.js'
 @Controller('/api/plugins')
 export class PluginController {
   constructor(
-    private readonly service: PluginService,
-    private readonly registry: PluginRegistry,
-    private readonly uiService: PluginUiService,
-    private readonly loader: PluginLoader,
-    private readonly watcher: PluginWatcher,
+    @Inject(PluginService) private readonly service: PluginService,
+    @Inject(PluginRegistry) private readonly registry: PluginRegistry,
+    @Inject(PluginUiService) private readonly uiService: PluginUiService,
+    @Inject(PluginLoader) private readonly loader: PluginLoader,
+    @Inject(PluginWatcher) private readonly watcher: PluginWatcher,
   ) {}
 
   @Get()
@@ -54,7 +54,7 @@ export class PluginController {
 /** 插件实例端点（应用空间）。 */
 @Controller('/api/apps')
 export class PluginInstanceController {
-  constructor(private readonly service: PluginService) {}
+  constructor(@Inject(PluginService) private readonly service: PluginService) {}
 
   @Get(':appId/plugins')
   overview(@Param('appId') appId: string) {
@@ -87,6 +87,11 @@ export class PluginInstanceController {
     } catch (e) {
       return error(400, (e as Error).message)
     }
+  }
+
+  @Get(':appId/plugins/:pluginType/config')
+  getConfig(@Param('appId') appId: string, @Param('pluginType') pluginType: string) {
+    return ok(this.service.getInstanceConfig(Number(appId), pluginType))
   }
 
   @Post(':appId/plugins/:pluginType/config')

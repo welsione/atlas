@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Back, Refresh, Folder, DataLine, Collection, VideoPlay, VideoPause, Delete } from '@element-plus/icons-vue'
+import { Back, Refresh, Folder, DataLine, Collection, VideoPlay, VideoPause, Delete, Key, SwitchButton, CircleCheck, CopyDocument, Lock, Calendar } from '@element-plus/icons-vue'
+import { appApi } from '../services/appApi'
 import { pluginApi } from '../services/pluginApi'
 import type { App, PluginOverviewRow } from '../types'
 import PluginMount from '../plugin-host/PluginMount.vue'
 import { registerCoreUi, useSlotsOf, toMountEntry, iconOf, pluginIconUrl } from '../plugin-host/slotRegistry'
+import { copyText } from '../clipboard'
 
 // 框架能力面板（数据集）：懒加载 chunk + slot 静态注册，与插件 UI 同一渲染管线
 registerCoreUi({
@@ -26,11 +28,73 @@ registerCoreUi({
 const props = defineProps<{ app: App }>()
 const emit = defineEmits<{ (e: 'back'): void }>()
 
-const activeTab = ref(localStorage.getItem('aibase-space-tab') || 'instances')
+/** 应用本地副本：凭证操作后状态联动刷新。 */
+const localApp = ref<App>({ ...props.app })
+const secretDialog = ref(false)
+const secretText = ref('')
+const rotating = ref(false)
+
+const activeTab = ref(localStorage.getItem('atlas-space-tab') || 'instances')
 const overview = ref<PluginOverviewRow[]>([])
 const loading = ref(false)
 
 const appSpaceSlots = useSlotsOf('app-space')
+
+function statusTag(status: string) {
+  return status === 'ACTIVE' ? 'success' : status === 'PAUSED' ? 'warning' : 'danger'
+}
+
+function statusLabel(status: string) {
+  return status === 'ACTIVE' ? '正常' : status === 'PAUSED' ? '暂停' : '已吊销'
+}
+
+async function copyAppId() {
+  await copyText(localApp.value.appId, 'App ID ')
+}
+
+async function copySecret() {
+  await copyText(secretText.value, '')
+}
+
+async function handleRotate() {
+  try {
+    await ElMessageBox.confirm(`轮换后新凭证生效，旧凭证保留可校验。确认轮换「${localApp.value.name}」？`, '轮换凭证', { type: 'warning' })
+    rotating.value = true
+    const result = await appApi.rotate(localApp.value.id)
+    secretText.value = result.secret
+    secretDialog.value = true
+  } catch {
+    // 取消
+  } finally {
+    rotating.value = false
+  }
+}
+
+async function handleRevoke() {
+  try {
+    await ElMessageBox.confirm(`吊销后应用凭证全部失效，令牌即时作废。确认吊销「${localApp.value.name}」？`, '吊销应用', { type: 'error' })
+    localApp.value = await appApi.revoke(localApp.value.id)
+    ElMessage.success('已吊销')
+  } catch {
+    // 取消
+  }
+}
+
+async function handleActivate() {
+  localApp.value = await appApi.activate(localApp.value.id)
+  ElMessage.success('已恢复')
+}
+
+async function handleRemove() {
+  try {
+    await ElMessageBox.confirm(`删除应用将级联清理其全部数据，不可恢复。确认删除「${localApp.value.name}」？`, '删除应用', { type: 'error' })
+    await appApi.remove(localApp.value.id)
+    ElMessage.success('已删除')
+    emit('back')
+  } catch {
+    // 取消
+  }
+}
 
 async function fetchOverview() {
   loading.value = true
@@ -45,7 +109,7 @@ onMounted(fetchOverview)
 
 function switchTab(tab: string) {
   activeTab.value = tab
-  localStorage.setItem('aibase-space-tab', tab)
+  localStorage.setItem('atlas-space-tab', tab)
 }
 
 async function handleEnable(row: PluginOverviewRow, scope?: string) {
@@ -96,13 +160,64 @@ function scopeLabel(row: PluginOverviewRow): string {
           <el-button :icon="Back" circle @click="emit('back')" />
         </el-tooltip>
         <div>
-          <h1 class="page-title">{{ app.name }} <el-tag size="small" type="info">{{ app.appId }}</el-tag></h1>
-          <p class="page-desc">{{ app.description || '应用空间：插件实例、插件数据、数据集发布与敏感凭证' }}</p>
+          <h1 class="page-title">
+            {{ localApp.name }}
+            <el-tag size="small" :type="statusTag(localApp.status)">{{ statusLabel(localApp.status) }}</el-tag>
+          </h1>
+          <p class="page-desc">{{ localApp.description || '应用空间：插件实例、插件数据、数据集发布与敏感凭证' }}</p>
         </div>
       </div>
       <el-tooltip content="刷新" placement="bottom">
         <el-button :icon="Refresh" circle :loading="loading" @click="fetchOverview" />
       </el-tooltip>
+    </div>
+
+    <!-- 应用信息与凭证操作 -->
+    <div class="surface app-info">
+      <div class="info-grid">
+        <div class="info-item">
+          <span class="info-label">App ID</span>
+          <span class="info-value">
+            <code class="mono">{{ localApp.appId }}</code>
+            <el-tooltip content="复制 App ID" placement="top">
+              <el-button size="small" text :icon="CopyDocument" @click="copyAppId" />
+            </el-tooltip>
+          </span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">App Secret</span>
+          <span class="info-value">
+            <el-icon class="secret-icon"><Lock /></el-icon>
+            <span class="muted">仅创建/轮换时展示一次</span>
+            <el-tooltip :content="localApp.status === 'ACTIVE' ? '轮换后新凭证生效，旧凭证保留可校验' : '应用已吊销，请先恢复'" placement="top">
+              <el-button size="small" :icon="Key" :disabled="localApp.status !== 'ACTIVE'" :loading="rotating" @click="handleRotate">轮换凭证</el-button>
+            </el-tooltip>
+          </span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">创建时间</span>
+          <span class="info-value">
+            <el-icon class="secret-icon"><Calendar /></el-icon>
+            <span>{{ localApp.createdAt }}</span>
+          </span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">应用操作</span>
+          <span class="info-value">
+            <template v-if="localApp.status === 'ACTIVE'">
+              <el-tooltip content="吊销后凭证全部失效，令牌即时作废" placement="top">
+                <el-button size="small" type="danger" plain :icon="SwitchButton" @click="handleRevoke">吊销应用</el-button>
+              </el-tooltip>
+            </template>
+            <el-tooltip v-else content="恢复 ACTIVE 状态，需重新配置凭证" placement="top">
+              <el-button size="small" type="success" plain :icon="CircleCheck" @click="handleActivate">恢复应用</el-button>
+            </el-tooltip>
+            <el-tooltip content="删除应用将级联清理其全部数据，不可恢复" placement="top">
+              <el-button size="small" type="danger" :icon="Delete" @click="handleRemove">删除应用</el-button>
+            </el-tooltip>
+          </span>
+        </div>
+      </div>
     </div>
 
     <el-tabs :model-value="activeTab" class="space-tabs" @tab-change="switchTab">
@@ -194,6 +309,19 @@ function scopeLabel(row: PluginOverviewRow): string {
         <PluginMount v-if="activeTab === slot.key" :load="slot.load" :app-id="app.id" :plugin-type="slot.key.slice('plugin:'.length)" mode="app-space" :refresh="fetchOverview" />
       </el-tab-pane>
     </el-tabs>
+
+    <!-- 凭证展示（仅一次） -->
+    <el-dialog v-model="secretDialog" title="应用凭证（仅展示一次，请立即保存）" width="560">
+      <el-alert type="warning" :closable="false" title="此凭证仅在创建/轮换时展示一次，关闭后将无法再次查看。" style="margin-bottom: 12px" />
+      <el-input :model-value="secretText" readonly>
+        <template #append>
+          <el-button @click="copySecret">复制</el-button>
+        </template>
+      </el-input>
+      <template #footer>
+        <el-button type="primary" @click="secretDialog = false">我已保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -202,6 +330,46 @@ function scopeLabel(row: PluginOverviewRow): string {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.app-info {
+  margin-bottom: 14px;
+  padding: 12px 18px;
+}
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 10px 28px;
+}
+.info-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 13px;
+}
+.info-label {
+  font-size: 12px;
+  color: var(--atlas-muted);
+  flex-shrink: 0;
+  width: 76px;
+}
+.info-value {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+.info-value code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.secret-icon {
+  color: var(--atlas-muted);
+  font-size: 14px;
+  flex-shrink: 0;
 }
 
 .plugin-cell {
@@ -237,7 +405,7 @@ function scopeLabel(row: PluginOverviewRow): string {
 
 .tab-label .el-icon,
 .core-tab-icon {
-  color: var(--aibase-accent);
+  color: var(--atlas-accent);
 }
 
 .plugin-name {

@@ -1,6 +1,8 @@
-import { readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { AibasePlugin, PluginEnvironment } from '@atlas/types'
+import type { AtlasPlugin, PluginEnvironment } from '@atlas/types'
+import type { ModelGatewaySpi, ModelGatewayRequest, ModelGatewayResponse } from '@atlas/types/spi/model-gateway'
 
 /**
  * providers 插件：AI 供应商管理（GLOBAL_SHARED —— 共享一份数据）。
@@ -80,12 +82,124 @@ const loadBuiltinReference = (): ModelReference => {
   return JSON.parse(readFileSync(path, 'utf8')) as ModelReference
 }
 
-const plugin: AibasePlugin = {
+/** 对外配置载荷（数据集渲染与 ep/config 共用）：expose=false 时不含明文 Key（Key 走 SECRET 数据集 secrets）。 */
+const buildConfigPayload = (list: Provider[], env: PluginEnvironment, expose: boolean) => {
+  const endpointOf = (ep: CompatEndpoint) => {
+    const out: { baseUrl: string; apiKey?: string } = { baseUrl: ep.baseUrl }
+    if (expose && ep.apiKey) out.apiKey = env.crypto().decrypt(ep.apiKey)
+    return out
+  }
+  return {
+    exposeApiKey: expose,
+    providerCount: list.length,
+    providers: list.map((p) => ({
+      id: p.id,
+      name: p.name,
+      icon: p.icon,
+      iconColor: p.iconColor,
+      models: p.models,
+      openai: endpointOf(p.openai),
+      anthropic: endpointOf(p.anthropic),
+    })),
+  }
+}
+
+const plugin: AtlasPlugin = {
   type: 'providers',
   name: '供应商管理',
   describe: '供应商配置：OpenAI/Anthropic 兼容接口、API Key 加密、模型快速选择、图标上传',
   defaultDataScope: 'GLOBAL_SHARED',
   scopeOverrideAllowed: true,
+
+  /** 插件自有表（从 core schema 迁出）：providers（历史遗留关系表，当前数据走 plugin_store）。 */
+  schemaDdl: () => [
+    `CREATE TABLE IF NOT EXISTS providers (
+       id INTEGER PRIMARY KEY AUTOINCREMENT,
+       app_id INTEGER,
+       name TEXT NOT NULL,
+       provider_type TEXT NOT NULL DEFAULT 'OPENAI_COMPATIBLE',
+       api_key TEXT NOT NULL DEFAULT '',
+       base_url TEXT NOT NULL DEFAULT '',
+       icon TEXT NOT NULL DEFAULT '',
+       icon_color TEXT NOT NULL DEFAULT '',
+       models_json TEXT NOT NULL DEFAULT '[]',
+       default_model TEXT NOT NULL DEFAULT '',
+       max_tokens INTEGER,
+       timeout_seconds INTEGER NOT NULL DEFAULT 240,
+       extra_config TEXT NOT NULL DEFAULT '{}',
+       enabled INTEGER NOT NULL DEFAULT 1,
+       is_default INTEGER NOT NULL DEFAULT 0,
+       sort_order INTEGER NOT NULL DEFAULT 0,
+       created_at TEXT NOT NULL,
+       updated_at TEXT NOT NULL
+     );
+     CREATE INDEX IF NOT EXISTS idx_providers_scope ON providers(app_id, enabled);`,
+  ],
+
+  /** 应用删除时级联清理本插件表（app_id NULL=全局共享保留，仅删 APP_LOCAL 覆盖行）。 */
+  cleanupTables: () => [{ table: 'providers', column: 'app_id' }],
+
+  /** 暴露 model-gateway SPI：其他插件可经 env.spi('providers','model-gateway') 调用 OpenAI 兼容供应商。 */
+  provides: () => ({
+    'model-gateway': {
+      describe: 'OpenAI 兼容供应商对话网关（密钥由 providers 保管，消费方无需感知）',
+      create: (env: PluginEnvironment): ModelGatewaySpi => ({
+        async listProviders() {
+          const list = (await env.store().get<Provider[]>('providers')) ?? []
+          return list
+            .filter((p) => p.openai.baseUrl)
+            .map((p) => ({
+              id: p.id,
+              name: p.name,
+              baseUrl: p.openai.baseUrl,
+              models: p.models.map((m) => m.modelId),
+            }))
+        },
+        async chat(req: ModelGatewayRequest): Promise<ModelGatewayResponse> {
+          const list = (await env.store().get<Provider[]>('providers')) ?? []
+          const row = list.find((p) => p.id === Number(req.providerId))
+          if (!row) throw new Error(`供应商不存在: ${req.providerId}`)
+          const baseUrl = row.openai.baseUrl.replace(/\/+$/, '')
+          if (!baseUrl) throw new Error('未配置 OpenAI 兼容接口 BaseUrl')
+          const apiKey = row.openai.apiKey ? env.crypto().decrypt(row.openai.apiKey) : ''
+          const controller = new AbortController()
+          const timer = setTimeout(() => controller.abort(), 240_000)
+          try {
+            const res = await fetch(`${baseUrl}/chat/completions`, {
+              method: 'POST',
+              signal: controller.signal,
+              headers: {
+                'Content-Type': 'application/json',
+                ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+              },
+              body: JSON.stringify({
+                model: req.model,
+                messages: req.messages,
+                ...(req.maxTokens ? { max_tokens: req.maxTokens } : {}),
+                ...(req.temperature != null ? { temperature: req.temperature } : {}),
+              }),
+            })
+            if (!res.ok) {
+              const text = await res.text().catch(() => '')
+              throw new Error(`供应商返回 HTTP ${res.status}: ${text.slice(0, 200)}`)
+            }
+            const j = (await res.json()) as { choices?: Array<{ message?: { content?: string } }>; model?: string; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } }
+            const content = j.choices?.[0]?.message?.content ?? ''
+            env.ops().info(`model-gateway 调用：${row.name}/${req.model}，${req.messages.length} 条消息`)
+            return {
+              content,
+              model: j.model ?? req.model,
+              usage: j.usage
+                ? { promptTokens: j.usage.prompt_tokens, completionTokens: j.usage.completion_tokens, totalTokens: j.usage.total_tokens }
+                : undefined,
+            }
+          } finally {
+            clearTimeout(timer)
+          }
+        },
+      }),
+    },
+  }),
 
   async init(env: PluginEnvironment) {
     const store = env.store()
@@ -105,13 +219,75 @@ const plugin: AibasePlugin = {
     }
   },
 
+  /** 数据集注册：配置复用数据集接口与密级管理（对外免网关，Key 走 SECRET 级 secrets）。 */
+  datasets: () => [
+    {
+      key: 'providers-config',
+      name: '供应商配置',
+      sensitivity: 'SECRET',
+      refreshMode: 'MANUAL',
+      render: async (env) => {
+        const list = (await env.store().get<Provider[]>('providers')) ?? []
+        await migrate(env, list)
+        return JSON.stringify(buildConfigPayload(list, env, false))
+      },
+      secrets: async (env) => {
+        const list = (await env.store().get<Provider[]>('providers')) ?? []
+        await migrate(env, list)
+        const out: Record<string, string> = {}
+        for (const p of list) {
+          if (p.openai.apiKey) out[`provider-${p.id}-openai`] = env.crypto().decrypt(p.openai.apiKey)
+          if (p.anthropic.apiKey) out[`provider-${p.id}-anthropic`] = env.crypto().decrypt(p.anthropic.apiKey)
+        }
+        return out
+      },
+      assets: async (env) => {
+        const list = (await env.store().get<Provider[]>('providers')) ?? []
+        const builtinDir = fileURLToPath(new URL('../icons/vendors', import.meta.url.split('?')[0]))
+        const custom = await customIcons(env)
+        const out: Array<{ path: string; mime: string }> = []
+        for (const p of list) {
+          const icon = p.icon || ''
+          if (icon.startsWith('icons/vendors/')) {
+            const name = basename(icon)
+            if (existsSync(join(builtinDir, name))) out.push({ path: icon, mime: 'image/svg+xml' })
+          } else if (icon.startsWith('data:image')) {
+            const hit = custom.find((c) => c.dataUrl === icon)
+            if (hit) out.push({ path: `icons/custom/${hit.name}`, mime: 'image/svg+xml' })
+          }
+        }
+        return out
+      },
+      assetSource: async (env, path) => {
+        if (path.startsWith('icons/vendors/')) {
+          const abs = join(fileURLToPath(new URL('../icons/vendors', import.meta.url.split('?')[0])), basename(path))
+          return existsSync(abs) ? readFileSync(abs) : null
+        }
+        if (path.startsWith('icons/custom/')) {
+          const name = basename(path)
+          const c = (await customIcons(env)).find((x) => x.name === name)
+          return c ? Buffer.from(c.dataUrl.split(',')[1] || '', 'base64') : null
+        }
+        return null
+      },
+    },
+  ],
+
   endpoints: () => [
     {
-      method: 'GET', path: 'list', summary: '供应商列表（密钥脱敏）',
+      method: 'GET', path: 'list', summary: '供应商列表（密钥脱敏，管理面）',
       handle: async (env) => {
         const list = (await env.store().get<Provider[]>('providers')) ?? []
         await migrate(env, list)
         return list.map(masked)
+      },
+    },
+    {
+      method: 'GET', path: 'config', summary: '对外配置（数据面/应用凭证访问；exposeApiKey 开关控制是否含明文 Key）',
+      handle: async (env) => {
+        const list = (await env.store().get<Provider[]>('providers')) ?? []
+        await migrate(env, list)
+        return buildConfigPayload(list, env, env.config().exposeApiKey === true)
       },
     },
     {
@@ -135,6 +311,7 @@ const plugin: AibasePlugin = {
         }
         list.push(next)
         await env.store().put('providers', list)
+        void env.datasets().refresh('providers-config').catch(() => undefined)
         env.info(`新增供应商：${next.name}`)
         return masked(next)
       },
@@ -157,16 +334,17 @@ const plugin: AibasePlugin = {
           iconColor: req?.iconColor ?? row.iconColor,
           openai: {
             baseUrl: openaiBase,
-            apiKey: req?.openai?.apiKey ? env.crypto().encrypt(req.openai.apiKey) : row.openai.apiKey,
+            apiKey: req?.openai?.apiKey === null ? '' : req?.openai?.apiKey ? env.crypto().encrypt(req.openai.apiKey) : row.openai.apiKey,
           },
           anthropic: {
             baseUrl: anthropicBase,
-            apiKey: req?.anthropic?.apiKey ? env.crypto().encrypt(req.anthropic.apiKey) : row.anthropic.apiKey,
+            apiKey: req?.anthropic?.apiKey === null ? '' : req?.anthropic?.apiKey ? env.crypto().encrypt(req.anthropic.apiKey) : row.anthropic.apiKey,
           },
           models: req?.models ?? row.models,
         }
         list[idx] = next
         await env.store().put('providers', list)
+        void env.datasets().refresh('providers-config').catch(() => undefined)
         return masked(next)
       },
     },
@@ -177,6 +355,7 @@ const plugin: AibasePlugin = {
         const row = list.find((p) => p.id === Number(params.id))
         if (!row) throw new Error(`供应商不存在: ${params.id}`)
         await env.store().put('providers', list.filter((p) => p.id !== row.id))
+        void env.datasets().refresh('providers-config').catch(() => undefined)
         env.warn(`删除供应商：${row.name}`)
         return null
       },

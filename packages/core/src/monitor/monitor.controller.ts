@@ -1,11 +1,11 @@
-import { Controller, Get, Param, Query } from '@nestjs/common'
+import { Controller, Get, Param, Query, Inject } from '@nestjs/common'
 import { ok } from '../common/response.js'
 import { MonitorRepository, type MonitorRange } from './monitor.repository.js'
 
 /** monitor 内置插件聚合端点（应用空间）。 */
 @Controller('/api/apps')
 export class MonitorController {
-  constructor(private readonly repository: MonitorRepository) {}
+  constructor(@Inject(MonitorRepository) private readonly repository: MonitorRepository) {}
 
   private range(q: string | undefined): MonitorRange {
     return q === '24h' || q === '7d' || q === 'all' ? q : '24h'

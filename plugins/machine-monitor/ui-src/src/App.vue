@@ -37,8 +37,27 @@ const fmtUptime = (s) => {
   const m = Math.floor((s % 3600) / 60)
   return d > 0 ? `${d}天${h}时` : h > 0 ? `${h}时${m}分` : `${m}分`
 }
-const colorOf = (p) => (p == null ? 'var(--aibase-muted)' : p >= 85 ? '#f56c6c' : p >= 60 ? '#e6a23c' : '#67c23a')
+const colorOf = (p) => (p == null ? 'var(--atlas-muted)' : p >= 85 ? '#f56c6c' : p >= 60 ? '#e6a23c' : '#67c23a')
 const pctText = (p) => (p == null ? '—' : `${p}%`)
+
+/** 北京时间格式化（采样存储为 UTC ISO，展示统一转 Asia/Shanghai）。 */
+const TZ = { timeZone: 'Asia/Shanghai', hour12: false }
+const fmtTime = (ts) => {
+  if (!ts) return '—'
+  const d = new Date(ts)
+  if (Number.isNaN(d.getTime())) return '—'
+  const p = (n) => String(n).padStart(2, '0')
+  const parts = new Intl.DateTimeFormat('zh-CN', { ...TZ, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(d)
+  const get = (t) => parts.find((x) => x.type === t)?.value ?? ''
+  return `${get('month')}-${get('day')} ${get('hour')}:${get('minute')}`
+}
+const fmtClock = () => {
+  const d = new Date()
+  const p = (n) => String(n).padStart(2, '0')
+  const parts = new Intl.DateTimeFormat('zh-CN', { ...TZ, hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(d)
+  const get = (t) => parts.find((x) => x.type === t)?.value ?? ''
+  return `${get('hour')}:${get('minute')}:${get('second')}`
+}
 
 // ---------- 数据 ----------
 async function resolveApp() {
@@ -62,7 +81,7 @@ async function fetchStatus() {
     const data = await get(ep + '/status')
     host.value = data.host
     sample.value = data.sample
-    lastUpdated.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
+    lastUpdated.value = fmtClock()
     error.value = ''
   } catch (e) {
     error.value = (e && e.message) || '采集失败'
@@ -73,6 +92,7 @@ async function fetchHistory() {
   if (!(await resolveApp())) return
   try {
     history.value = await get(base() + '/history/24')
+    samplePage.value = 1
   } catch {
     // 详情页可容忍历史失败
   }
@@ -82,6 +102,7 @@ async function fetchProcesses() {
   if (!(await resolveApp())) return
   try {
     processes.value = await get(base() + '/processes')
+    procPage.value = 1
   } catch {
     // 尽力而为
   }
@@ -115,9 +136,18 @@ const trend = computed(() => {
   return { cpu: series('cpu'), mem: series('memPercent'), disk: series('diskPercent') }
 })
 const trendMax = () => Math.max(1, ...trend.value.cpu.map((p) => p.v ?? 0), ...trend.value.mem.map((p) => p.v ?? 0), ...trend.value.disk.map((p) => p.v ?? 0))
-const fmtTime = (ts) => (ts ? ts.slice(11, 16) : '')
+const fmtTrendTime = (ts) => (ts ? new Intl.DateTimeFormat('zh-CN', { ...TZ, hour: '2-digit', minute: '2-digit' }).format(new Date(ts)) : '')
 
-const recentSamples = computed(() => history.value.slice(-20).reverse())
+// 最近采样：全量倒序 + 前端分页（每页 10 条）
+const SAMPLE_PAGE_SIZE = 10
+const samplePage = ref(1)
+const samplesDesc = computed(() => [...history.value].reverse())
+const pagedSamples = computed(() => samplesDesc.value.slice((samplePage.value - 1) * SAMPLE_PAGE_SIZE, samplePage.value * SAMPLE_PAGE_SIZE))
+
+// Top 进程：后端前 100 条 + 前端分页（每页 10 条）
+const PROC_PAGE_SIZE = 10
+const procPage = ref(1)
+const pagedProcesses = computed(() => processes.value.slice((procPage.value - 1) * PROC_PAGE_SIZE, procPage.value * PROC_PAGE_SIZE))
 
 // ---------- 生命周期 ----------
 onMounted(async () => {
@@ -223,7 +253,7 @@ onBeforeUnmount(() => {
         <div v-for="t in [['cpu', 'CPU %', 'cpu'], ['mem', '内存 %', 'mem'], ['disk', '磁盘 %', 'disk']]" :key="t[0]" class="trend-box">
           <div class="trend-name">{{ t[1] }}</div>
           <div class="trend">
-            <div v-for="(p, i) in trend[t[2]]" :key="i" class="trend-col" :title="`${fmtTime(p.ts)}：${p.v == null ? '—' : p.v.toFixed(1)}%`">
+            <div v-for="(p, i) in trend[t[2]]" :key="i" class="trend-col" :title="`${fmtTrendTime(p.ts)}：${p.v == null ? '—' : p.v.toFixed(1)}%`">
               <div class="trend-bar" :style="{ height: `${(p.v ?? 0) / trendMax() * 100}%`, background: colorOf(p.v) }" />
             </div>
           </div>
@@ -235,9 +265,9 @@ onBeforeUnmount(() => {
     <div class="grid-2">
       <!-- 最近采样 -->
       <div class="surface section">
-        <div class="section-title">最近采样</div>
-        <el-table :data="recentSamples" size="small" empty-text="暂无">
-          <el-table-column label="时间" width="90">
+        <div class="section-title">最近采样（北京时间）</div>
+        <el-table :data="pagedSamples" size="small" empty-text="暂无">
+          <el-table-column label="时间" width="120">
             <template #default="{ row }">{{ fmtTime(row.ts) }}</template>
           </el-table-column>
           <el-table-column label="CPU" width="70">
@@ -253,12 +283,22 @@ onBeforeUnmount(() => {
             <template #default="{ row }">{{ row.load1.toFixed(2) }}</template>
           </el-table-column>
         </el-table>
+        <div class="table-pager">
+          <el-pagination
+            layout="total, prev, pager, next"
+            :total="samplesDesc.length"
+            :page-size="SAMPLE_PAGE_SIZE"
+            :current-page="samplePage"
+            small
+            @current-change="(p) => (samplePage = p)"
+          />
+        </div>
       </div>
 
       <!-- Top 进程 -->
       <div class="surface section">
         <div class="section-title">Top 进程（按 CPU）</div>
-        <el-table :data="processes" size="small" empty-text="暂无">
+        <el-table :data="pagedProcesses" size="small" empty-text="暂无">
           <el-table-column prop="pid" label="PID" width="70" />
           <el-table-column prop="name" label="进程" min-width="140" show-overflow-tooltip />
           <el-table-column label="CPU" width="80">
@@ -271,6 +311,16 @@ onBeforeUnmount(() => {
             <template #default="{ row }">{{ row.rssBytes == null ? '—' : fmtBytes(row.rssBytes) }}</template>
           </el-table-column>
         </el-table>
+        <div class="table-pager">
+          <el-pagination
+            layout="total, prev, pager, next"
+            :total="processes.length"
+            :page-size="PROC_PAGE_SIZE"
+            :current-page="procPage"
+            small
+            @current-change="(p) => (procPage = p)"
+          />
+        </div>
       </div>
     </div>
   </div>
@@ -278,7 +328,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .muted {
-  color: var(--aibase-muted);
+  color: var(--atlas-muted);
 }
 
 /* ---------- 控制台卡片 ---------- */
@@ -296,12 +346,12 @@ onBeforeUnmount(() => {
 }
 .metric-label {
   font-size: 11px;
-  color: var(--aibase-muted);
+  color: var(--atlas-muted);
   margin-top: 2px;
 }
 .card-meta {
   grid-column: 1 / -1;
-  border-top: 1px dashed var(--aibase-stroke);
+  border-top: 1px dashed var(--atlas-stroke);
   margin-top: 6px;
   padding-top: 6px;
   font-size: 12px;
@@ -314,10 +364,10 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 .meta-line {
-  color: var(--aibase-text);
+  color: var(--atlas-text);
 }
 .card-empty {
-  color: var(--aibase-muted);
+  color: var(--atlas-muted);
   font-size: 12px;
   text-align: center;
   padding: 24px 0;
@@ -383,7 +433,7 @@ onBeforeUnmount(() => {
 }
 .stat-icon {
   font-size: 20px;
-  color: var(--aibase-accent);
+  color: var(--atlas-accent);
   margin-bottom: 10px;
 }
 .stat-num {
@@ -392,7 +442,7 @@ onBeforeUnmount(() => {
 }
 .stat-label {
   font-size: 12px;
-  color: var(--aibase-muted);
+  color: var(--atlas-muted);
   margin-top: 4px;
 }
 .trend-grid {
@@ -402,7 +452,7 @@ onBeforeUnmount(() => {
 }
 .trend-name {
   font-size: 12px;
-  color: var(--aibase-muted);
+  color: var(--atlas-muted);
   margin-bottom: 8px;
 }
 .trend {
@@ -428,6 +478,13 @@ onBeforeUnmount(() => {
   grid-template-columns: 1fr 1fr;
   gap: 16px;
 }
+
+.table-pager {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 10px;
+}
+
 .empty {
   font-size: 13px;
 }

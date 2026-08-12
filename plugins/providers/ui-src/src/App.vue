@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Refresh, Connection, EditPen, Delete, Search, Grid, Key, Star, Upload, Close, Check, Link, ArrowRight } from '@element-plus/icons-vue'
+import { Plus, Refresh, Connection, EditPen, Delete, Search, Grid, Key, Star, Upload, Close, Check, Link, ArrowRight, Setting } from '@element-plus/icons-vue'
 import { get, post, put, del } from '@atlas/runtime'
 
 const props = defineProps({ appId: { type: Number, required: true } })
@@ -17,8 +17,13 @@ const testing = ref(null)   // 'openai' | 'anthropic' | null
 const keyword = ref('')
 const drawerVisible = ref(false)
 const detailRow = ref(null)
+const settingsVisible = ref(false)
+const exposeApiKey = ref(false)
+const savingSettings = ref(false)
 
 const base = () => `/api/apps/${props.appId}/plugins/providers/ep`
+/** 对外数据面访问 URL（应用凭证 Bearer）。 */
+const externalUrl = () => `/api/v1/app/${props.appId}/plugins/providers/ep/config`
 /** 图标 URL：data:/http(s): 原样返回，相对路径（内置）走插件图标服务。 */
 const iconUrl = (icon) => (/^(data:|https?:)/i.test(icon || '') ? icon : `/_pluginui/providers/${icon}`)
 
@@ -66,6 +71,28 @@ async function fetchIcons() {
   const res = await get(base() + '/icons/list')
   builtinIcons.value = res.builtin ?? []
   customIcons.value = res.custom ?? []
+}
+
+// ================= 对外接口设置 =================
+async function openSettings() {
+  try {
+    const res = await get(base() + '/config')
+    exposeApiKey.value = res?.exposeApiKey === true
+  } catch {
+    exposeApiKey.value = false
+  }
+  settingsVisible.value = true
+}
+
+async function saveSettings() {
+  savingSettings.value = true
+  try {
+    await post(`/api/apps/${props.appId}/plugins/providers/config`, { exposeApiKey: exposeApiKey.value })
+    settingsVisible.value = false
+    ElMessage.success('已保存')
+  } finally {
+    savingSettings.value = false
+  }
 }
 
 onMounted(async () => {
@@ -319,6 +346,9 @@ async function handleTest(row, compat) {
     <div class="toolbar">
       <el-input v-model="keyword" class="search" :prefix-icon="Search" placeholder="搜索名称 / BaseUrl" clearable />
       <div class="spacer" />
+      <el-tooltip content="对外接口设置" placement="top">
+        <el-button :icon="Setting" circle @click="openSettings" />
+      </el-tooltip>
       <el-tooltip content="刷新列表" placement="top">
         <el-button :icon="Refresh" circle :loading="loading" @click="fetchAll" />
       </el-tooltip>
@@ -330,7 +360,7 @@ async function handleTest(row, compat) {
       <div v-for="row in filtered" :key="row.id" class="provider-card" @click="openDetail(row)">
         <div class="card-head">
           <img v-if="row.icon" :src="iconUrl(row.icon)" class="p-icon" :alt="row.name" @error="$event.target.style.display = 'none'" />
-          <span v-else class="dot" :style="{ background: row.iconColor || 'var(--aibase-accent)' }" />
+          <span v-else class="dot" :style="{ background: row.iconColor || 'var(--atlas-accent)' }" />
           <span class="p-name" :title="row.name">{{ row.name }}</span>
           <div class="spacer" />
           <el-icon class="chevron"><ArrowRight /></el-icon>
@@ -372,7 +402,7 @@ async function handleTest(row, compat) {
       <div v-if="detailRow" class="drawer-body">
         <div class="drawer-head">
           <img v-if="detailRow.icon" :src="iconUrl(detailRow.icon)" class="drawer-icon" :alt="detailRow.name" @error="$event.target.style.display = 'none'" />
-          <span v-else class="dot" :style="{ background: detailRow.iconColor || 'var(--aibase-accent)' }" />
+          <span v-else class="dot" :style="{ background: detailRow.iconColor || 'var(--atlas-accent)' }" />
           <div class="drawer-title">
             <div class="drawer-name">{{ detailRow.name }}</div>
             <div class="muted drawer-sub">供应商详情</div>
@@ -435,7 +465,7 @@ async function handleTest(row, compat) {
         <!-- 底部操作 -->
         <div class="drawer-foot">
           <span class="muted foot-info">
-            <span class="dot" :style="{ background: detailRow.iconColor || 'var(--aibase-accent)' }" />
+            <span class="dot" :style="{ background: detailRow.iconColor || 'var(--atlas-accent)' }" />
             标识色 {{ detailRow.iconColor || '未设置' }}
           </span>
           <div class="spacer" />
@@ -444,6 +474,31 @@ async function handleTest(row, compat) {
         </div>
       </div>
     </el-drawer>
+
+    <!-- 对外接口设置 -->
+    <el-dialog v-model="settingsVisible" title="对外接口设置" width="520">
+      <div class="settings-body">
+        <div class="settings-section">
+          <div class="settings-title">外部访问地址</div>
+          <code class="settings-url mono">{{ externalUrl() }}</code>
+          <div class="muted settings-tip">外部系统用应用凭证换取 Bearer 令牌后访问：<br />1. <code class="mono">POST /api/v1/app/auth</code>（appId + appSecret）→ token<br />2. <code class="mono">GET /api/v1/app/{{ props.appId }}/plugins/providers/ep/config</code>（Authorization: Bearer &lt;token&gt;）</div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-title">返回 API Key</div>
+          <div class="settings-switch">
+            <el-switch v-model="exposeApiKey" />
+            <div class="settings-switch-text">
+              <div>在对外配置中返回 API Key 明文</div>
+              <div class="muted settings-tip">默认关闭；开启后外部应用经凭证认证即可拿到各接口的明文 Key（供实际调用 LLM），请确认调用方可信。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="settingsVisible = false">取消</el-button>
+        <el-button type="primary" :loading="savingSettings" @click="saveSettings">保存</el-button>
+      </template>
+    </el-dialog>
 
     <el-dialog v-model="dialogVisible" :title="editing ? '编辑供应商' : '新增供应商'" width="680">
       <el-form label-width="110px">
@@ -499,7 +554,10 @@ async function handleTest(row, compat) {
           <el-input v-model="form.openai.baseUrl" placeholder="https://api.example.com/v1" clearable />
         </el-form-item>
         <el-form-item label="API Key">
-          <el-input v-model="form.openai.apiKey" type="password" show-password :placeholder="editing && form.openai.apiKey === '' ? '留空保持不变' : ''" clearable />
+          <div class="key-row">
+            <el-input v-model="form.openai.apiKey" type="password" show-password :placeholder="editing && form.openai.apiKey === '' ? '留空保持不变' : ''" clearable />
+            <el-button v-if="editing && editing.openai.apiKeySet" size="small" text type="danger" @click="form.openai.apiKey = null">清除密钥</el-button>
+          </div>
         </el-form-item>
 
         <el-divider content-position="left">Anthropic 兼容接口</el-divider>
@@ -507,7 +565,10 @@ async function handleTest(row, compat) {
           <el-input v-model="form.anthropic.baseUrl" placeholder="https://api.example.com" clearable />
         </el-form-item>
         <el-form-item label="API Key">
-          <el-input v-model="form.anthropic.apiKey" type="password" show-password :placeholder="editing && form.anthropic.apiKey === '' ? '留空保持不变' : ''" clearable />
+          <div class="key-row">
+            <el-input v-model="form.anthropic.apiKey" type="password" show-password :placeholder="editing && form.anthropic.apiKey === '' ? '留空保持不变' : ''" clearable />
+            <el-button v-if="editing && editing.anthropic.apiKeySet" size="small" text type="danger" @click="form.anthropic.apiKey = null">清除密钥</el-button>
+          </div>
         </el-form-item>
 
         <el-divider content-position="left">模型（两接口共享）</el-divider>
@@ -556,7 +617,7 @@ async function handleTest(row, compat) {
   align-items: stretch;
   gap: 0;
   padding: 12px 0;
-  border-bottom: 1px dashed var(--aibase-stroke);
+  border-bottom: 1px dashed var(--atlas-stroke);
   margin-bottom: 14px;
 }
 .stat-block {
@@ -568,7 +629,7 @@ async function handleTest(row, compat) {
   min-width: 0;
 }
 .stat-block + .stat-block {
-  border-left: 1px solid var(--aibase-stroke);
+  border-left: 1px solid var(--atlas-stroke);
 }
 .stat-icon {
   width: 34px;
@@ -578,11 +639,11 @@ async function handleTest(row, compat) {
   align-items: center;
   justify-content: center;
   font-size: 17px;
-  background: var(--aibase-bg);
-  color: var(--aibase-text);
+  background: var(--atlas-bg);
+  color: var(--atlas-text);
   flex-shrink: 0;
 }
-.stat-icon.accent { background: rgba(79, 110, 247, 0.1); color: var(--aibase-accent); }
+.stat-icon.accent { background: rgba(79, 110, 247, 0.1); color: var(--atlas-accent); }
 .stat-text {
   display: flex;
   flex-direction: column;
@@ -593,12 +654,12 @@ async function handleTest(row, compat) {
   font-size: 20px;
   font-weight: 700;
   line-height: 1.15;
-  color: var(--aibase-text);
+  color: var(--atlas-text);
 }
-.stat-num.accent { color: var(--aibase-accent); }
+.stat-num.accent { color: var(--atlas-accent); }
 .stat-label {
   font-size: 12px;
-  color: var(--aibase-muted);
+  color: var(--atlas-muted);
 }
 
 /* ---------- 工具栏 ---------- */
@@ -619,7 +680,7 @@ async function handleTest(row, compat) {
   min-height: 120px;
 }
 .provider-card {
-  border: 1px solid var(--aibase-stroke);
+  border: 1px solid var(--atlas-stroke);
   border-radius: 12px;
   padding: 14px 16px;
   display: flex;
@@ -631,7 +692,7 @@ async function handleTest(row, compat) {
   transition: box-shadow 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
 }
 .provider-card:hover {
-  border-color: var(--aibase-accent);
+  border-color: var(--atlas-accent);
   box-shadow: 0 6px 20px rgba(79, 110, 247, 0.14);
   transform: translateY(-2px);
 }
@@ -646,13 +707,13 @@ async function handleTest(row, compat) {
   margin-bottom: 2px;
 }
 .chevron {
-  color: var(--aibase-muted);
+  color: var(--atlas-muted);
   font-size: 13px;
   flex-shrink: 0;
   transition: transform 0.18s ease, color 0.18s ease;
 }
 .provider-card:hover .chevron {
-  color: var(--aibase-accent);
+  color: var(--atlas-accent);
   transform: translateX(2px);
 }
 .p-icon {
@@ -681,7 +742,7 @@ async function handleTest(row, compat) {
   gap: 7px;
   font-size: 12px;
   padding: 5px 9px;
-  background: var(--aibase-bg);
+  background: var(--atlas-bg);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -714,14 +775,14 @@ async function handleTest(row, compat) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--aibase-text);
+  color: var(--atlas-text);
 }
 .card-foot {
   display: flex;
   align-items: center;
   gap: 8px;
   padding-top: 8px;
-  border-top: 1px dashed var(--aibase-stroke);
+  border-top: 1px dashed var(--atlas-stroke);
   margin-top: auto;
   min-height: 26px;
 }
@@ -738,15 +799,15 @@ async function handleTest(row, compat) {
 }
 .model-chip {
   font-size: 11px;
-  background: var(--aibase-bg);
-  border: 1px solid var(--aibase-stroke);
+  background: var(--atlas-bg);
+  border: 1px solid var(--atlas-stroke);
   border-radius: 5px;
   padding: 1px 7px;
-  color: var(--aibase-text);
+  color: var(--atlas-text);
   cursor: default;
 }
 .muted-chip {
-  color: var(--aibase-muted);
+  color: var(--atlas-muted);
   font-style: italic;
 }
 .card-meta {
@@ -754,7 +815,7 @@ async function handleTest(row, compat) {
   align-items: center;
   gap: 8px;
   padding-top: 8px;
-  border-top: 1px dashed var(--aibase-stroke);
+  border-top: 1px dashed var(--atlas-stroke);
   margin-top: auto;
   min-height: 26px;
 }
@@ -777,14 +838,14 @@ async function handleTest(row, compat) {
   align-items: center;
   gap: 12px;
   padding-bottom: 14px;
-  border-bottom: 1px solid var(--aibase-stroke);
+  border-bottom: 1px solid var(--atlas-stroke);
 }
 .drawer-icon {
   width: 40px;
   height: 40px;
   border-radius: 10px;
   object-fit: contain;
-  background: var(--aibase-bg);
+  background: var(--atlas-bg);
   padding: 6px;
 }
 .drawer-title {
@@ -801,7 +862,7 @@ async function handleTest(row, compat) {
   font-size: 12px;
 }
 .endpoint-block {
-  border: 1px solid var(--aibase-stroke);
+  border: 1px solid var(--atlas-stroke);
   border-radius: 12px;
   padding: 12px 14px;
   display: flex;
@@ -823,8 +884,8 @@ async function handleTest(row, compat) {
 }
 .endpoint-url {
   font-size: 12.5px;
-  color: var(--aibase-text);
-  background: var(--aibase-bg);
+  color: var(--atlas-text);
+  background: var(--atlas-bg);
   border-radius: 8px;
   padding: 7px 10px;
   overflow: hidden;
@@ -852,7 +913,7 @@ async function handleTest(row, compat) {
   align-items: center;
   gap: 8px;
   padding-top: 12px;
-  border-top: 1px dashed var(--aibase-stroke);
+  border-top: 1px dashed var(--atlas-stroke);
   margin-top: auto;
 }
 .foot-info {
@@ -879,7 +940,7 @@ async function handleTest(row, compat) {
 }
 .icon-group-title {
   font-size: 12px;
-  color: var(--aibase-muted);
+  color: var(--atlas-muted);
   margin-top: 2px;
 }
 .icon-picker {
@@ -895,7 +956,7 @@ async function handleTest(row, compat) {
   position: relative;
   width: 40px;
   height: 40px;
-  border: 1px solid var(--aibase-stroke);
+  border: 1px solid var(--atlas-stroke);
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -905,10 +966,10 @@ async function handleTest(row, compat) {
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .icon-item:hover {
-  border-color: var(--aibase-accent);
+  border-color: var(--atlas-accent);
 }
 .icon-item.active {
-  border-color: var(--aibase-accent);
+  border-color: var(--atlas-accent);
   box-shadow: 0 0 0 2px rgba(79, 110, 247, 0.2);
 }
 .icon-item img {
@@ -919,7 +980,7 @@ async function handleTest(row, compat) {
   position: absolute;
   right: -4px;
   top: -4px;
-  background: var(--aibase-accent);
+  background: var(--atlas-accent);
   color: #fff;
   border-radius: 50%;
   font-size: 11px;
@@ -952,7 +1013,7 @@ async function handleTest(row, compat) {
 .ref-list {
   max-height: 180px;
   overflow: auto;
-  border: 1px solid var(--aibase-stroke);
+  border: 1px solid var(--atlas-stroke);
   border-radius: 8px;
 }
 .ref-item {
@@ -977,7 +1038,7 @@ async function handleTest(row, compat) {
   flex-shrink: 0;
 }
 .ref-add {
-  color: var(--aibase-accent);
+  color: var(--atlas-accent);
   flex-shrink: 0;
 }
 .ref-hint {
@@ -995,7 +1056,53 @@ async function handleTest(row, compat) {
 }
 
 /* ---------- 其他 ---------- */
-.hint { font-size: 12px; margin-left: 10px; color: var(--aibase-muted); }
-.muted { color: var(--aibase-muted); }
+.hint { font-size: 12px; margin-left: 10px; color: var(--atlas-muted); }
+.muted { color: var(--atlas-muted); }
 .mono { font-family: monospace; }
+.key-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.key-row .el-input { flex: 1; }
+
+/* ---------- 对外接口设置 ---------- */
+.settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.settings-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+.settings-url {
+  font-size: 12.5px;
+  background: var(--atlas-bg);
+  border-radius: 8px;
+  padding: 8px 10px;
+  word-break: break-all;
+  user-select: all;
+}
+.settings-tip {
+  font-size: 12px;
+  line-height: 1.8;
+}
+.settings-switch {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.settings-switch-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
 </style>

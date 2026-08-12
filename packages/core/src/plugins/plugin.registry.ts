@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common'
+import { Injectable, Logger, Inject } from '@nestjs/common'
 import type { LoadedPlugin } from './types.js'
+import { PlatformEventEmitter } from '../spi/platform-event-emitter.js'
 
 /**
  * 插件注册中心：type 全局唯一（内置保留字保护），
@@ -9,6 +10,8 @@ import type { LoadedPlugin } from './types.js'
 export class PluginRegistry {
   private readonly logger = new Logger(PluginRegistry.name)
   private readonly plugins = new Map<string, LoadedPlugin>()
+
+  constructor(@Inject(PlatformEventEmitter) private readonly eventBus: PlatformEventEmitter) {}
 
   register(loaded: LoadedPlugin): boolean {
     const existing = this.plugins.get(loaded.plugin.type)
@@ -20,6 +23,7 @@ export class PluginRegistry {
     }
     this.plugins.set(loaded.plugin.type, loaded)
     this.logger.log(`插件已注册：${loaded.plugin.name}（type=${loaded.plugin.type}，artifact=${loaded.artifact}）`)
+    this.eventBus.emit('plugin.loaded', { pluginType: loaded.plugin.type })
     return true
   }
 
@@ -40,6 +44,7 @@ export class PluginRegistry {
       }
       this.plugins.delete(type)
       this.logger.log(`插件已卸载：${removed.plugin.name}（type=${type}）`)
+      this.eventBus.emit('plugin.unloaded', { pluginType: type })
     }
     return removed
   }

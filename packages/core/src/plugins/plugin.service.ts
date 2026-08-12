@@ -1,6 +1,6 @@
-import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common'
+import { forwardRef, Inject, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common'
 import type {
-  AibasePlugin,
+  AtlasPlugin,
   DatasetPublisher,
   DatasetSource,
   DataScope,
@@ -10,6 +10,12 @@ import type {
   PluginCrypto,
   PluginInstanceContext,
   PluginStore,
+  PluginEvents,
+  PluginApps,
+  PluginMonitor,
+  PluginSecurity,
+  PluginPlatform,
+  PluginSpiDependency,
 } from '@atlas/types'
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, readdirSync, statSync } from 'node:fs'
@@ -22,25 +28,46 @@ import { PluginFileRegistry } from './plugin-file.registry.js'
 import type { LoadedPlugin } from './types.js'
 import { NotFoundError, ValidationError } from '../common/response.js'
 import { now } from '../common/utils.js'
-import { CONFIG, type AIBaseConfig } from '../config.js'
+import { CONFIG, type AtlasConfig } from '../config.js'
+import { PlatformEventEmitter } from '../spi/platform-event-emitter.js'
+import { APP_FACADE, MONITOR_FACADE, SECURITY_FACADE, PLATFORM_FACADE, PLUGIN_SPI_REGISTRY } from '../spi/tokens.js'
+import type { AppFacade } from '../spi/app.facade.js'
+import type { MonitorFacade } from '../spi/monitor.facade.js'
+import type { SecurityFacade } from '../spi/security.facade.js'
+import type { PlatformFacade } from '../spi/platform.facade.js'
+import type { PluginSpiRegistry } from '../spi/plugin-spi.registry.js'
 
 
 /**
  * 插件服务：注册表同步、实例生命周期（enable/disable/删除）、
- * 单向覆盖校验（SHARED→LOCAL）、环境构建（PluginEnvironment）、通用存储。
+ * 单向覆盖校验（SHARED→LOCAL）、环境构建（PluginEnvironment）、通用存储、双向 SPI 编排。
  */
 @Injectable()
-export class PluginService {
+export class PluginService implements OnApplicationBootstrap {
   private readonly logger = new Logger(PluginService.name)
+  /** 启用实例创建的 env 追踪：实例销毁/插件卸载时调用 env.dispose() 自动退订事件。 */
+  private readonly activeEnvs = new Map<number, PlatformPluginEnvironment>()
 
   constructor(
-    @Inject(CONFIG) private readonly config: AIBaseConfig,
-    private readonly registry: PluginRegistry,
-    private readonly repository: PluginRepository,
-    private readonly opsLogService: OpsLogService,
+    @Inject(CONFIG) private readonly config: AtlasConfig,
+    @Inject(PluginRegistry) private readonly registry: PluginRegistry,
+    @Inject(PluginRepository) private readonly repository: PluginRepository,
+    @Inject(OpsLogService) private readonly opsLogService: OpsLogService,
     @Inject(forwardRef(() => DatasetService)) private readonly datasetService: DatasetService,
-    private readonly fileRegistry: PluginFileRegistry,
+    @Inject(PluginFileRegistry) private readonly fileRegistry: PluginFileRegistry,
+    @Inject(PlatformEventEmitter) private readonly eventBus: PlatformEventEmitter,
+    @Inject(APP_FACADE) private readonly appFacade: AppFacade,
+    @Inject(MONITOR_FACADE) private readonly monitorFacade: MonitorFacade,
+    @Inject(SECURITY_FACADE) private readonly securityFacade: SecurityFacade,
+    @Inject(PLATFORM_FACADE) private readonly platformFacade: PlatformFacade,
+    @Inject(PLUGIN_SPI_REGISTRY) private readonly spiRegistry: PluginSpiRegistry,
   ) {}
+
+  /** 订阅热替换事件：unloaded 清 SPI、loaded 重建（对已启用实例）。 */
+  onApplicationBootstrap(): void {
+    this.eventBus.on('plugin.unloaded', ({ pluginType }) => this.spiRegistry.unregister(pluginType))
+    this.eventBus.on('plugin.loaded', ({ pluginType }) => this.rebuildSpiFor(pluginType))
+  }
 
   // ---------- 注册表同步 ----------
 
@@ -53,7 +80,7 @@ export class PluginService {
   }
 
   private upsertDef(
-    plugin: AibasePlugin,
+    plugin: AtlasPlugin,
     pluginType: string,
     artifact: string,
     artifactHash: string,
@@ -111,6 +138,11 @@ export class PluginService {
         })
         this.logger.log(`恢复插件实例：app=${appId}，type=${pluginType}`)
       }
+      void this.syncPluginDatasets(appId, pluginType).catch((e) =>
+        this.logger.warn(`插件数据集同步异常: ${pluginType}，${(e as Error).message}`))
+      // 恢复时重建 SPI（此前可能已注册）
+      this.registerSpiFor(appId, pluginType, existing.dataScope)
+      this.eventBus.emit('plugin.enabled', { appId, pluginType, instanceId: existing.id })
       return existing
     }
     const scope = requestedScope ? this.resolveScope(plugin, requestedScope) : plugin.defaultDataScope
@@ -119,18 +151,25 @@ export class PluginService {
       app_id: appId, plugin_type: pluginType, data_scope: scope,
       config_json: '{}', enabled: 1, created_at: nowTs, updated_at: nowTs,
     })
-    try {
-      const env = this.environmentOf(appId, id, pluginType, scope)
-      void plugin.init?.(env)
-    } catch (e) {
-      this.logger.warn(`插件实例初始化异常（实例仍创建）: type=${pluginType}，${(e as Error).message}`)
-    }
+    const env = this.environmentOf(appId, id, pluginType, scope)
+    this.activeEnvs.set(id, env)
+    this.registerSpiFor(appId, pluginType, scope)
+    void (async () => {
+      try {
+        await plugin.init?.(env)
+      } catch (e) {
+        this.logger.warn(`插件实例初始化异常（实例仍创建）: type=${pluginType}，${(e as Error).message}`)
+      }
+      await this.syncPluginDatasets(appId, pluginType).catch((e) =>
+        this.logger.warn(`插件数据集同步异常: ${pluginType}，${(e as Error).message}`))
+    })()
     this.logger.log(`启用插件实例：app=${appId}，type=${pluginType}，scope=${scope}`)
+    this.eventBus.emit('plugin.enabled', { appId, pluginType, instanceId: id })
     return this.repository.findInstance(appId, pluginType)!
   }
 
   /** 单向规则解析。 */
-  private resolveScope(plugin: AibasePlugin, requested: string): DataScope {
+  private resolveScope(plugin: AtlasPlugin, requested: string): DataScope {
     if (requested !== 'APP_LOCAL' && requested !== 'GLOBAL_SHARED') {
       throw new ValidationError(`非法数据范围: ${requested}`)
     }
@@ -152,6 +191,7 @@ export class PluginService {
         enabled: 0, created_at: inst.createdAt, updated_at: inst.updatedAt,
       })
     }
+    this.eventBus.emit('plugin.disabled', { appId, pluginType, instanceId: inst.id })
     return inst
   }
 
@@ -167,25 +207,55 @@ export class PluginService {
       }
     }
     if (inst.dataScope === 'APP_LOCAL') {
-      // 清理该应用作用域的通用存储（instance_id=appId）；共享 store（0）保留
-      this.repository.storeDeleteByScope(appId)
+      // 仅清理该插件在该应用的通用存储（instance_id=appId + plugin_type），不动兄弟插件
+      this.repository.storeDeleteInstance(appId, pluginType)
     }
+    this.activeEnvs.get(inst.id)?.dispose()
+    this.activeEnvs.delete(inst.id)
+    // 按实例实际作用域精确注销：混合 scope（共享@0 + 本地@appId）时不误减共享实例引用
+    this.spiRegistry.unregister(pluginType, appId, inst.dataScope)
     this.repository.deleteInstance(inst.id)
     this.logger.log(`删除插件实例：app=${appId}，type=${pluginType}`)
+    this.eventBus.emit('plugin.deleted', { appId, pluginType })
   }
 
   /**
    * 创建应用时自动实例化插件：默认全部已注册插件；可传 pluginTypes 精确指定（创建应用勾选场景）。
-   * 未注册/未加载的插件类型静默跳过。
+   * 未注册/未加载的插件类型静默跳过。对声明 dependsOn 的插件做拓扑排序（先启用被依赖方），环检测拒绝。
    */
   autoInstantiate(appId: number, pluginTypes?: string[]): void {
     const want = pluginTypes && pluginTypes.length > 0 ? new Set(pluginTypes) : null
-    for (const def of this.repository.findAllDefs()) {
-      if (want && !want.has(def.pluginType)) continue
-      if (!this.repository.findInstance(appId, def.pluginType)) {
-        this.enableInstance(appId, def.pluginType)
+    const pending = this.repository
+      .findAllDefs()
+      .filter((d) => (!want || want.has(d.pluginType)) && !this.repository.findInstance(appId, d.pluginType))
+      .map((d) => d.pluginType)
+    if (pending.length === 0) return
+
+    const { order, cycle } = topoSortPlugins(pending, (t) => this.dependenciesOf(t))
+    if (cycle.length > 0) {
+      this.logger.error(`插件依赖存在环，已跳过启用: ${cycle.join(' → ')}`)
+    }
+    for (const t of order) {
+      if (cycle.includes(t)) continue // 环成员拒绝启用
+      this.enableInstance(appId, t)
+    }
+  }
+
+  /** 插件声明的依赖 pluginType 集合（去重）；带 spi 字段的依赖项做存在性校验
+   *  （提供方已加载且 provides() 暴露该命名空间），不满足 warn（不抛错，不影响排序）。 */
+  private dependenciesOf(pluginType: string): string[] {
+    const loaded = this.registry.byType(pluginType)
+    const deps = loaded?.plugin.dependsOn?.() ?? []
+    for (const d of deps) {
+      if (d.spi) {
+        const target = this.registry.byType(d.pluginType)
+        const exposed = target?.plugin.provides?.() ?? {}
+        if (!target || !exposed[d.spi]) {
+          this.logger.warn(`依赖声明不满足: ${pluginType} 依赖 ${d.pluginType}/${d.spi}（未加载或未暴露该能力）`)
+        }
       }
     }
+    return [...new Set(deps.map((d: PluginSpiDependency) => d.pluginType))]
   }
 
   /** 卸载插件（软停用 loaded=0，实例/数据保留；重集成恢复）。 */
@@ -193,6 +263,7 @@ export class PluginService {
     const loaded = this.registry.byType(pluginType)
     if (!loaded) throw new ValidationError(`插件未加载: ${pluginType}`)
     if (loaded.builtin) throw new ValidationError('内置插件不支持卸载')
+    this.spiRegistry.unregister(pluginType)
     this.registry.unregister(pluginType)
     this.repository.markLoaded(pluginType, false)
     this.logger.warn(`插件已卸载（数据保留）: ${pluginType}`)
@@ -240,11 +311,120 @@ export class PluginService {
     }
   }
 
-  private environmentOf(appId: number, instanceId: number, pluginType: string, scope: DataScope): PluginEnvironment {
+  // ---------- 数据集注册 ----------
+
+  datasetRegistrations(pluginType: string): import('@atlas/types').PluginDatasetRegistration[] {
+    const loaded = this.registry.byType(pluginType)
+    return loaded?.plugin.datasets?.() ?? []
+  }
+
+  /** 插件级按 key 查注册项（不依赖 app）。 */
+  datasetRegistration(_appId: number, pluginType: string, key: string): import('@atlas/types').PluginDatasetRegistration | null {
+    return this.datasetRegistrations(pluginType).find((r) => r.key === key) ?? null
+  }
+
+  /** 同步插件注册数据集：创建/升级内容、调度配置、资产清单、敏感凭证对齐。实例须已启用。 */
+  async syncPluginDatasets(appId: number, pluginType: string): Promise<void> {
+    const env = this.environmentOrNull(appId, pluginType)
+    if (!env) return
+    for (const reg of this.datasetRegistrations(pluginType)) {
+      try {
+        const content = (await reg.render(env)) ?? '{}'
+        this.datasetService.ensureRegistered(appId, pluginType, {
+          key: reg.key,
+          name: reg.name,
+          sensitivity: reg.sensitivity ?? 'INTERNAL',
+          refreshMode: reg.refreshMode,
+          refreshIntervalSeconds: reg.refreshIntervalSeconds,
+        }, content)
+        await this.syncAssetsFor(appId, pluginType, reg.key)
+        await this.syncSecretsFor(appId, pluginType, reg.key)
+      } catch (e) {
+        this.logger.warn(`插件数据集同步失败：app=${appId}，${pluginType}/${reg.key}，${(e as Error).message}`)
+      }
+    }
+  }
+
+  /** 对齐插件注册的资产清单：变化则写入 assets_json 并 bump 版本。 */
+  async syncAssetsFor(appId: number, pluginType: string, datasetKey: string): Promise<void> {
+    const reg = this.datasetRegistration(appId, pluginType, datasetKey)
+    const env = this.environmentOrNull(appId, pluginType)
+    if (!reg?.assets || !env) return
+    const d = this.datasetService.findByKeyOrNull(appId, pluginType, datasetKey)
+    if (!d) return
+    const assets = await reg.assets(env)
+    const next = JSON.stringify(assets)
+    if (JSON.stringify(d.assets) !== next) {
+      this.datasetService.applyAssets(d.id, next)
+      this.logger.log(`插件数据集资产已同步：app=${appId}，${pluginType}/${datasetKey}（${assets.length} 项）`)
+    }
+  }
+
+  /** 经插件注册的 assetSource 懒加载资产字节；无注册源返回 null。 */
+  async assetSourceFor(appId: number, pluginType: string, datasetKey: string, path: string): Promise<Buffer | null> {
+    const reg = this.datasetRegistration(appId, pluginType, datasetKey)
+    const env = this.environmentOrNull(appId, pluginType)
+    if (!reg?.assetSource || !env) return null
+    try {
+      const buf = await reg.assetSource(env, path)
+      return buf ? Buffer.from(buf) : null
+    } catch {
+      return null
+    }
+  }
+
+  /** 对齐插件注册的敏感凭证：仅 SECRET 级数据集生效；录入存在项、停用已移除项。 */
+  async syncSecretsFor(appId: number, pluginType: string, datasetKey: string): Promise<void> {
+    const reg = this.datasetRegistration(appId, pluginType, datasetKey)
+    const env = this.environmentOrNull(appId, pluginType)
+    if (!reg?.secrets || !env) return
+    const d = this.datasetService.findByKeyOrNull(appId, pluginType, datasetKey)
+    if (!d || d.sensitivity !== 'SECRET') return
+    const secrets = await reg.secrets(env)
+    for (const [keyName, value] of Object.entries(secrets)) {
+      if (value) this.datasetService.upsertSecretFromPlugin(appId, pluginType, datasetKey, keyName, value)
+    }
+    const active = this.datasetService.activeSecretNames(d.id)
+    for (const keyName of active) {
+      if (!(keyName in secrets)) this.datasetService.deactivateSecretFromPlugin(appId, pluginType, datasetKey, keyName)
+    }
+  }
+
+  /** 启动后对全部已启用实例补同步插件注册数据集（存量环境）。 */
+  async syncAllEnabledDatasets(): Promise<void> {
+    for (const inst of this.repository.findAllEnabled()) {
+      try {
+        await this.syncPluginDatasets(inst.appId, inst.pluginType)
+      } catch (e) {
+        this.logger.warn(`启动数据集补同步失败：app=${inst.appId}，${inst.pluginType}，${(e as Error).message}`)
+      }
+    }
+  }
+
+  private environmentOf(appId: number, instanceId: number, pluginType: string, scope: DataScope): PlatformPluginEnvironment {
     return new PlatformPluginEnvironment(
       this, this.repository, this.opsLogService, this.datasetService, this.fileRegistry, this.config,
-      instanceId, appId, pluginType, scope,
+      this.eventBus, this.appFacade, this.monitorFacade, this.securityFacade, this.platformFacade,
+      this.spiRegistry, instanceId, appId, pluginType, scope,
     )
+  }
+
+  // ---------- 双向 SPI 编排 ----------
+
+  /** 实例启用时注册其暴露的 SPI（provides() 非空才注册）。 */
+  private registerSpiFor(appId: number, pluginType: string, scope: DataScope): void {
+    const loaded = this.registry.byType(pluginType)
+    const exports = loaded?.plugin.provides?.() ?? null
+    if (!exports || Object.keys(exports).length === 0) return
+    // 惰性构建：消费方 resolve 时才 buildEnv（此时实例已启用，返回该实例 env）
+    this.spiRegistry.register(pluginType, appId, scope, exports, () => this.environmentOrNull(appId, pluginType))
+  }
+
+  /** 热替换后对某插件已启用实例重注册 SPI（旧注册已被 unloaded 清除）。 */
+  private rebuildSpiFor(pluginType: string): void {
+    for (const inst of this.repository.findAllEnabledInstancesOf(pluginType)) {
+      this.registerSpiFor(inst.appId, pluginType, inst.dataScope)
+    }
   }
 
   // ---------- 实例配置 ----------
@@ -252,6 +432,11 @@ export class PluginService {
   updateInstanceConfig(appId: number, pluginType: string, config: Record<string, unknown>): void {
     const inst = this.requireInstance(appId, pluginType)
     this.repository.updateInstanceConfig(inst.id, JSON.stringify(config))
+  }
+
+  getInstanceConfig(appId: number, pluginType: string): Record<string, unknown> {
+    const inst = this.requireInstance(appId, pluginType)
+    return this.readConfig(inst)
   }
 
   readConfig(inst: import('@atlas/types').PluginInstance): Record<string, unknown> {
@@ -266,13 +451,22 @@ export class PluginService {
 /** PluginEnvironment 实现：绑定实例上下文（appId/instanceId/scope）。
  *  store/files 作用域 = scope 决定（GLOBAL_SHARED → 全局一份，APP_LOCAL → 应用一份）。 */
 class PlatformPluginEnvironment implements PluginEnvironment {
+  /** 本实例订阅的事件退订函数：dispose() 时统一清理（实例销毁/插件卸载）。 */
+  private readonly unsubs: Array<() => void> = []
+
   constructor(
     private readonly service: PluginService,
     private readonly repository: PluginRepository,
     private readonly opsLogService: OpsLogService,
     private readonly datasetService: DatasetService,
     private readonly fileRegistry: PluginFileRegistry,
-    private readonly aibaseConfig: AIBaseConfig,
+    private readonly atlasConfig: AtlasConfig,
+    private readonly eventBus: PlatformEventEmitter,
+    private readonly appFacade: AppFacade,
+    private readonly monitorFacade: MonitorFacade,
+    private readonly securityFacade: SecurityFacade,
+    private readonly platformFacade: PlatformFacade,
+    private readonly spiRegistry: PluginSpiRegistry,
     private readonly instanceId: number,
     private readonly appId: number,
     private readonly pluginType: string,
@@ -286,20 +480,21 @@ class PlatformPluginEnvironment implements PluginEnvironment {
 
   store(): PluginStore {
     const scopeKey = this.scopeKey()
+    const pluginType = this.pluginType
     return {
       get: async <T = unknown>(entityKey: string, entityId = '') =>
-        (this.repository.storeGet(scopeKey, entityKey, entityId) as T | null) ?? null,
+        (this.repository.storeGet(scopeKey, pluginType, entityKey, entityId) as T | null) ?? null,
       put: async (entityKey: string, value: unknown, entityId = '') =>
-        this.repository.storePut(scopeKey, entityKey, entityId, JSON.stringify(value), now()),
+        this.repository.storePut(scopeKey, pluginType, entityKey, entityId, JSON.stringify(value), now()),
       remove: async (entityKey: string, entityId = '') =>
-        this.repository.storeRemove(scopeKey, entityKey, entityId),
+        this.repository.storeRemove(scopeKey, pluginType, entityKey, entityId),
       list: async <T = unknown>(entityId = '') =>
-        this.repository.storeList(scopeKey, entityId).map((r) => JSON.parse(r.value_json) as T),
+        this.repository.storeList(scopeKey, pluginType, entityId).map((r) => JSON.parse(r.value_json) as T),
     }
   }
 
   files(): PluginFiles {
-    const root = resolve(this.aibaseConfig.dataDir, 'plugin-files', String(this.scopeKey()), this.pluginType)
+    const root = resolve(this.atlasConfig.dataDir, 'plugin-files', String(this.scopeKey()), this.pluginType)
     mkdirSync(root, { recursive: true })
     const safe = (rel: string): string => {
       const normalized = resolve(root, rel.replaceAll('\\', '/').replace(/^\/+/, ''))
@@ -346,7 +541,7 @@ class PlatformPluginEnvironment implements PluginEnvironment {
   }
 
   crypto(): PluginCrypto {
-    const key = createHash('sha256').update(this.aibaseConfig.encKey + ':' + this.pluginType).digest()
+    const key = createHash('sha256').update(this.atlasConfig.encKey + ':' + this.pluginType).digest()
     return {
       encrypt: (plain: string): string => {
         if (!plain) return ''
@@ -422,4 +617,93 @@ class PlatformPluginEnvironment implements PluginEnvironment {
       error: async (message) => this.opsLogService.write(this.appId, this.pluginType, 'ERROR', message),
     }
   }
+
+  events(): PluginEvents {
+    return {
+      on: (name, handler) => {
+        const unsub = this.eventBus.on(name, handler)
+        this.unsubs.push(unsub)
+        return unsub
+      },
+      off: (name, handler) => this.eventBus.off(name, handler),
+    }
+  }
+
+  apps(): PluginApps {
+    return this.appFacade
+  }
+
+  monitor(): PluginMonitor {
+    // 监控按应用维度：绑定本实例的 appId
+    const appId = this.appId
+    const facade = this.monitorFacade
+    return {
+      overview: (range) => facade.overview(appId, range),
+      endpoints: (range) => facade.endpoints(appId, range),
+      topResources: (range, limit) => facade.topResources(appId, range, limit),
+      topIps: (range, limit) => facade.topIps(appId, range, limit),
+      topApps: (range, limit) => facade.topApps(appId, range, limit),
+      series: (range) => facade.series(appId, range),
+      recent: (limit) => facade.recent(appId, limit),
+      registerMetric: (def) => facade.registerMetric(def),
+    }
+  }
+
+  security(): PluginSecurity {
+    return this.securityFacade
+  }
+
+  platform(): PluginPlatform {
+    return this.platformFacade
+  }
+
+  spi<T = unknown>(pluginType: string, namespace: string, targetAppId?: number): T | null {
+    // 缺省以当前实例 appId 作为消费方上下文；GLOBAL_SHARED 提供方任意 app 可解析，APP_LOCAL 仅同 app。
+    return this.spiRegistry.resolve<T>(pluginType, namespace, targetAppId ?? this.appId)
+  }
+
+  /** 实例销毁/插件卸载时调用：自动退订本实例订阅的全部平台事件。 */
+  dispose(): void {
+    for (const unsub of this.unsubs.splice(0)) {
+      try {
+        unsub()
+      } catch {
+        /* 忽略退订异常 */
+      }
+    }
+  }
+}
+
+/**
+ * 拓扑排序插件启动顺序（被依赖方在前）。返回 { order, cycle }。
+ * cycle 为检测到的环路径（若有）；环成员不保证顺序，由调用方决定是否启用。
+ */
+function topoSortPlugins(types: string[], depsOf: (t: string) => string[]): { order: string[]; cycle: string[] } {
+  const visited = new Set<string>()
+  const visiting = new Set<string>()
+  const order: string[] = []
+  let cycle: string[] = []
+
+  const visit = (t: string, stack: string[]): void => {
+    if (cycle.length > 0) return
+    if (visiting.has(t)) {
+      // 找到环：从栈中截取环路径
+      const start = stack.indexOf(t)
+      cycle = [...stack.slice(start), t]
+      return
+    }
+    if (visited.has(t)) return
+    visiting.add(t)
+    for (const dep of depsOf(t)) {
+      if (types.includes(dep)) visit(dep, [...stack, t])
+    }
+    visiting.delete(t)
+    visited.add(t)
+    order.push(t)
+  }
+
+  for (const t of types) {
+    if (!visited.has(t) && !visiting.has(t)) visit(t, [])
+  }
+  return { order, cycle }
 }

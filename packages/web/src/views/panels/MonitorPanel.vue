@@ -205,7 +205,7 @@ const statusTag = (s: number) => (s >= 400 ? 'danger' : s === 304 ? 'warning' : 
 
 .stat-icon {
   font-size: 18px;
-  color: var(--aibase-accent);
+  color: var(--atlas-accent);
   margin-bottom: 8px;
 }
 
@@ -224,7 +224,7 @@ const statusTag = (s: number) => (s >= 400 ? 'danger' : s === 304 ? 'warning' : 
 
 .stat-label {
   font-size: 12px;
-  color: var(--aibase-muted);
+  color: var(--atlas-muted);
   margin-top: 4px;
 }
 
@@ -262,7 +262,7 @@ const statusTag = (s: number) => (s >= 400 ? 'danger' : s === 304 ? 'warning' : 
 .trend-bar {
   width: 100%;
   max-width: 18px;
-  background: var(--aibase-accent);
+  background: var(--atlas-accent);
   border-radius: 3px 3px 0 0;
   opacity: 0.85;
   flex: 1;
@@ -271,12 +271,12 @@ const statusTag = (s: number) => (s >= 400 ? 'danger' : s === 304 ? 'warning' : 
 
 .trend-label {
   font-size: 10px;
-  color: var(--aibase-muted);
+  color: var(--atlas-muted);
   margin-top: 4px;
 }
 
 .empty {
-  color: var(--aibase-muted);
+  color: var(--atlas-muted);
   font-size: 13px;
 }
 </style>

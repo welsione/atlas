@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common'
 import { PluginLoader } from './plugin.loader.js'
-import { CONFIG, type AIBaseConfig } from '../config.js'
+import { CONFIG, type AtlasConfig } from '../config.js'
 
 /**
  * 外部插件热扫描：定时对比目录 hash，处理新增/更新/删除三态。
@@ -12,8 +12,8 @@ export class PluginWatcher implements OnApplicationBootstrap, OnModuleDestroy {
   private timer: NodeJS.Timeout | null = null
 
   constructor(
-    @Inject(CONFIG) private readonly config: AIBaseConfig,
-    private readonly loader: PluginLoader,
+    @Inject(CONFIG) private readonly config: AtlasConfig,
+    @Inject(PluginLoader) private readonly loader: PluginLoader,
   ) {}
 
   onApplicationBootstrap(): void {

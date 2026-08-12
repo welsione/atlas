@@ -1,7 +1,7 @@
 import { Global, Module, Inject } from '@nestjs/common'
 import BetterSqlite3 from 'better-sqlite3'
 import type BetterSqlite3NS from 'better-sqlite3'
-import { CONFIG, configProvider, type AIBaseConfig } from '../config.js'
+import { CONFIG, configProvider, type AtlasConfig } from '../config.js'
 import { SchemaInitializer } from './schema-initializer.js'
 
 /** SQLite 连接（better-sqlite3 同步 API，全局单例）。 */
@@ -13,7 +13,7 @@ export const DB = Symbol('SQLiteDB')
     configProvider,
     {
       provide: DB,
-      useFactory: async (config: AIBaseConfig) => {
+      useFactory: async (config: AtlasConfig) => {
         const db = new BetterSqlite3(config.dbPath)
         db.pragma('journal_mode = WAL')
         db.pragma('foreign_keys = ON')

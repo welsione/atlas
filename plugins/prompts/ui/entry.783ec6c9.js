@@ -1,4 +1,4 @@
-;(()=>{const s=document.createElement('style');s.textContent=".filter-bar[data-v-5fee9758]{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}.spacer[data-v-5fee9758]{flex:1}.search[data-v-5fee9758]{width:200px}.name-cell[data-v-5fee9758]{display:flex;align-items:center;gap:6px;min-width:0}.name-cell .main[data-v-5fee9758]{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.desc[data-v-5fee9758]{font-size:12px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:320px}.preview[data-v-5fee9758]{color:var(--aibase-muted);font-size:13px}.var-chips[data-v-5fee9758]{display:flex;flex-wrap:wrap;gap:4px}.var-editor[data-v-5fee9758]{width:100%;display:flex;flex-direction:column;gap:6px}.var-row[data-v-5fee9758]{display:flex;align-items:center;gap:8px}.var-name[data-v-5fee9758]{flex:1}.render-vars[data-v-5fee9758]{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}.render-var-row[data-v-5fee9758]{display:flex;align-items:center;gap:10px}.render-var-name[data-v-5fee9758]{width:120px;font-size:13px;font-family:monospace;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.render-var-name.required[data-v-5fee9758]{color:#f56c6c}.star[data-v-5fee9758]{margin-left:2px}.render-result[data-v-5fee9758]{background:var(--aibase-bg);border-radius:8px;padding:12px}.render-title[data-v-5fee9758]{font-size:12px;color:var(--aibase-muted);margin-bottom:6px}.render-content[data-v-5fee9758]{margin:0;white-space:pre-wrap;font-size:13px}.missing[data-v-5fee9758]{color:#f56c6c;font-size:12px;margin-top:6px}.muted[data-v-5fee9758]{color:var(--aibase-muted)}\n";document.head.appendChild(s)})();import { ref as s, computed as J, onMounted as ze, resolveComponent as m, resolveDirective as Ue, openBlock as i, createElementBlock as p, createElementVNode as f, createVNode as t, withCtx as a, Fragment as N, renderList as j, createBlock as R, createTextVNode as o, toDisplayString as v, unref as b, withDirectives as qe, createCommentVNode as E, normalizeClass as Re, withKeys as Ee, createApp as he } from "vue";
+;(()=>{const s=document.createElement('style');s.textContent=".filter-bar[data-v-5b0eb57e]{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}.spacer[data-v-5b0eb57e]{flex:1}.search[data-v-5b0eb57e]{width:200px}.name-cell[data-v-5b0eb57e]{display:flex;align-items:center;gap:6px;min-width:0}.name-cell .main[data-v-5b0eb57e]{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.desc[data-v-5b0eb57e]{font-size:12px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:320px}.preview[data-v-5b0eb57e]{color:var(--atlas-muted);font-size:13px}.var-chips[data-v-5b0eb57e]{display:flex;flex-wrap:wrap;gap:4px}.var-editor[data-v-5b0eb57e]{width:100%;display:flex;flex-direction:column;gap:6px}.var-row[data-v-5b0eb57e]{display:flex;align-items:center;gap:8px}.var-name[data-v-5b0eb57e]{flex:1}.render-vars[data-v-5b0eb57e]{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}.render-var-row[data-v-5b0eb57e]{display:flex;align-items:center;gap:10px}.render-var-name[data-v-5b0eb57e]{width:120px;font-size:13px;font-family:monospace;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.render-var-name.required[data-v-5b0eb57e]{color:#f56c6c}.star[data-v-5b0eb57e]{margin-left:2px}.render-result[data-v-5b0eb57e]{background:var(--atlas-bg);border-radius:8px;padding:12px}.render-title[data-v-5b0eb57e]{font-size:12px;color:var(--atlas-muted);margin-bottom:6px}.render-content[data-v-5b0eb57e]{margin:0;white-space:pre-wrap;font-size:13px}.missing[data-v-5b0eb57e]{color:#f56c6c;font-size:12px;margin-top:6px}.muted[data-v-5b0eb57e]{color:var(--atlas-muted)}\n";document.head.appendChild(s)})();import { ref as s, computed as J, onMounted as ze, resolveComponent as m, resolveDirective as Ue, openBlock as i, createElementBlock as p, createElementVNode as f, createVNode as t, withCtx as a, Fragment as N, renderList as j, createBlock as R, createTextVNode as o, toDisplayString as v, unref as g, withDirectives as qe, createCommentVNode as E, normalizeClass as Re, withKeys as Ee, createApp as he } from "vue";
 import Ae, { ElMessageBox as oe, ElMessage as F } from "element-plus";
 import { Search as Le, Plus as ie, Refresh as Se, VideoPlay as Te, Clock as Be, EditPen as Ie, Delete as se, Back as Ne } from "@element-plus/icons-vue";
 import { get as ue, put as de, del as je, post as Q } from "@atlas/runtime";
@@ -92,10 +92,10 @@ const De = (w, h) => {
         K.value = !1;
       }
     }
-    async function ge(n) {
+    async function be(n) {
       T.value = n, W.value = await ue(`${k()}/versions/${n.id}`), S.value = !0;
     }
-    async function be(n) {
+    async function ge(n) {
       try {
         await oe.confirm(`确认将「${T.value.name}」恢复到 v${n.version}？将生成新版本 ${T.value.version + 1}。`, "恢复版本", { type: "warning" }), await Q(`${k()}/restore/${T.value.id}`, { version: n.version }), S.value = !1, await z(), F.success("已恢复");
       } catch {
@@ -106,7 +106,7 @@ const De = (w, h) => {
     }
     return (n, e) => {
       var ae, ne;
-      const y = m("el-radio-button"), c = m("el-radio-group"), U = m("el-input"), r = m("el-button"), I = m("el-tag"), g = m("el-table-column"), le = m("el-switch"), te = m("el-table"), q = m("el-form-item"), ke = m("el-option"), we = m("el-select"), Ce = m("el-checkbox"), $e = m("el-form"), H = m("el-dialog"), xe = Ue("loading");
+      const y = m("el-radio-button"), c = m("el-radio-group"), U = m("el-input"), r = m("el-button"), I = m("el-tag"), b = m("el-table-column"), le = m("el-switch"), te = m("el-table"), q = m("el-form-item"), ke = m("el-option"), we = m("el-select"), Ce = m("el-checkbox"), $e = m("el-form"), H = m("el-dialog"), xe = Ue("loading");
       return i(), p("div", Oe, [
         f("div", Pe, [
           t(c, {
@@ -132,14 +132,14 @@ const De = (w, h) => {
             modelValue: G.value,
             "onUpdate:modelValue": e[1] || (e[1] = (l) => G.value = l),
             class: "search",
-            "prefix-icon": b(Le),
+            "prefix-icon": g(Le),
             placeholder: "搜索名称 / 内容",
             clearable: ""
           }, null, 8, ["modelValue", "prefix-icon"]),
           t(r, {
             type: "primary",
             size: "small",
-            icon: b(ie),
+            icon: g(ie),
             onClick: me
           }, {
             default: a(() => [...e[14] || (e[14] = [
@@ -148,7 +148,7 @@ const De = (w, h) => {
             _: 1
           }, 8, ["icon"]),
           t(r, {
-            icon: b(Se),
+            icon: g(Se),
             size: "small",
             circle: "",
             loading: C.value,
@@ -160,7 +160,7 @@ const De = (w, h) => {
           "empty-text": "暂无提示词"
         }, {
           default: a(() => [
-            t(g, {
+            t(b, {
               label: "名称",
               "min-width": "140"
             }, {
@@ -182,7 +182,7 @@ const De = (w, h) => {
               ]),
               _: 1
             }),
-            t(g, {
+            t(b, {
               label: "内容预览",
               "min-width": "220",
               "show-overflow-tooltip": ""
@@ -192,7 +192,7 @@ const De = (w, h) => {
               ]),
               _: 1
             }),
-            t(g, {
+            t(b, {
               label: "变量",
               "min-width": "150"
             }, {
@@ -224,7 +224,7 @@ const De = (w, h) => {
               ]),
               _: 1
             }),
-            t(g, {
+            t(b, {
               label: "版本",
               width: "80",
               align: "center"
@@ -243,7 +243,7 @@ const De = (w, h) => {
               ]),
               _: 1
             }),
-            t(g, {
+            t(b, {
               label: "启用",
               width: "80"
             }, {
@@ -255,7 +255,7 @@ const De = (w, h) => {
               ]),
               _: 1
             }),
-            t(g, {
+            t(b, {
               label: "操作",
               width: "250",
               fixed: "right"
@@ -263,7 +263,7 @@ const De = (w, h) => {
               default: a(({ row: l }) => [
                 t(r, {
                   size: "small",
-                  icon: b(Te),
+                  icon: g(Te),
                   onClick: (d) => ye(l)
                 }, {
                   default: a(() => [...e[17] || (e[17] = [
@@ -273,8 +273,8 @@ const De = (w, h) => {
                 }, 8, ["icon", "onClick"]),
                 t(r, {
                   size: "small",
-                  icon: b(Be),
-                  onClick: (d) => ge(l)
+                  icon: g(Be),
+                  onClick: (d) => be(l)
                 }, {
                   default: a(() => [...e[18] || (e[18] = [
                     o("历史", -1)
@@ -283,7 +283,7 @@ const De = (w, h) => {
                 }, 8, ["icon", "onClick"]),
                 t(r, {
                   size: "small",
-                  icon: b(Ie),
+                  icon: g(Ie),
                   onClick: (d) => ve(l)
                 }, {
                   default: a(() => [...e[19] || (e[19] = [
@@ -295,7 +295,7 @@ const De = (w, h) => {
                   size: "small",
                   type: "danger",
                   plain: "",
-                  icon: b(se),
+                  icon: g(se),
                   onClick: (d) => pe(l)
                 }, {
                   default: a(() => [...e[20] || (e[20] = [
@@ -412,14 +412,14 @@ const De = (w, h) => {
                           size: "small",
                           text: "",
                           type: "danger",
-                          icon: b(se),
+                          icon: g(se),
                           onClick: (P) => x.value.splice(d, 1)
                         }, null, 8, ["icon", "onClick"])
                       ]))), 128)),
                       t(r, {
                         size: "small",
                         plain: "",
-                        icon: b(ie),
+                        icon: g(ie),
                         onClick: e[5] || (e[5] = (l) => x.value.push({ name: "", required: !1 }))
                       }, {
                         default: a(() => [...e[22] || (e[22] = [
@@ -540,7 +540,7 @@ const De = (w, h) => {
               "empty-text": "暂无历史版本"
             }, {
               default: a(() => [
-                t(g, {
+                t(b, {
                   label: "版本",
                   width: "90"
                 }, {
@@ -558,7 +558,7 @@ const De = (w, h) => {
                   ]),
                   _: 1
                 }),
-                t(g, {
+                t(b, {
                   label: "内容",
                   "min-width": "260",
                   "show-overflow-tooltip": ""
@@ -568,7 +568,7 @@ const De = (w, h) => {
                   ]),
                   _: 1
                 }),
-                t(g, {
+                t(b, {
                   label: "时间",
                   width: "150"
                 }, {
@@ -577,7 +577,7 @@ const De = (w, h) => {
                   ]),
                   _: 1
                 }),
-                t(g, {
+                t(b, {
                   label: "操作",
                   width: "100",
                   fixed: "right"
@@ -585,8 +585,8 @@ const De = (w, h) => {
                   default: a(({ row: l }) => [
                     t(r, {
                       size: "small",
-                      icon: b(Ne),
-                      onClick: (d) => be(l)
+                      icon: g(Ne),
+                      onClick: (d) => ge(l)
                     }, {
                       default: a(() => [...e[28] || (e[28] = [
                         o("恢复", -1)
@@ -605,7 +605,7 @@ const De = (w, h) => {
       ]);
     };
   }
-}, tl = /* @__PURE__ */ De(ll, [["__scopeId", "data-v-5fee9758"]]), sl = {
+}, tl = /* @__PURE__ */ De(ll, [["__scopeId", "data-v-5b0eb57e"]]), sl = {
   mount(w, h) {
     const _ = he(tl, { appId: h.appId });
     return _.use(Ae), _.mount(w), () => _.unmount();

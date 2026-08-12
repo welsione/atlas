@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { ElMessage } from 'element-plus'
 import { CopyDocument, Lock } from '@element-plus/icons-vue'
 import { get } from '../services/http'
+import { copyText } from '../clipboard'
 
 const status = ref<{ authEnabled: boolean } | null>(null)
 
@@ -15,8 +15,7 @@ onMounted(async () => {
 })
 
 async function copyVar(name: string) {
-  await navigator.clipboard?.writeText(name)
-  ElMessage.success(`已复制 ${name}`)
+  await copyText(name, `${name} `)
 }
 </script>
 
@@ -40,41 +39,41 @@ async function copyVar(name: string) {
         <el-descriptions-item label="登录密码">
           <el-tooltip content="管理登录密码（Bearer token 签发依据），复制变量名" placement="top">
             <span class="env-chip">
-              <code class="mono">AIBASE_ADMIN_PASSWORD</code>
-              <el-button size="small" text :icon="CopyDocument" @click="copyVar('AIBASE_ADMIN_PASSWORD')" />
+              <code class="mono">ATLAS_ADMIN_PASSWORD</code>
+              <el-button size="small" text :icon="CopyDocument" @click="copyVar('ATLAS_ADMIN_PASSWORD')" />
             </span>
           </el-tooltip>
         </el-descriptions-item>
         <el-descriptions-item label="固定管理 Token">
-          <el-tooltip content="固定管理令牌，请求头 X-AIBase-Key，复制变量名" placement="top">
+          <el-tooltip content="固定管理令牌，请求头 X-Atlas-Key，复制变量名" placement="top">
             <span class="env-chip">
-              <code class="mono">AIBASE_ADMIN_KEY</code>
-              <el-button size="small" text :icon="CopyDocument" @click="copyVar('AIBASE_ADMIN_KEY')" />
+              <code class="mono">ATLAS_ADMIN_KEY</code>
+              <el-button size="small" text :icon="CopyDocument" @click="copyVar('ATLAS_ADMIN_KEY')" />
             </span>
           </el-tooltip>
-          <span class="env-note">请求头 <code class="mono">X-AIBase-Key</code></span>
+          <span class="env-note">请求头 <code class="mono">X-Atlas-Key</code></span>
         </el-descriptions-item>
         <el-descriptions-item label="数据集加密密钥">
           <el-tooltip content="SECRET 级数据集信封加密 KEK；生产环境必须显式配置（默认开发密钥会被拒绝启动）" placement="top">
             <span class="env-chip">
-              <code class="mono">AIBASE_ENC_KEY</code>
-              <el-button size="small" text :icon="CopyDocument" @click="copyVar('AIBASE_ENC_KEY')" />
+              <code class="mono">ATLAS_ENC_KEY</code>
+              <el-button size="small" text :icon="CopyDocument" @click="copyVar('ATLAS_ENC_KEY')" />
             </span>
           </el-tooltip>
         </el-descriptions-item>
         <el-descriptions-item label="数据目录">
           <el-tooltip content="默认 ./data；外部插件目录 data/plugins/（或仓库 plugins/），复制变量名" placement="top">
             <span class="env-chip">
-              <code class="mono">AIBASE_DATA_DIR</code>
-              <el-button size="small" text :icon="CopyDocument" @click="copyVar('AIBASE_DATA_DIR')" />
+              <code class="mono">ATLAS_DATA_DIR</code>
+              <el-button size="small" text :icon="CopyDocument" @click="copyVar('ATLAS_DATA_DIR')" />
             </span>
           </el-tooltip>
         </el-descriptions-item>
         <el-descriptions-item label="反向代理">
           <el-tooltip content="部署在可信反向代理后开启，才解析 X-Forwarded-For 获取客户端 IP（默认关闭防伪造绕过）" placement="top">
             <span class="env-chip">
-              <code class="mono">AIBASE_TRUST_PROXY</code>
-              <el-button size="small" text :icon="CopyDocument" @click="copyVar('AIBASE_TRUST_PROXY')" />
+              <code class="mono">ATLAS_TRUST_PROXY</code>
+              <el-button size="small" text :icon="CopyDocument" @click="copyVar('ATLAS_TRUST_PROXY')" />
             </span>
           </el-tooltip>
         </el-descriptions-item>
@@ -83,7 +82,7 @@ async function copyVar(name: string) {
 
     <div class="security-note">
       <el-icon class="note-icon"><Lock /></el-icon>
-      <span>提示：生产部署必须配置 <code class="mono">AIBASE_ENC_KEY</code>；启用认证（配置密码或管理 Token）后，使用默认开发加密密钥将导致服务拒绝启动。</span>
+      <span>提示：生产部署必须配置 <code class="mono">ATLAS_ENC_KEY</code>；启用认证（配置密码或管理 Token）后，使用默认开发加密密钥将导致服务拒绝启动。</span>
     </div>
   </div>
 </template>
@@ -93,8 +92,8 @@ async function copyVar(name: string) {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: var(--aibase-bg);
-  border: 1px solid var(--aibase-stroke);
+  background: var(--atlas-bg);
+  border: 1px solid var(--atlas-stroke);
   border-radius: 6px;
   padding: 2px 4px 2px 8px;
 }
@@ -104,13 +103,13 @@ async function copyVar(name: string) {
 }
 
 .env-note {
-  color: var(--aibase-muted);
+  color: var(--atlas-muted);
   font-size: 12px;
   margin-left: 10px;
 }
 
 .auth-hint {
-  color: var(--aibase-muted);
+  color: var(--atlas-muted);
   font-size: 12px;
   margin-left: 10px;
 }

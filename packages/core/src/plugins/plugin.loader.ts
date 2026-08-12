@@ -2,10 +2,10 @@ import { Inject, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/comm
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import type { AibasePlugin } from '@atlas/types'
+import type { AtlasPlugin } from '@atlas/types'
 import { PluginRegistry } from './plugin.registry.js'
 import { PluginService } from './plugin.service.js'
-import { CONFIG, type AIBaseConfig } from '../config.js'
+import { CONFIG, type AtlasConfig } from '../config.js'
 import type { LoadedPlugin, PluginManifest } from './types.js'
 import { createHash } from 'node:crypto'
 
@@ -22,9 +22,9 @@ export class PluginLoader implements OnApplicationBootstrap {
   private readonly logger = new Logger(PluginLoader.name)
 
   constructor(
-    @Inject(CONFIG) private readonly config: AIBaseConfig,
-    private readonly registry: PluginRegistry,
-    private readonly service: PluginService,
+    @Inject(CONFIG) private readonly config: AtlasConfig,
+    @Inject(PluginRegistry) private readonly registry: PluginRegistry,
+    @Inject(PluginService) private readonly service: PluginService,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -32,6 +32,9 @@ export class PluginLoader implements OnApplicationBootstrap {
     await this.loadExternal()
     this.service.syncDefs()
     this.logger.log(`插件加载完成：${this.registry.types().length} 个`)
+    // 存量已启用实例补同步插件注册数据集（幂等，不阻塞启动）
+    void this.service.syncAllEnabledDatasets().then(() =>
+      this.logger.log('插件注册数据集补同步完成'))
   }
 
   /** 扫描 data/plugins/ 全部目录插件（新增/更新/删除三态）。 */
@@ -140,11 +143,11 @@ export class PluginLoader implements OnApplicationBootstrap {
       // cache-busting：URL 带目录 hash query —— Node import 缓存按 URL 键，热替换后强制加载新模块
       const entryUrl = `${pathToFileURL(entryFile).href}?v=${hash}`
       const mod = (await import(/* @vite-ignore */ entryUrl)) as {
-        default?: AibasePlugin
+        default?: AtlasPlugin
       }
       const plugin = mod.default
       if (!plugin?.type) {
-        this.logger.warn(`插件入口未导出 AibasePlugin，跳过: ${artifact}`)
+        this.logger.warn(`插件入口未导出 AtlasPlugin，跳过: ${artifact}`)
         return null
       }
       if (plugin.type !== manifest.pluginType) {

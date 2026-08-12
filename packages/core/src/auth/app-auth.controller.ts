@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Req } from '@nestjs/common'
+import { Body, Controller, Post, Req, Inject } from '@nestjs/common'
 import type { Request } from 'express'
 import { ok, error } from '../common/response.js'
 import { AppTokenService } from './app-token.service.js'
@@ -8,7 +8,7 @@ import { AppTokenService } from './app-token.service.js'
  */
 @Controller('/api/v1/app')
 export class AppAuthController {
-  constructor(private readonly tokenService: AppTokenService) {}
+  constructor(@Inject(AppTokenService) private readonly tokenService: AppTokenService) {}
 
   @Post('auth')
   auth(@Body() body: { appId?: string; appSecret?: string }, @Req() req: Request) {

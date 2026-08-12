@@ -1,5 +1,5 @@
-;(()=>{const s=document.createElement('style');s.textContent=".upload-box[data-v-ba325092]{margin-bottom:14px;padding:14px;background:var(--aibase-bg);border-radius:8px}.update-banner[data-v-ba325092]{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:13px}.update-name[data-v-ba325092]{flex:1}.dropzone[data-v-ba325092] .el-upload-dragger{padding:18px}.upload-row[data-v-ba325092]{display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap}.filter-bar[data-v-ba325092]{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}.spacer[data-v-ba325092]{flex:1}.search[data-v-ba325092]{width:200px}.name-cell[data-v-ba325092]{display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap}.name-cell .main[data-v-ba325092]{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dir-icon[data-v-ba325092]{color:#e6a23c}.file-icon[data-v-ba325092]{color:var(--aibase-muted)}.desc[data-v-ba325092]{font-size:12px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:420px}.token-cell[data-v-ba325092]{display:flex;align-items:center;gap:4px}.file-list[data-v-ba325092]{max-height:260px;overflow:auto}.file-item[data-v-ba325092]{display:flex;gap:8px;font-size:12px;padding:3px 0;align-items:baseline}.f-name[data-v-ba325092]{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace}.f-size[data-v-ba325092]{width:64px;text-align:right;flex-shrink:0}.f-sha[data-v-ba325092]{width:60px;flex-shrink:0}.muted[data-v-ba325092]{color:var(--aibase-muted)}\n";document.head.appendChild(s)})();import { ref as f, computed as L, onMounted as ne, resolveComponent as p, resolveDirective as oe, openBlock as s, createElementBlock as k, createElementVNode as u, createVNode as n, withCtx as a, createTextVNode as o, toDisplayString as i, createCommentVNode as R, unref as m, Fragment as N, renderList as S, createBlock as b, withDirectives as ie, createApp as se } from "vue";
-import ue, { ElMessage as C, ElMessageBox as de } from "element-plus";
+;(()=>{const s=document.createElement('style');s.textContent=".upload-box[data-v-a779aa66]{margin-bottom:14px;padding:14px;background:var(--atlas-bg);border-radius:8px}.update-banner[data-v-a779aa66]{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:13px}.update-name[data-v-a779aa66]{flex:1}.dropzone[data-v-a779aa66] .el-upload-dragger{padding:18px}.upload-row[data-v-a779aa66]{display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap}.filter-bar[data-v-a779aa66]{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}.spacer[data-v-a779aa66]{flex:1}.search[data-v-a779aa66]{width:200px}.name-cell[data-v-a779aa66]{display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap}.name-cell .main[data-v-a779aa66]{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dir-icon[data-v-a779aa66]{color:#e6a23c}.file-icon[data-v-a779aa66]{color:var(--atlas-muted)}.desc[data-v-a779aa66]{font-size:12px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:420px}.token-cell[data-v-a779aa66]{display:flex;align-items:center;gap:4px}.file-list[data-v-a779aa66]{max-height:260px;overflow:auto}.file-item[data-v-a779aa66]{display:flex;gap:8px;font-size:12px;padding:3px 0;align-items:baseline}.f-name[data-v-a779aa66]{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace}.f-size[data-v-a779aa66]{width:64px;text-align:right;flex-shrink:0}.f-sha[data-v-a779aa66]{width:60px;flex-shrink:0}.muted[data-v-a779aa66]{color:var(--atlas-muted)}\n";document.head.appendChild(s)})();import { ref as f, computed as L, onMounted as ne, resolveComponent as p, resolveDirective as oe, openBlock as s, createElementBlock as k, createElementVNode as u, createVNode as n, withCtx as a, createTextVNode as o, toDisplayString as i, createCommentVNode as R, unref as m, Fragment as N, renderList as S, createBlock as C, withDirectives as ie, createApp as se } from "vue";
+import ue, { ElMessage as b, ElMessageBox as de } from "element-plus";
 import { Upload as M, Search as ce, Refresh as re, FolderOpened as pe, Files as fe, CopyDocument as me, Download as ve, Delete as _e } from "@element-plus/icons-vue";
 import { get as ye, post as Y, del as ge } from "@atlas/runtime";
 const ke = (h, $) => {
@@ -7,7 +7,7 @@ const ke = (h, $) => {
   for (const [w, g] of $)
     d[w] = g;
   return d;
-}, be = { class: "surface" }, Ce = { class: "upload-box" }, he = {
+}, Ce = { class: "surface" }, be = { class: "upload-box" }, he = {
   key: 0,
   class: "update-banner"
 }, we = { class: "update-name" }, xe = { class: "upload-row" }, $e = { class: "filter-bar" }, ze = { class: "name-cell" }, Ve = { class: "main" }, De = { class: "file-list" }, Ie = ["title"], Re = { class: "f-size muted" }, Te = ["title"], Be = {
@@ -44,7 +44,7 @@ const ke = (h, $) => {
     }
     async function G() {
       if (!x.value.length) {
-        C.warning("请选择文件");
+        b.warning("请选择文件");
         return;
       }
       T.value = !0;
@@ -54,7 +54,7 @@ const ke = (h, $) => {
         for (const v of x.value)
           t.append("files", v.raw, v.name);
         const e = await Y(I() + "/upload", t);
-        C.success(c.value ? `「${c.value.name}」已更新为 v${e.version}` : "上传成功"), U(), await D();
+        b.success(c.value ? `「${c.value.name}」已更新为 v${e.version}` : "上传成功"), U(), await D();
       } finally {
         T.value = !1;
       }
@@ -62,16 +62,16 @@ const ke = (h, $) => {
     async function H(t) {
       const e = t.kind === "DIRECTORY" ? `${t.name}（${t.fileCount} 个文件）` : t.name;
       try {
-        await de.confirm(`确认删除「${e}」？删除后公开链接失效，不可恢复。`, "删除模型文件", { type: "error" }), await ge(`${I()}/delete/${t.id}`), await D(), C.success("已删除");
+        await de.confirm(`确认删除「${e}」？删除后公开链接失效，不可恢复。`, "删除模型文件", { type: "error" }), await ge(`${I()}/delete/${t.id}`), await D(), b.success("已删除");
       } catch {
       }
     }
     async function O(t) {
       if (t.token) return t.token;
       if (t.kind === "DIRECTORY")
-        return C.warning("目录（多文件）不支持公开下载链接"), null;
+        return b.warning("目录（多文件）不支持公开下载链接"), null;
       const e = await Y(`${I()}/publish/${t.id}`);
-      return C.success("已生成公开链接"), await D(), e.token;
+      return b.success("已生成公开链接"), await D(), e.token;
     }
     async function J(t) {
       const e = await O(t);
@@ -81,9 +81,9 @@ const ke = (h, $) => {
       const e = await O(t);
       if (e)
         try {
-          await navigator.clipboard.writeText(`${location.origin}/api/files/${e}/download`), C.success("下载链接已复制");
+          await navigator.clipboard.writeText(`${location.origin}/api/files/${e}/download`), b.success("下载链接已复制");
         } catch {
-          C.warning("复制失败，请手动复制 token");
+          b.warning("复制失败，请手动复制 token");
         }
     }
     function A(t) {
@@ -94,8 +94,8 @@ const ke = (h, $) => {
     }
     return (t, e) => {
       const v = p("el-tag"), _ = p("el-button"), E = p("el-icon"), X = p("el-upload"), F = p("el-input"), Z = p("el-radio-button"), ee = p("el-radio-group"), te = p("el-popover"), y = p("el-table-column"), le = p("el-table"), ae = oe("loading");
-      return s(), k("div", be, [
-        u("div", Ce, [
+      return s(), k("div", Ce, [
+        u("div", be, [
           c.value ? (s(), k("div", he, [
             n(v, {
               type: "warning",
@@ -175,7 +175,7 @@ const ke = (h, $) => {
             size: "small"
           }, {
             default: a(() => [
-              (s(!0), k(N, null, S(q.value, (l) => (s(), b(Z, {
+              (s(!0), k(N, null, S(q.value, (l) => (s(), C(Z, {
                 key: l,
                 value: l
               }, {
@@ -204,7 +204,7 @@ const ke = (h, $) => {
             onClick: D
           }, null, 8, ["icon", "loading"])
         ]),
-        ie((s(), b(le, {
+        ie((s(), C(le, {
           data: K.value,
           "empty-text": "暂无模型文件"
         }, {
@@ -215,7 +215,7 @@ const ke = (h, $) => {
             }, {
               default: a(({ row: l }) => [
                 u("div", ze, [
-                  l.kind === "DIRECTORY" ? (s(), b(E, {
+                  l.kind === "DIRECTORY" ? (s(), C(E, {
                     key: 0,
                     class: "dir-icon"
                   }, {
@@ -223,7 +223,7 @@ const ke = (h, $) => {
                       n(m(pe))
                     ]),
                     _: 1
-                  })) : (s(), b(E, {
+                  })) : (s(), C(E, {
                     key: 1,
                     class: "file-icon"
                   }, {
@@ -233,7 +233,7 @@ const ke = (h, $) => {
                     _: 1
                   })),
                   u("span", Ve, i(l.name), 1),
-                  l.fileCount > 1 ? (s(), b(v, {
+                  l.fileCount > 1 ? (s(), C(v, {
                     key: 2,
                     size: "small",
                     type: "warning",
@@ -244,7 +244,7 @@ const ke = (h, $) => {
                     ]),
                     _: 2
                   }, 1024)) : R("", !0),
-                  l.fileCount > 1 ? (s(), b(te, {
+                  l.fileCount > 1 ? (s(), C(te, {
                     key: 3,
                     placement: "right",
                     width: "320",
@@ -362,7 +362,7 @@ const ke = (h, $) => {
                     ])]),
                     _: 1
                   }, 8, ["icon", "onClick"])
-                ])) : (s(), b(v, {
+                ])) : (s(), C(v, {
                   key: 1,
                   size: "small",
                   type: "info",
@@ -437,7 +437,7 @@ const ke = (h, $) => {
       ]);
     };
   }
-}, Oe = /* @__PURE__ */ ke(Ue, [["__scopeId", "data-v-ba325092"]]), Me = {
+}, Oe = /* @__PURE__ */ ke(Ue, [["__scopeId", "data-v-a779aa66"]]), Me = {
   mount(h, $) {
     const d = se(Oe, { appId: $.appId });
     return d.use(ue), d.mount(h), () => d.unmount();

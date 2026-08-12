@@ -92,6 +92,20 @@ export class DatasetRepository {
     this.db.prepare('UPDATE datasets SET last_refreshed_at = ? WHERE id = ?').run(lastRefreshedAt, id)
   }
 
+  /** 插件注册调度同步（注册声明的 refreshMode/interval 变化时更新）。 */
+  updateRefreshSchedule(id: number, mode: string, intervalSeconds: number | null): void {
+    this.db
+      .prepare('UPDATE datasets SET refresh_mode = ?, refresh_interval_seconds = ?, updated_at = ? WHERE id = ?')
+      .run(mode, intervalSeconds, now(), id)
+  }
+
+  /** 资产清单变更：写入清单并 bump 版本（内容哈希不变）。 */
+  updateAssets(id: number, assetsJson: string, version: number, now: string): void {
+    this.db
+      .prepare('UPDATE datasets SET assets_json = ?, version = ?, updated_at = ? WHERE id = ?')
+      .run(assetsJson, version, now, id)
+  }
+
   findAllByApp(appId: number): Dataset[] {
     return (this.db.prepare('SELECT * FROM datasets WHERE app_id = ? ORDER BY id').all(appId) as DatasetRow[])
       .map(rowToDataset)
@@ -155,7 +169,8 @@ export class DatasetRepository {
   insertGrant(datasetId: number, appId: number): void {
     this.db
       .prepare(
-        'INSERT OR IGNORE INTO dataset_app_grants (dataset_id, app_id, granted_at) VALUES (?,?,?)',
+        `INSERT INTO dataset_app_grants (dataset_id, app_id, granted_at) VALUES (?,?,?)
+         ON CONFLICT(dataset_id, app_id) DO UPDATE SET revoked_at = NULL, granted_at = excluded.granted_at`,
       )
       .run(datasetId, appId, now())
   }

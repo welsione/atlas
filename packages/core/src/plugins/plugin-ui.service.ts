@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { PluginRegistry } from './plugin.registry.js'
-import { CONFIG, type AIBaseConfig } from '../config.js'
+import { CONFIG, type AtlasConfig } from '../config.js'
 import type { PluginUiManifest } from '@atlas/types'
 
 /**
@@ -16,8 +16,8 @@ export class PluginUiService {
   private readonly logger = new Logger(PluginUiService.name)
 
   constructor(
-    @Inject(CONFIG) private readonly config: AIBaseConfig,
-    private readonly registry: PluginRegistry,
+    @Inject(CONFIG) private readonly config: AtlasConfig,
+    @Inject(PluginRegistry) private readonly registry: PluginRegistry,
   ) {}
 
   /** 全量 UI 清单（无 UI 的插件不出现）。 */

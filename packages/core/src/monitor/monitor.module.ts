@@ -6,5 +6,6 @@ import { MonitorController } from './monitor.controller.js'
 @Module({
   controllers: [MonitorController],
   providers: [MonitorRepository],
+  exports: [MonitorRepository],
 })
 export class MonitorModule {}

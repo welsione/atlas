@@ -11,7 +11,9 @@ const config = loadConfig()
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule)
-  // CORS：默认全开（本地开发）；AIBASE_CORS_ORIGIN 逗号分隔限定来源（生产建议）
+  // 优雅关闭：让 DatabaseModule 的 onApplicationShutdown → db.close() 在 SIGTERM/SIGINT 时执行（WAL 连接不优雅关闭会丢尾部数据）
+  app.enableShutdownHooks()
+  // CORS：默认全开（本地开发）；ATLAS_CORS_ORIGIN 逗号分隔限定来源（生产建议）
   const origins = config.corsOrigin.split(',').map((s) => s.trim()).filter(Boolean)
   app.enableCors(origins.includes('*') ? {} : { origin: origins })
   const logger = new Logger('Bootstrap')
@@ -41,9 +43,9 @@ async function bootstrap() {
   }
 
   await app.listen(config.port)
-  logger.log(`AIBase 已启动：http://127.0.0.1:${config.port}（data-dir=${config.dataDir}）`)
+  logger.log(`Atlas 已启动：http://127.0.0.1:${config.port}（data-dir=${config.dataDir}）`)
   if (!config.authEnabled) {
-    logger.warn('未配置 AIBASE_ADMIN_PASSWORD / AIBASE_ADMIN_KEY，管理接口未启用认证（仅限本地开发，生产必须设置）')
+    logger.warn('未配置 ATLAS_ADMIN_PASSWORD / ATLAS_ADMIN_KEY，管理接口未启用认证（仅限本地开发，生产必须设置）')
   }
 }
 

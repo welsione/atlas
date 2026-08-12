@@ -1,13 +1,17 @@
 import { Inject, Injectable } from '@nestjs/common'
 import { DB } from '../db/database.module.js'
 import type Database from 'better-sqlite3'
+import { ExtensionRegistry } from '../spi/extension.registry.js'
 
 export type MonitorRange = '24h' | '7d' | 'all'
 
 /** monitor 插件聚合仓储：基于 api_access_logs（数据集 + 模型文件全部数据面调用）。 */
 @Injectable()
 export class MonitorRepository {
-  constructor(@Inject(DB) private readonly db: Database.Database) {}
+  constructor(
+    @Inject(DB) private readonly db: Database.Database,
+    @Inject(ExtensionRegistry) private readonly extensions: ExtensionRegistry,
+  ) {}
 
   private since(range: MonitorRange): string | null {
     if (range === '24h') return "datetime('now', '-1 day', 'localtime')"
@@ -55,13 +59,13 @@ export class MonitorRepository {
       .all(appId) as Array<Record<string, unknown>>
   }
 
-  /** Top 资源：JOIN datasets/model_files 名称。 */
+  /** Top 资源：JOIN datasets/model_files 名称；非内置资源类型经 ExtensionRegistry 解析显示名。 */
   topResources(appId: number, range: MonitorRange, limit: number): Array<Record<string, unknown>> {
     const since = this.since(range)
     const where = since
       ? 'WHERE l.owner_app_id = ? AND l.accessed_at >= ' + since
       : 'WHERE l.owner_app_id = ?'
-    return this.db
+    const rows = this.db
       .prepare(
         `SELECT l.resource_type resource_type, l.resource_id resource_id,
            COALESCE(d.name, mf.name, '') name,
@@ -74,6 +78,7 @@ export class MonitorRepository {
          ${where} GROUP BY l.resource_type, l.resource_id ORDER BY count DESC LIMIT ?`,
       )
       .all(appId, limit) as Array<Record<string, unknown>>
+    return rows.map((r) => this.resolveName(r))
   }
 
   topIps(appId: number, range: MonitorRange, limit: number): Array<Record<string, unknown>> {
@@ -117,7 +122,7 @@ export class MonitorRepository {
   }
 
   recent(appId: number, limit: number): Array<Record<string, unknown>> {
-    return this.db
+    const rows = this.db
       .prepare(
         `SELECT l.id, l.resource_type resource_type, l.resource_id resource_id,
            COALESCE(d.name, mf.name, '') name,
@@ -128,5 +133,16 @@ export class MonitorRepository {
          WHERE l.owner_app_id = ? ORDER BY l.id DESC LIMIT ?`,
       )
       .all(appId, limit) as Array<Record<string, unknown>>
+    return rows.map((r) => this.resolveName(r))
+  }
+
+  /** 非内置资源类型（非 DATASET/MODEL_FILE）经插件 resourceName() 解析显示名，替换 LEFT JOIN 的空名。 */
+  private resolveName(row: Record<string, unknown>): Record<string, unknown> {
+    const type = row.resource_type as string
+    if (type !== 'DATASET' && type !== 'MODEL_FILE' && !row.name) {
+      const resolved = this.extensions.resolveResourceName(type, Number(row.resource_id))
+      if (resolved) row.name = resolved
+    }
+    return row
   }
 }

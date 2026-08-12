@@ -1,11 +1,11 @@
-import type { AibasePlugin, PluginEnvironment } from '@atlas/types'
+import type { AtlasPlugin, PluginEnvironment } from '@atlas/types'
 
 /**
  * 插件模板：复制本目录即可开发新插件。
  * 目录结构：manifest.json（{pluginType, name, description, version, defaultDataScope, entry}）
  *          + src/index.ts（本文件）+ ui/（前端面板产物，可选）
  */
-const plugin: AibasePlugin = {
+const plugin: AtlasPlugin = {
   type: 'your-plugin-type', // 全局唯一（与 manifest.pluginType 一致）
   name: '插件名称',
   describe: '插件说明',

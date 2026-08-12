@@ -2,7 +2,7 @@ import axios, { AxiosError } from 'axios'
 import { ElMessage } from 'element-plus'
 import type { ApiResponse } from '../types'
 
-export const AUTH_TOKEN_KEY = 'aibase-token'
+export const AUTH_TOKEN_KEY = 'atlas-token'
 
 const http = axios.create({
   baseURL: '',
@@ -32,7 +32,7 @@ http.interceptors.response.use(
   (error: AxiosError<ApiResponse<unknown>>) => {
     if (error.response?.status === 401) {
       localStorage.removeItem(AUTH_TOKEN_KEY)
-      window.dispatchEvent(new CustomEvent('aibase:unauthorized'))
+      window.dispatchEvent(new CustomEvent('atlas:unauthorized'))
       ElMessage.warning('请先登录')
       return Promise.reject(error)
     }

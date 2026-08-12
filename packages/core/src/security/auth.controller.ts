@@ -3,7 +3,7 @@ import type { Request } from 'express'
 import { ok, error } from '../common/response.js'
 import { AuthService } from './auth.service.js'
 import { clientIp, createRateLimiter } from '../common/utils.js'
-import { CONFIG, type AIBaseConfig } from '../config.js'
+import { CONFIG, type AtlasConfig } from '../config.js'
 
 /** 登录限流：每 IP 每分钟 10 次尝试。 */
 const loginLimiter = createRateLimiter(10, 60_000)
@@ -14,8 +14,8 @@ const loginLimiter = createRateLimiter(10, 60_000)
 @Controller('/api/auth')
 export class AuthController {
   constructor(
-    private readonly authService: AuthService,
-    @Inject(CONFIG) private readonly config: AIBaseConfig,
+    @Inject(AuthService) private readonly authService: AuthService,
+    @Inject(CONFIG) private readonly config: AtlasConfig,
   ) {}
 
   @Post('login')

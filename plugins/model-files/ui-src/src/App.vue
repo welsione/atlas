@@ -223,7 +223,7 @@ function fmtTime(ts) {
 .upload-box {
   margin-bottom: 14px;
   padding: 14px;
-  background: var(--aibase-bg);
+  background: var(--atlas-bg);
   border-radius: 8px;
 }
 .update-banner {
@@ -266,7 +266,7 @@ function fmtTime(ts) {
   white-space: nowrap;
 }
 .dir-icon { color: #e6a23c; }
-.file-icon { color: var(--aibase-muted); }
+.file-icon { color: var(--atlas-muted); }
 .desc {
   font-size: 12px;
   margin-top: 2px;
@@ -300,5 +300,5 @@ function fmtTime(ts) {
 }
 .f-size { width: 64px; text-align: right; flex-shrink: 0; }
 .f-sha { width: 60px; flex-shrink: 0; }
-.muted { color: var(--aibase-muted); }
+.muted { color: var(--atlas-muted); }
 </style>

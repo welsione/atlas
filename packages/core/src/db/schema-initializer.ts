@@ -1,20 +1,20 @@
 import { readFileSync, existsSync, mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { Logger } from '@nestjs/common'
-import type { AIBaseConfig } from '../config.js'
+import type { AtlasConfig } from '../config.js'
 import type Database from 'better-sqlite3'
 
 /**
  * 数据库结构初始化（幂等 + 版本化迁移）：
  * - schema.sql 全部 CREATE TABLE/INDEX IF NOT EXISTS，可直接幂等执行
  * - 结构变更走 user_version 迁移（migrations 按版本升序应用）
- * - 仅当 AIBASE_DEV_RESET_DB=1（开发重置）时 DROP 全表重建
+ * - 仅当 ATLAS_DEV_RESET_DB=1（开发重置）时 DROP 全表重建
  * 生产数据跨重启保留。
  */
 export class SchemaInitializer {
   private readonly logger = new Logger(SchemaInitializer.name)
 
-  constructor(private readonly config: AIBaseConfig) {}
+  constructor(private readonly config: AtlasConfig) {}
 
   /** 当前结构版本。 */
   static readonly SCHEMA_VERSION = 1
@@ -31,6 +31,33 @@ export class SchemaInitializer {
         }
       },
     },
+    {
+      // v2：plugin_store 加 plugin_type 维度，隔离不同插件（防跨插件同 key 碰撞 + 卸载误删兄弟数据）。
+      // SQLite 无法直接改表内 UNIQUE 约束，需重建表；旧行 plugin_type 回填 ''（上线前库无生产数据可接受）。
+      version: 2,
+      up: (db) => {
+        const cols = db.prepare('PRAGMA table_info(plugin_store)').all() as Array<{ name: string }>
+        if (cols.some((c) => c.name === 'plugin_type')) return
+        db.exec(`
+          ALTER TABLE plugin_store RENAME TO plugin_store_old;
+          CREATE TABLE plugin_store (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            instance_id INTEGER NOT NULL,
+            plugin_type TEXT NOT NULL DEFAULT '',
+            entity_id TEXT NOT NULL DEFAULT '',
+            entity_key TEXT NOT NULL,
+            value_json TEXT NOT NULL DEFAULT '{}',
+            version INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(instance_id, plugin_type, entity_id, entity_key)
+          );
+          INSERT INTO plugin_store (id, instance_id, plugin_type, entity_id, entity_key, value_json, version, created_at, updated_at)
+            SELECT id, instance_id, '', entity_id, entity_key, value_json, version, created_at, updated_at FROM plugin_store_old;
+          DROP TABLE plugin_store_old;
+        `)
+      },
+    },
   ]
 
   /** 打开（或创建）数据库并完成结构初始化。 */
@@ -44,7 +71,7 @@ export class SchemaInitializer {
         db.exec(`DROP TABLE IF EXISTS ${table}`)
       }
       db.pragma('user_version = 0')
-      this.logger.warn('AIBASE_DEV_RESET_DB=1：已清空全部表（开发重置）')
+      this.logger.warn('ATLAS_DEV_RESET_DB=1：已清空全部表（开发重置）')
     }
     const schemaPath = resolve(__dirname, 'schema.sql')
     const sql = readFileSync(schemaPath, 'utf8')
