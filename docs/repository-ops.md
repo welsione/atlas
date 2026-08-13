@@ -21,7 +21,7 @@
 
 | 能力 | 机制 | 触发 |
 |------|------|------|
-| 版本发布 | release-please（commit 语义驱动） | master 推送 |
+| 版本发布 | release-please（commit 语义驱动） | release 分支推送 |
 | Release Notes 润色 | opencode（OpenCode Go 订阅） | release 发布 |
 | PR 自动 AI 审查 | opencode GitHub Agent | PR 打开/更新 |
 | AI 按需操作 | `/opencode` / `/oc` 评论 | issue/PR 评论 |
@@ -44,10 +44,10 @@
 | `feat!` 或 body 含 `BREAKING CHANGE:` | major（0.2.0 → 1.0.0） |
 | `docs` / `chore` / `test` / `ci` 等 | 无版本变化 |
 
-**完整流程**（master 推送后自动）：
+**完整流程**（release 分支推送后自动；master/pre-release 推送不触发）：
 
 ```text
-push master → release-please 评估 → 开 release PR（bump 4 处 package.json + package-lock + CHANGELOG）
+push release → release-please 评估 → 开 release PR（bump 4 处 package.json + package-lock + CHANGELOG）
     → 人工合并 release PR → 自动打 tag + 创建 GitHub Release
     → tag 触发 build-push.yml 构建 GHCR 镜像（ghcr.io/welsione/atlas）
     → release 发布触发 release-notes.yml 用 opencode 润色 Release Notes

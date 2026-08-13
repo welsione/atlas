@@ -9,7 +9,31 @@
 - 技术栈：后端 NestJS + better-sqlite3 + node:crypto；前端 Vue 3 + Element Plus + Vite；Node ≥ 22（插件直接运行 `.ts`）。
 - 仓库形态：npm workspaces monorepo（`packages/types` + `packages/core` + `packages/web`），插件在 `plugins/` 目录。
 
-## 2. 常用命令
+## 2. 分支与发布规范
+
+### 2.1 分支模型
+
+| 分支 | 定位 | 发布行为 |
+|------|------|----------|
+| `master` | **默认分支 / 日常开发主线**：所有功能分支 PR 合并到这里 | 仅跑 CI，**不发布** |
+| `pre-release` | 测试发布分支：预发布验证、灰度环境 | 仅跑 CI，不触发发布 |
+| `release` | **产品发布分支**：唯一触发发布的分支 | 推送 → release-please 评估版本 → release PR → 合并后 tag + GitHub Release + 镜像 |
+| 功能分支 | 日常开发（`feat/` `fix/` `docs/` 等） | 仅跑 CI |
+
+### 2.2 发布流程
+
+```text
+功能分支 → 合入 master（日常开发，不发布）
+        → 合入 pre-release 测试验证（可选）
+        → 合入 release 正式发布（git push origin master:release 或 PR 合入）
+```
+
+- **只有 `release` 分支上的代码变动才提升版本号、构建镜像、发 release**；`master`/`pre-release` 上的提交不影响版本。
+- 版本由 Conventional Commits 语义自动推断：`feat`→minor、`fix`/`perf`→patch、`feat!`/`BREAKING CHANGE`→major、`docs`/`chore`/`ci`/`test` 等→无版本变化。
+- 发布链路：release 推送 → release-please 开 release PR（bump 4 处 package.json + package-lock + CHANGELOG）→ 人工合并 → 自动 tag + GitHub Release → GHCR 镜像 → opencode AI 润色 Release Notes。
+- 完整机制与故障排查见 [docs/repository-ops.md](docs/repository-ops.md)。
+
+## 3. 常用命令
 
 ```bash
 npm install            # 安装依赖
@@ -26,7 +50,7 @@ npm run lint:md        # markdownlint 文档规范检查（pre-commit 自动跑�
 - **提交信息必须符合 Conventional Commits**（commit-msg 钩子 + CI 双重强制）；`feat` 会触发 release-please minor 发布，勿滥用。
 - 版本发布、AI 审查（PR 自动 + `/opencode` 评论）、Dependabot、labeler/stale 等仓库运维机制见 [docs/repository-ops.md](docs/repository-ops.md)。
 
-## 3. 目录结构
+## 4. 目录结构
 
 ```text
 packages/
@@ -37,12 +61,12 @@ plugins/
   providers/ prompts/ model-files/ machine-monitor/   目录插件（前后端一体）
   template/    插件模板（加载器恒跳过）
 docs/
-  agent/    开发规范（见 §4，改代码前必读）
+  agent/    开发规范（见 §5，改代码前必读）
   plugin-development.md   插件开发教程/契约
   spi-development.md      核心功能 SPI 契约
 ```
 
-## 4. 开发规范（必读指引）
+## 5. 开发规范（必读指引）
 
 > **改哪块先读哪份**，红线与反模式都固化在规范里。
 
@@ -57,7 +81,7 @@ docs/
 
 **规范效力**：红线（❌ 禁止）Code Review 必须拦截；约定（✅ 推荐）偏离需说明理由；存量违规在「触碰该文件时顺手修正」，不做一次性大重构。
 
-## 5. 核心约定速查（红线摘要）
+## 6. 核心约定速查（红线摘要）
 
 > 完整内容见规范正文，此处仅列 agent 最容易踩的硬性约定。
 
@@ -93,7 +117,7 @@ docs/
 - 样式只引用 `--atlas-*` token，**禁止硬编码颜色/字号/圆角**；新增颜色先加 token 再用。
 - 状态双通道表达（Tag + 文字/图标），不只靠颜色；删除/轮换必须有二次确认。
 
-## 6. 已知陷阱（务必避开）
+## 7. 已知陷阱（务必避开）
 
 1. **删除单个插件实例时不要调用插件级 `destroy()`**：`AtlasPlugin.destroy()` 无实例上下文，会误伤其他应用（尤其 `GLOBAL_SHARED` 插件）。—— review H1 / 规范 R-01
 2. **卸载插件后新建应用会半成功失败**：`autoInstantiate` 遍历 `findAllDefs()` 含 `loaded=false` 的 def，`enableInstance` 会抛错且 app 已落库。—— review H2 / 规范 R-02
@@ -105,7 +129,7 @@ docs/
 
 > 完整问题清单与修复建议见评审记录（`.dev/review/`，不入 git）。
 
-## 7. 提交前自查清单
+## 8. 提交前自查清单
 
 - [ ] 改动对应的规范已读，红线无违反
 - [ ] 后端：测试通过（`npm test`）；新逻辑补了 `*.spec.ts`
