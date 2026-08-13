@@ -1,20 +1,25 @@
 docs:
-  - "docs/**/*"
-  - "*.md"
-  - "AGENTS.md"
-  - "CHANGELOG.md"
+  any:
+    - "docs/**/*"
+    - "*.md"
+    - "AGENTS.md"
+    - "CHANGELOG.md"
 
 core:
-  - "packages/core/**/*"
-  - "packages/types/**/*"
+  any:
+    - "packages/core/**/*"
+    - "packages/types/**/*"
 
 web:
-  - "packages/web/**/*"
+  any:
+    - "packages/web/**/*"
 
 plugins:
-  - "plugins/**/*"
+  any:
+    - "plugins/**/*"
 
 ci:
-  - ".github/**/*"
-  - "package.json"
-  - "package-lock.json"
+  any:
+    - ".github/**/*"
+    - "package.json"
+    - "package-lock.json"
