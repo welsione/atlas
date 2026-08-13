@@ -113,5 +113,6 @@
       "section": "回滚",
       "hidden": true
     }
-  ]
+  ],
+  "bump-minor-pre-major": true
 }
