@@ -41,7 +41,7 @@ push master → release-please 评估 → 开 release PR（bump 4 处 package.js
 
 - 版本号四处同步：根 `package.json` + `packages/{types,core,web}`（`linked-versions` 插件锁定）。
 - **release PR 合并后发布即生效**；如需撤销，回滚 release PR 即可（下个 release PR 会修正版本）。
-- 首次基线：`v0.2.0` tag 标记上一发布状态（见 §7 部署清单）。
+- 首次基线：`atlas-v0.2.0` tag 标记上一发布状态（见 §7 部署清单）。
 
 ## 3. AI 能力（opencode + OpenCode Go）
 
@@ -124,7 +124,7 @@ type ∈ feat | fix | perf | refactor | test | docs | build | chore | ci | style
 ### 首次部署清单（新 clone / 新 GitHub 仓库）
 
 1. 配置 `OPENCODE_API_KEY`（Settings → Secrets and variables → Actions）。
-2. 确认基线 tag：`git tag -l` 应含 `v0.2.0`；缺失时 `git tag v0.2.0 <上次发布 commit> && git push origin v0.2.0`。
+2. 确认基线 tag：`git tag -l` 应含 `atlas-v0.2.0`；缺失时 `git tag atlas-v0.2.0 <上次发布 commit> && git push origin atlas-v0.2.0`。
 3. 推送 master 后观察：CI 通过 → release-please 开 0.3.0 候选 release PR（验证版本推断，不合并）。
 4. 首次验证 AI：手动触发 `opencode-review` workflow 或对任意 PR 评论 `/opencode`。
 

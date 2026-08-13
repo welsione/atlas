@@ -33,5 +33,5 @@
 - 应用空间 CRUD、应用凭证（app_id + app_secret）
 - 基础数据集发布与消费
 
-[0.2.0]: https://github.com/welsione/atlas/compare/v0.1.0...v0.2.0
+[0.2.0]: https://github.com/welsione/atlas/compare/atlas-v0.1.0...atlas-v0.2.0
 [0.1.0]: https://github.com/welsione/atlas/releases/tag/v0.1.0
