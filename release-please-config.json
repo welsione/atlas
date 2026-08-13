@@ -34,7 +34,8 @@
     {
       "type": "linked-versions",
       "groupName": "atlas",
-      "components": [".", "packages/types", "packages/core", "packages/web"]
+      "components": [".", "packages/types", "packages/core", "packages/web"],
+      "tag-pattern": "v{version}"
     }
   ],
   "changelog-sections": [
