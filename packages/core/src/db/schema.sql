@@ -150,15 +150,16 @@ CREATE TABLE IF NOT EXISTS auth_logs (
 );
 CREATE INDEX IF NOT EXISTS idx_auth_logs_app ON auth_logs(app_id, created_at);
 
--- ---------- 接口访问日志（对外发布接口监控：meta/data/secrets/assets/download 全量记录） ----------
+-- ---------- 接口访问日志（对外发布接口监控：meta/data/secrets/assets/download + 插件 ep 端点全量记录） ----------
 CREATE TABLE IF NOT EXISTS api_access_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     owner_app_id INTEGER NOT NULL,            -- 发布方（资源属主）
     consumer_app_id INTEGER NOT NULL DEFAULT 0, -- 消费方（0=匿名 token）
-    resource_type TEXT NOT NULL DEFAULT 'DATASET', -- DATASET / MODEL_FILE
+    resource_type TEXT NOT NULL DEFAULT 'DATASET', -- DATASET / MODEL_FILE / PLUGIN_EP
     resource_id INTEGER NOT NULL DEFAULT 0,
+    plugin_type TEXT NOT NULL DEFAULT '',     -- PLUGIN_EP 行记录来源插件
     token TEXT NOT NULL DEFAULT '',
-    endpoint TEXT NOT NULL DEFAULT '',        -- meta/data/secrets/assets/download
+    endpoint TEXT NOT NULL DEFAULT '',        -- meta/data/secrets/assets/download 或 {method} {path}（PLUGIN_EP）
     http_status INTEGER NOT NULL DEFAULT 0,   -- 200/304/400/429...
     bytes INTEGER NOT NULL DEFAULT 0,
     ip TEXT NOT NULL DEFAULT '',
@@ -167,6 +168,20 @@ CREATE TABLE IF NOT EXISTS api_access_logs (
 );
 CREATE INDEX IF NOT EXISTS idx_api_access_owner ON api_access_logs(owner_app_id, accessed_at);
 CREATE INDEX IF NOT EXISTS idx_api_access_ip ON api_access_logs(ip, accessed_at);
+-- idx_api_access_ep 依赖 plugin_type 列，由 migration v3 在加列后创建（兼容已有库）
+
+-- ---------- 接口启停规则（接口监控管理面：按应用维度控制插件对外端点） ----------
+CREATE TABLE IF NOT EXISTS endpoint_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    app_id INTEGER NOT NULL,                  -- 应用维度；无规则行 = 默认启用
+    plugin_type TEXT NOT NULL,
+    method TEXT NOT NULL,
+    endpoint_path TEXT NOT NULL,              -- 插件声明路径（ep/ 之后，如 status、history/{hours}）
+    enabled INTEGER NOT NULL DEFAULT 0,       -- 0=停用 1=启用
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(app_id, plugin_type, method, endpoint_path)
+);
 
 -- ---------- 运维台工作日志（平台级：插件通过 env.ops() 写入，运维台跨应用查看） ----------
 CREATE TABLE IF NOT EXISTS ops_logs (

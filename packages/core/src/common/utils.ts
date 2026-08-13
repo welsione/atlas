@@ -5,6 +5,18 @@ export function now(): string {
   return new Date().toISOString().slice(0, 19).replace('T', ' ')
 }
 
+/** 分页参数归一：page 从 1 起，size 默认 10 上限 100。 */
+export function pageParams(
+  page: string | number | undefined,
+  size: string | number | undefined,
+  defaultSize = 10,
+  maxSize = 100,
+): { page: number; size: number } {
+  const p = Math.max(1, Math.floor(Number(page ?? 1)) || 1)
+  const s = Math.min(maxSize, Math.max(1, Math.floor(Number(size ?? defaultSize)) || defaultSize))
+  return { page: p, size: s }
+}
+
 /**
  * 客户端 IP：默认仅信任 socket 地址（防 XFF 伪造绕过黑名单/限流/审计）；
  * 仅当 trustProxy 开启时解析 x-forwarded-for 首值（部署在可信反向代理后）。

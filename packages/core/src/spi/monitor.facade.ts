@@ -19,19 +19,19 @@ export class MonitorFacade {
   }
 
   endpoints(appId: number, range?: PluginMonitorRange): Array<Record<string, unknown>> {
-    return this.repository.endpoints(appId, range ?? '24h')
+    return this.repository.endpoints(appId, range ?? '24h', 1, 10).rows
   }
 
   topResources(appId: number, range?: PluginMonitorRange, limit?: number): Array<Record<string, unknown>> {
-    return this.repository.topResources(appId, range ?? '24h', limit ?? 10)
+    return this.repository.topResources(appId, range ?? '24h', 1, limit ?? 10).rows
   }
 
   topIps(appId: number, range?: PluginMonitorRange, limit?: number): Array<Record<string, unknown>> {
-    return this.repository.topIps(appId, range ?? '24h', limit ?? 10)
+    return this.repository.topIps(appId, range ?? '24h', 1, limit ?? 10).rows
   }
 
   topApps(appId: number, range?: PluginMonitorRange, limit?: number): Array<Record<string, unknown>> {
-    return this.repository.topApps(appId, range ?? '24h', limit ?? 10)
+    return this.repository.topApps(appId, range ?? '24h', 1, limit ?? 10).rows
   }
 
   series(appId: number, range?: PluginMonitorRange): Array<Record<string, unknown>> {
@@ -39,7 +39,7 @@ export class MonitorFacade {
   }
 
   recent(appId: number, limit?: number): Array<Record<string, unknown>> {
-    return this.repository.recent(appId, limit ?? 50)
+    return this.repository.recent(appId, 1, limit ?? 50).rows
   }
 
   /** 注册自定义监控指标（平台按采集周期调用 collect 并汇聚）。 */

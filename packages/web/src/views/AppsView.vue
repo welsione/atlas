@@ -12,6 +12,9 @@ const emit = defineEmits<{ (e: 'open-space', app: App): void }>()
 
 const apps = ref<App[]>([])
 const loading = ref(false)
+const page = ref(1)
+const size = ref(10)
+const total = ref(0)
 const createVisible = ref(false)
 const createName = ref('')
 const createDesc = ref('')
@@ -25,10 +28,23 @@ const selectedPlugins = ref<string[]>([])
 async function fetchAll() {
   loading.value = true
   try {
-    apps.value = await appApi.list()
+    const res = await appApi.list(page.value, size.value)
+    apps.value = res.rows
+    total.value = res.total
   } finally {
     loading.value = false
   }
+}
+
+function switchPage(p: number) {
+  page.value = p
+  fetchAll()
+}
+
+function switchSize(s: number) {
+  size.value = s
+  page.value = 1
+  fetchAll()
 }
 
 onMounted(fetchAll)
@@ -37,7 +53,7 @@ async function openCreate() {
   createVisible.value = true
   if (pluginDefs.value.length === 0) {
     try {
-      pluginDefs.value = (await pluginApi.listDefs()).map((r) => r.plugin)
+      pluginDefs.value = (await pluginApi.listDefs(1, 100)).rows.map((r) => r.plugin)
       selectedPlugins.value = pluginDefs.value.map((p) => p.pluginType)
     } catch {
       pluginDefs.value = []
@@ -138,6 +154,16 @@ function isPluginSelected(pluginType: string) {
       <div v-if="!loading && apps.length === 0" class="empty-state">
         <el-empty description="暂无应用，点击右上角创建" :image-size="80" />
       </div>
+    </div>
+
+    <div v-if="!loading && total > size" class="pager">
+      <el-pagination
+        layout="total, prev, pager, next"
+        :total="total"
+        :page-size="size"
+        :current-page="page"
+        @current-change="switchPage"
+      />
     </div>
 
     <!-- 创建应用（右侧抽屉） -->
@@ -247,6 +273,11 @@ function isPluginSelected(pluginType: string) {
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 14px;
   min-height: 120px;
+}
+.pager {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
 }
 .app-card {
   border: 1px solid var(--atlas-stroke);

@@ -3,7 +3,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { AppRepository, type AppRow } from './app.repository.js'
 import { NotFoundError, ValidationError } from '../common/response.js'
 import { now } from '../common/utils.js'
-import type { App, AppStatus, CreateAppResult } from '@atlas/types'
+import type { App, AppStatus, CreateAppResult, Page } from '@atlas/types'
 import { PluginService } from '../plugins/plugin.service.js'
 import { PlatformEventEmitter } from '../spi/platform-event-emitter.js'
 
@@ -63,6 +63,16 @@ export class AppService {
 
   list(): App[] {
     return this.repository.findAll().map(AppService.toApp)
+  }
+
+  /** 分页列表（SPI/内部全量场景仍用 list()）。 */
+  listPage(page: number, size: number): Page<App> {
+    return {
+      rows: this.repository.findAllPage(page, size).map(AppService.toApp),
+      total: this.repository.countAll(),
+      page,
+      size,
+    }
   }
 
   get(id: number): App {
