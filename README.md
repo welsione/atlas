@@ -135,3 +135,5 @@ plugins/weather/
 ## 仓库运维
 
 仓库自动化运维套件（release-please 发布、opencode AI 审查、Dependabot、markdownlint/commitlint 门禁等）见 [docs/repository-ops.md](docs/repository-ops.md)；贡献流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+## AI 链路验证
