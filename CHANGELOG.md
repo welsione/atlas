@@ -5,6 +5,30 @@
 > 本文件由 **release-please 自动维护**（版本区块从 Conventional Commits 自动生成），
 > 请勿手动维护 Unreleased 区块；发布流程见 [docs/repository-ops.md](docs/repository-ops.md)。
 
+## [0.3.0](https://github.com/welsione/atlas/compare/atlas-v0.2.0...atlas-v0.3.0) (2026-08-13)
+
+
+### 新增
+
+* **monitor:** 接口监控管理面与数据面联动完善 ([2dfc0b0](https://github.com/welsione/atlas/commit/2dfc0b094c6aff051528bda4e14ab0cba2486b73))
+
+
+### 修复
+
+* **ops:** changelog 忽略改为脚本参数方式 ([33b2601](https://github.com/welsione/atlas/commit/33b2601679bf7a083d3cdad03a68cd10fd7c1997))
+* **ops:** changelog-sections 的 section 值去掉 ### 前缀，修复双 ### 渲染 ([e76bd8d](https://github.com/welsione/atlas/commit/e76bd8df6b0c01b5311abe13871955acfdfffd50))
+* **ops:** linked-versions 的 tag-pattern 对齐基线 v{version} ([e20a308](https://github.com/welsione/atlas/commit/e20a3085ebdbb2336151d6c04bd02a224e8dc98b))
+* **ops:** lint 忽略全部层级 changelog 文件 ([f5414a1](https://github.com/welsione/atlas/commit/f5414a185546edacf374f6b1b73e5084489ed9cb))
+* **ops:** release-please 配置文件重命名为无点前缀 release-please-config.json ([db4cd97](https://github.com/welsione/atlas/commit/db4cd973a67746c0310686f2d5568f9856e94283))
+* **ops:** 补回 MD060 关闭配置（中文表格对齐规则） ([9bc0b97](https://github.com/welsione/atlas/commit/9bc0b977e64b288ca7cc8e1d67f4989a2c673fb7))
+* **plugins:** 修复 review 遗留问题并补齐生命周期/分发测试 ([74bdaec](https://github.com/welsione/atlas/commit/74bdaecca4cc90a1be034e6e5afa4f271205dc86))
+
+
+### 文档
+
+* **build:** 开发规范体系、开源基础设施与 CI ([6743c4a](https://github.com/welsione/atlas/commit/6743c4a7eade132ad115e8647bfd4339540104a6))
+* **ops:** 基线 tag 统一为 atlas-v{version} 前缀 ([a7afa0f](https://github.com/welsione/atlas/commit/a7afa0f1463efd9949173e2d49df29c01937b6ef))
+
 ## [0.2.0] - 2026-08-12
 
 ### 新增
