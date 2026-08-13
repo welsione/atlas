@@ -5,6 +5,23 @@
 > 本文件由 **release-please 自动维护**（版本区块从 Conventional Commits 自动生成），
 > 请勿手动维护 Unreleased 区块；发布流程见 [docs/repository-ops.md](docs/repository-ops.md)。
 
+## [0.4.1](https://github.com/welsione/atlas/compare/v0.4.0...v0.4.1) (2026-08-13)
+
+
+### 修复
+
+* **ops:** labeler v5 配置改 any/all 格式，opencode-review 补写权限 ([91e434a](https://github.com/welsione/atlas/commit/91e434af125c8e6c80da836929e9fa856e9877ff))
+* **ops:** labeler v5 配置改为 changed-files 匹配格式 ([5974707](https://github.com/welsione/atlas/commit/5974707e098822c351781953c157a3691e17e82a))
+* **ops:** opencode 评论工作流补 GITHUB_TOKEN 写权限 ([d55c49b](https://github.com/welsione/atlas/commit/d55c49b6545efaf2df6d970dc30237ca66fda65d))
+* **ops:** release-notes 移除非法 --format 参数，支持手动补跑 ([e9c81a9](https://github.com/welsione/atlas/commit/e9c81a9bd997272470ba980744f3a4019bef26ca))
+* **ops:** release-please 显式 target-branch=release，镜像快照前缀改 release- ([01b9e62](https://github.com/welsione/atlas/commit/01b9e62893e4ea50fd77335f43faf33496c1f0fc))
+
+
+### 文档
+
+* **ops:** 补充分支模型——master 产品发布 / pre-release 测试发布 ([a8cf09e](https://github.com/welsione/atlas/commit/a8cf09ebf8a8844ba712bee7c4401fc076dd30b3))
+* 同步触发 labeler 与审查重跑 ([cfe2a94](https://github.com/welsione/atlas/commit/cfe2a94bb9acf1fc814667e06ff810e5182bede5))
+
 ## [0.4.0](https://github.com/welsione/atlas/compare/v0.3.0...v0.4.0) (2026-08-13)
 
 
