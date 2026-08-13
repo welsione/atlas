@@ -1,8 +1,9 @@
-# Atlas — 全 TS 插件化 AI 服务基础平台
-
 <p align="center">
-  <img src="packages/web/public/icons/atlas.svg" width="120" height="120" alt="Atlas Logo" />
+  <img src="packages/web/public/icons/atlas.svg" width="48" height="48" alt="Atlas Logo" style="vertical-align: middle" />
+  <strong style="vertical-align: middle; font-size: 1.5em">Atlas</strong>
 </p>
+
+<h2 align="center">全 TS 插件化 AI 服务基础平台</h2>
 
 [![CI](https://github.com/welsione/atlas/actions/workflows/ci.yml/badge.svg)](https://github.com/welsione/atlas/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
