@@ -1,6 +1,6 @@
-<p align="center" style="display: flex; align-items: center; justify-content: center; gap: 12px">
-  <img src="packages/web/public/icons/atlas.svg" width="44" height="44" alt="Atlas Logo" />
-  <strong style="font-size: 36px; line-height: 1">Atlas</strong>
+<p align="center" style="display: flex; align-items: center; justify-content: center; gap: 20px">
+  <img src="packages/web/public/icons/atlas.svg" width="96" height="96" alt="Atlas Logo" />
+  <strong style="font-size: 72px; line-height: 1">Atlas</strong>
 </p>
 
 <h2 align="center">全 TS 插件化 AI 服务基础平台</h2>
