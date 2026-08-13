@@ -33,9 +33,9 @@ jobs:
         run: npm run lint:md
 
       - name: Commitlint
-        uses: wwh/commitlint@v1
+        uses: wagoid/commitlint-github-action@v6
         with:
-          commitlint-config: '{"extends":["@commitlint/config-conventional"]}'
+          configFile: .commitlintrc.json
 
       - name: Type check
         run: npm run typecheck
