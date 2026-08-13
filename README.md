@@ -1,6 +1,13 @@
 # Atlas — 全 TS 插件化 AI 服务基础平台
 
+[![CI](https://github.com/welsione/atlas/actions/workflows/ci.yml/badge.svg)](https://github.com/welsione/atlas/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/Node-%3E%3D22-brightgreen.svg)](https://nodejs.org)
+[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](CHANGELOG.md)
+
 以应用为核心的多租户平台：数据集版本化分发（PUBLIC/INTERNAL/SECRET + 信封加密）、插件体系（前后端一体打包、目录热加载）、接口监控、运维台工作日志。
+
+> **参与贡献**：[贡献指南](CONTRIBUTING.md) · [行为准则](CODE_OF_CONDUCT.md) · [安全策略](SECURITY.md) · [变更日志](CHANGELOG.md)
 
 ## 技术栈
 

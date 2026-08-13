@@ -11,3 +11,4 @@ data/
 !plugins/providers/data/
 .DS_Store
 *.log
+.dev/
