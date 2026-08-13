@@ -8,24 +8,13 @@
   <!-- 白色圆角底 -->
   <rect x="0" y="0" width="100" height="100" rx="22" fill="#ffffff"/>
 
-  <!-- 低多边形字母 A（Atlas），三角形拼合 -->
+  <!-- 三个三角形组成的字母 A（Atlas）：左右腿 + 横梁 -->
   <g filter="url(#atlas-shadow)">
-    <!-- 顶部尖角 -->
-    <polygon points="50,22 40,30 50,35" fill="#5BB9FF"/>
-    <polygon points="50,22 50,35 60,30" fill="#3D9BF5"/>
-    <polygon points="50,22 40,30 38,40" fill="#1E6FE8"/>
-    <polygon points="50,22 60,30 62,40" fill="#4FA9F7"/>
-    <!-- 左腿 -->
-    <polygon points="38,40 12,82 28,60" fill="#0B4FC9"/>
-    <polygon points="28,60 12,82 32,64" fill="#3D9BF5"/>
-    <polygon points="38,40 35,58 28,60" fill="#5BB9FF"/>
-    <!-- 横梁 -->
-    <polygon points="35,58 65,58 56,64" fill="#3D9BF5"/>
-    <polygon points="35,58 56,64 32,64" fill="#1E6FE8"/>
-    <polygon points="32,64 56,64 50,82" fill="#5BB9FF"/>
-    <!-- 右腿 -->
-    <polygon points="62,40 65,58 72,60" fill="#3D9BF5"/>
-    <polygon points="62,40 72,60 88,82" fill="#5BB9FF"/>
-    <polygon points="72,60 88,82 50,82" fill="#2B86EF"/>
+    <!-- 左腿：顶点 → 左脚 → 梁左端（加粗） -->
+    <polygon points="50,16 12,80 42,52" fill="#1E6FE8"/>
+    <!-- 右腿：顶点 → 右脚 → 梁右端（加粗） -->
+    <polygon points="50,16 88,80 58,52" fill="#2B86EF"/>
+    <!-- 横梁：倒三角斜置，尖端偏左 -->
+    <polygon points="42,52 85,38 12,80" fill="#5BB9FF"/>
   </g>
 </svg>

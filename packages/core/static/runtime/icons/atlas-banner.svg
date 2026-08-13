@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 100">
+  <defs>
+    <linearGradient id="atlas-text" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#1E6FE8"/>
+      <stop offset="100%" stop-color="#5BB9FF"/>
+    </linearGradient>
+  </defs>
+
+  <!-- atlas.svg 图标（仅三三角，无白底无投影） -->
+  <polygon points="50,16 12,80 42,52" fill="#1E6FE8"/>
+  <polygon points="50,16 88,80 58,52" fill="#2B86EF"/>
+  <polygon points="42,52 85,38 12,80" fill="#5BB9FF"/>
+
+  <!-- Atlas 艺术字：衬线斜体 + 品牌渐变 -->
+  <text x="124" y="72" font-family="Georgia, 'Times New Roman', serif" font-size="62" font-style="italic" font-weight="700" fill="url(#atlas-text)" letter-spacing="1">Atlas</text>
+</svg>

@@ -1,25 +1,30 @@
 docs:
-  any:
-    - "docs/**/*"
-    - "*.md"
-    - "AGENTS.md"
-    - "CHANGELOG.md"
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docs/**/*"
+          - "*.md"
+          - "AGENTS.md"
+          - "CHANGELOG.md"
 
 core:
-  any:
-    - "packages/core/**/*"
-    - "packages/types/**/*"
+  - changed-files:
+      - any-glob-to-any-file:
+          - "packages/core/**/*"
+          - "packages/types/**/*"
 
 web:
-  any:
-    - "packages/web/**/*"
+  - changed-files:
+      - any-glob-to-any-file:
+          - "packages/web/**/*"
 
 plugins:
-  any:
-    - "plugins/**/*"
+  - changed-files:
+      - any-glob-to-any-file:
+          - "plugins/**/*"
 
 ci:
-  any:
-    - ".github/**/*"
-    - "package.json"
-    - "package-lock.json"
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/**/*"
+          - "package.json"
+          - "package-lock.json"
