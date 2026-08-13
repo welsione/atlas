@@ -4,6 +4,14 @@ export type ApiResponse<T> = {
   data: T
 }
 
+/** 通用分页结构：后端列表统一返回（page 从 1 起，size 默认 10 上限 100）。 */
+export type Page<T> = {
+  rows: T[]
+  total: number
+  page: number
+  size: number
+}
+
 // ---------- 应用空间 ----------
 export type App = {
   id: number

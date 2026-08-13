@@ -1,6 +1,7 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Req, Inject } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, Req, Inject } from '@nestjs/common'
 import type { Request } from 'express'
 import { ok, error, NotFoundError, ValidationError } from '../common/response.js'
+import { pageParams } from '../common/utils.js'
 import { DatasetService } from './dataset.service.js'
 import { parseMultipart } from '../plugins/plugin-dispatch.utils.js'
 import type { DatasetCreateRequest } from '@atlas/types'
@@ -11,8 +12,9 @@ export class DatasetController {
   constructor(@Inject(DatasetService) private readonly service: DatasetService) {}
 
   @Get(':appId/datasets')
-  list(@Param('appId') appId: string) {
-    return ok(this.service.list(Number(appId)))
+  list(@Param('appId') appId: string, @Query('page') page?: string, @Query('size') size?: string) {
+    const { page: p, size: s } = pageParams(page, size)
+    return ok(this.service.listPage(Number(appId), p, s))
   }
 
   @Post(':appId/datasets')

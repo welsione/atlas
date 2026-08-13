@@ -39,6 +39,17 @@ export class AppRepository {
     return this.db.prepare('SELECT * FROM apps ORDER BY id').all() as AppRow[]
   }
 
+  /** 分页列表（page 从 1 起）。 */
+  findAllPage(page: number, size: number): AppRow[] {
+    return this.db
+      .prepare('SELECT * FROM apps ORDER BY id LIMIT ? OFFSET ?')
+      .all(size, (page - 1) * size) as AppRow[]
+  }
+
+  countAll(): number {
+    return (this.db.prepare('SELECT COUNT(*) c FROM apps').get() as { c: number }).c
+  }
+
   findById(id: number): AppRow | undefined {
     return this.db.prepare('SELECT * FROM apps WHERE id = ?').get(id) as AppRow | undefined
   }
@@ -92,6 +103,7 @@ export class AppRepository {
 
       db.prepare('DELETE FROM plugin_file_tokens WHERE scope_key = ?').run(appId)
       db.prepare('DELETE FROM api_access_logs WHERE owner_app_id = ?').run(appId)
+      db.prepare('DELETE FROM endpoint_rules WHERE app_id = ?').run(appId)
       db.prepare('DELETE FROM ops_logs WHERE app_id = ?').run(appId)
       db.prepare('DELETE FROM auth_logs WHERE app_id = ?').run(appId)
       db.prepare('DELETE FROM app_credentials WHERE app_id = ?').run(appId)

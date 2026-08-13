@@ -1,6 +1,7 @@
-import { Body, Controller, Delete, Get, Inject, Param, Post } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Inject, Param, Post, Query } from '@nestjs/common'
 import type { App, CreateAppResult } from '@atlas/types'
 import { ok } from '../common/response.js'
+import { pageParams } from '../common/utils.js'
 import { AppService } from './app.service.js'
 import { AppTokenService } from '../auth/app-token.service.js'
 
@@ -17,8 +18,9 @@ export class AppController {
   ) {}
 
   @Get()
-  list() {
-    return ok(this.service.list())
+  list(@Query('page') page?: string, @Query('size') size?: string) {
+    const { page: p, size: s } = pageParams(page, size)
+    return ok(this.service.listPage(p, s))
   }
 
   @Post()

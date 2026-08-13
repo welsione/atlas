@@ -111,6 +111,19 @@ export class DatasetRepository {
       .map(rowToDataset)
   }
 
+  /** 分页数据集列表（page 从 1 起）。 */
+  findAllByAppPage(appId: number, page: number, size: number): Dataset[] {
+    return (
+      this.db
+        .prepare('SELECT * FROM datasets WHERE app_id = ? ORDER BY id LIMIT ? OFFSET ?')
+        .all(appId, size, (page - 1) * size) as DatasetRow[]
+    ).map(rowToDataset)
+  }
+
+  countByApp(appId: number): number {
+    return (this.db.prepare('SELECT COUNT(*) c FROM datasets WHERE app_id = ?').get(appId) as { c: number }).c
+  }
+
   /** 精确查找（app + 插件 + key），避免全表扫描 content_json 大字段。 */
   findDatasetByKey(appId: number, pluginType: string, datasetKey: string): Dataset | undefined {
     const row = this.db

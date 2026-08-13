@@ -27,15 +27,13 @@ export interface LogTableSpec {
 export class ExtensionRegistry {
   /** 平台内置公开前缀（SecurityMiddleware 默认放行）。 */
   private static readonly BUILTIN_PUBLIC_URLS = ['/api/files/', '/api/auth/', '/api/v1/', '/_pluginui/']
-  /** 平台内置日志保留表（LogCleanupService 定时清理）。 */
+  /** 平台内置日志保留表（LogCleanupService 定时清理）。download_logs/upload_logs 属 model-files 插件表，由插件 logTables() 声明。 */
   private static readonly BUILTIN_LOG_TABLES: LogTableSpec[] = [
     { table: 'api_access_logs', column: 'accessed_at' },
     { table: 'ops_logs', column: 'created_at' },
     { table: 'dataset_download_logs', column: 'downloaded_at' },
     { table: 'secret_access_logs', column: 'accessed_at' },
     { table: 'auth_logs', column: 'created_at' },
-    { table: 'download_logs', column: 'downloaded_at' },
-    { table: 'upload_logs', column: 'uploaded_at' },
   ]
 
   /** 运行时动态注册的公开前缀（env.security().publicUrl()）。 */

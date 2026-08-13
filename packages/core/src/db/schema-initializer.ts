@@ -58,6 +58,19 @@ export class SchemaInitializer {
         `)
       },
     },
+    {
+      // v3：api_access_logs 加 plugin_type 列（接口监控记录插件 ep 端点来源）+ 依赖该列的查询索引。
+      version: 3,
+      up: (db) => {
+        const cols = db.prepare('PRAGMA table_info(api_access_logs)').all() as Array<{ name: string }>
+        if (!cols.some((c) => c.name === 'plugin_type')) {
+          db.exec("ALTER TABLE api_access_logs ADD COLUMN plugin_type TEXT NOT NULL DEFAULT ''")
+        }
+        db.exec(
+          'CREATE INDEX IF NOT EXISTS idx_api_access_ep ON api_access_logs(owner_app_id, resource_type, plugin_type, endpoint, accessed_at)',
+        )
+      },
+    },
   ]
 
   /** 打开（或创建）数据库并完成结构初始化。 */
@@ -94,7 +107,7 @@ export class SchemaInitializer {
     'apps', 'app_credentials', 'plugins', 'plugin_instances', 'plugin_store',
     'datasets', 'secrets', 'dataset_app_grants',
     'dataset_download_logs', 'secret_access_logs', 'auth_logs',
-    'api_access_logs', 'ops_logs', 'plugin_file_tokens',
+    'api_access_logs', 'ops_logs', 'plugin_file_tokens', 'endpoint_rules',
     'providers', 'prompts', 'prompt_versions', 'model_files',
     'download_logs', 'upload_logs',
   ]

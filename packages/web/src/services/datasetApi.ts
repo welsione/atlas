@@ -1,8 +1,8 @@
 import { get, post, put, del } from './http'
-import type { Dataset, DatasetCreateRequest, Secret, DatasetMeta } from '../types'
+import type { Dataset, DatasetCreateRequest, Secret, DatasetMeta, Page } from '../types'
 
 export const datasetApi = {
-  list: (appId: number) => get<Dataset[]>(`/api/apps/${appId}/datasets`),
+  list: (appId: number, page = 1, size = 10) => get<Page<Dataset>>(`/api/apps/${appId}/datasets?page=${page}&size=${size}`),
   create: (appId: number, req: DatasetCreateRequest) => post<Dataset>(`/api/apps/${appId}/datasets`, req),
   remove: (appId: number, id: number) => del<void>(`/api/apps/${appId}/datasets/${id}`),
   update: (appId: number, id: number, req: Partial<DatasetCreateRequest>) => put<Dataset>(`/api/apps/${appId}/datasets/${id}`, req),

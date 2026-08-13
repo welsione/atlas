@@ -1,8 +1,8 @@
 import { get, post, put, del } from './http'
-import type { App, CreateAppResult } from '../types'
+import type { App, CreateAppResult, Page } from '../types'
 
 export const appApi = {
-  list: () => get<App[]>('/api/apps'),
+  list: (page = 1, size = 10) => get<Page<App>>(`/api/apps?page=${page}&size=${size}`),
   create: (name: string, description: string, pluginTypes?: string[]) =>
     post<CreateAppResult>('/api/apps', { name, description, pluginTypes }),
   rotate: (id: number) => post<{ secret: string }>(`/api/apps/${id}/rotate`),

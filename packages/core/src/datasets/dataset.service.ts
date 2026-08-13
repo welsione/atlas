@@ -2,7 +2,7 @@ import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common'
 import { createHash, randomBytes } from 'node:crypto'
 import { mkdirSync, existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
-import type { Dataset, DatasetSensitivity, Secret } from '@atlas/types'
+import type { Dataset, DatasetSensitivity, Page, Secret } from '@atlas/types'
 import { DatasetRepository } from './dataset.repository.js'
 import { EnvelopeCrypto } from './envelope-crypto.js'
 import { PluginService } from '../plugins/plugin.service.js'
@@ -62,6 +62,16 @@ export class DatasetService {
 
   list(appId: number): Dataset[] {
     return this.repository.findAllByApp(appId)
+  }
+
+  /** 分页列表（管理面）。 */
+  listPage(appId: number, page: number, size: number): Page<Dataset> {
+    return {
+      rows: this.repository.findAllByAppPage(appId, page, size),
+      total: this.repository.countByApp(appId),
+      page,
+      size,
+    }
   }
 
   create(
