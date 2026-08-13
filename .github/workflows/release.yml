@@ -19,5 +19,6 @@ jobs:
     steps:
       - uses: googleapis/release-please-action@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # welsione 账号 PAT：开 PR/打 tag/发 release 的提交者与发布者均显示为 welsione 账号
+          token: ${{ secrets.OPENCODE_BOT_TOKEN }}
           target-branch: release
