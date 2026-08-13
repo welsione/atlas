@@ -86,6 +86,16 @@ export class PluginRepository {
     return (this.db.prepare('SELECT * FROM plugins ORDER BY id').all() as PluginDefRow[]).map(rowToDef)
   }
 
+  /** 分页插件注册表（page 从 1 起）。 */
+  findAllDefsPage(page: number, size: number): PluginDef[] {
+    return (this.db.prepare('SELECT * FROM plugins ORDER BY id LIMIT ? OFFSET ?').all(size, (page - 1) * size) as PluginDefRow[])
+      .map(rowToDef)
+  }
+
+  countDefs(): number {
+    return (this.db.prepare('SELECT COUNT(*) c FROM plugins').get() as { c: number }).c
+  }
+
   findDefByType(pluginType: string): PluginDef | undefined {
     const row = this.db.prepare('SELECT * FROM plugins WHERE plugin_type = ?').get(pluginType) as PluginDefRow | undefined
     return row ? rowToDef(row) : undefined
@@ -140,9 +150,15 @@ export class PluginRepository {
       .map(rowToInstance)
   }
 
-  /** 某插件类型全部已启用实例（热替换后重建 SPI 用）。 */
+  /** 某插件类型全部已启用实例（热替换后重建 SPI / re-init 用）。 */
   findAllEnabledInstancesOf(pluginType: string): PluginInstance[] {
     return (this.db.prepare('SELECT * FROM plugin_instances WHERE plugin_type = ? AND enabled = 1').all(pluginType) as PluginInstanceRow[])
+      .map(rowToInstance)
+  }
+
+  /** 某插件类型全部实例（含停用；卸载/热替换前 dispose env 用）。 */
+  findAllInstancesOf(pluginType: string): PluginInstance[] {
+    return (this.db.prepare('SELECT * FROM plugin_instances WHERE plugin_type = ?').all(pluginType) as PluginInstanceRow[])
       .map(rowToInstance)
   }
 
@@ -166,9 +182,25 @@ export class PluginRepository {
       .prepare(
         `INSERT INTO plugin_store (instance_id, plugin_type, entity_id, entity_key, value_json, version, created_at, updated_at)
          VALUES (?,?,?,?,?,1,?,?)
-         ON CONFLICT(instance_id, plugin_type, entity_id, entity_key) DO UPDATE SET value_json=excluded.value_json, updated_at=excluded.updated_at`,
+         ON CONFLICT(instance_id, plugin_type, entity_id, entity_key) DO UPDATE SET value_json=excluded.value_json, version=plugin_store.version+1, updated_at=excluded.updated_at`,
       )
       .run(instanceId, pluginType, entityId, entityKey, valueJson, now, now)
+  }
+
+  /** 读取记录版本（不存在返回 0）。 */
+  storeVersion(instanceId: number, pluginType: string, entityKey: string, entityId: string): number {
+    const row = this.db
+      .prepare('SELECT version FROM plugin_store WHERE instance_id = ? AND plugin_type = ? AND entity_id = ? AND entity_key = ?')
+      .get(instanceId, pluginType, entityId, entityKey) as { version: number } | undefined
+    return row?.version ?? 0
+  }
+
+  /** 乐观锁写入（CAS）：版本不匹配返回 false 不写入；匹配（含不存在且 expectedVersion=0 的创建）则写入并版本 +1。
+   *  better-sqlite3 同步执行，单事件循环内无并发交错，先查后写原子。 */
+  storePutIfVersion(instanceId: number, pluginType: string, entityKey: string, entityId: string, valueJson: string, expectedVersion: number, now: string): boolean {
+    if (this.storeVersion(instanceId, pluginType, entityKey, entityId) !== expectedVersion) return false
+    this.storePut(instanceId, pluginType, entityKey, entityId, valueJson, now)
+    return true
   }
 
   storeRemove(instanceId: number, pluginType: string, entityKey: string, entityId: string): void {

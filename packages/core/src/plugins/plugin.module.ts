@@ -15,12 +15,14 @@ import { PluginFileRegistry } from './plugin-file.registry.js'
 import { PluginFileDownloadController } from './plugin-file-download.controller.js'
 import { DatasetModule } from '../datasets/dataset.module.js'
 import { SpiModule } from '../spi/spi.module.js'
+import { MonitorModule } from '../monitor/monitor.module.js'
 
 @Global()
 @Module({
   // SpiModule 提供 PlatformEventEmitter / ExtensionRegistry / 门面 / PluginSpiRegistry，
   // PluginService 构造期依赖它们；显式 import 建立依赖边，确保 SpiModule 先于 PluginModule 实例化。
-  imports: [SpiModule, forwardRef(() => DatasetModule)],
+  // MonitorModule 提供 EndpointRuleRepository（数据面端点启停拦截 + PLUGIN_EP 访问日志）。
+  imports: [SpiModule, MonitorModule, forwardRef(() => DatasetModule)],
   controllers: [
     PluginController,
     PluginInstanceController,

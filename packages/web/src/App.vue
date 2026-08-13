@@ -9,7 +9,7 @@ import SecurityView from './views/SecurityView.vue'
 import OpsView from './views/OpsView.vue'
 import LoginView from './views/LoginView.vue'
 import PluginMount from './plugin-host/PluginMount.vue'
-import { useSlotsOf } from './plugin-host/slotRegistry'
+import { initPluginSlots, useSlotsOf } from './plugin-host/slotRegistry'
 import { AUTH_TOKEN_KEY } from './services/http'
 import type { App } from './types'
 
@@ -22,6 +22,8 @@ const activeApp = ref<App | null>(null)
 const authed = ref(false)
 function handleAuthed() {
   authed.value = true
+  // 登录前 /api/plugins/ui 会 401 静默失败，登录后必须重拉一次（规范 F-02）
+  void initPluginSlots()
 }
 function logout() {
   localStorage.removeItem(AUTH_TOKEN_KEY)
@@ -100,7 +102,7 @@ function switchMenu(key: MenuKey) {
         <div class="page-header">
           <h1 class="page-title">{{ activePlugin.label }}</h1>
         </div>
-        <PluginMount :load="activePlugin.load" :plugin-type="activePlugin.key.slice('plugin:'.length)" mode="system-menu" :refresh="() => undefined" />
+        <PluginMount :load="activePlugin.load" :plugin-type="activePlugin.pluginType" mode="system-menu" :refresh="() => undefined" />
       </div>
       <AppSpaceView v-else-if="activeApp" :app="activeApp" @back="backToList" />
       <ConsoleView v-else-if="current === 'console'" @open-space="openSpace" />

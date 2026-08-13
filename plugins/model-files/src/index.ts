@@ -40,6 +40,12 @@ const plugin: AtlasPlugin = {
   /** 应用删除时级联清理本插件表（model_files 有 app_id；download_logs/upload_logs 按 file_id 关联，历史遗留表不单独清理）。 */
   cleanupTables: () => [{ table: 'model_files', column: 'app_id' }],
 
+  /** 本插件日志表：公开下载/上传审计由 LogCleanupService 按时间列定时清理。 */
+  logTables: () => [
+    { table: 'download_logs', column: 'downloaded_at' },
+    { table: 'upload_logs', column: 'uploaded_at' },
+  ],
+
   /** 数据集注册：模型文件库整体发布为「模型文件」数据集，复用数据集接口与密级管理。 */
   datasets: () => [
     {
@@ -210,6 +216,7 @@ const plugin: AtlasPlugin = {
         if (row.token) await files.unpublish(row.token)
         await store.put('files', list.filter((f) => f.id !== row.id))
         void env.datasets().refresh('model-files').catch(() => undefined)
+        env.ops().warn(`删除模型文件：${row.name}`)
         return null
       },
     },
@@ -225,7 +232,8 @@ const plugin: AtlasPlugin = {
           if (!data) throw new Error('文件内容缺失')
           row.downloadCount += 1
           await env.store().put('files', list)
-          return { $binary: data.toString('base64'), $mime: mimeOf(row.files[0].path), $filename: row.files[0].path.split('/').pop() }
+          // 直接返回 Buffer（平台 $binary 支持 Buffer 通道，避免 base64 全量往返）
+          return { $binary: data, $mime: mimeOf(row.files[0].path), $filename: row.files[0].path.split('/').pop() }
         }
         throw new Error('目录请使用公开下载链接')
       },

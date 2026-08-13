@@ -9,6 +9,9 @@ const http = axios.create({
   timeout: 30000,
 })
 
+/** 测试用：暴露底层 axios 实例（配合 mock adapter 验证拦截器行为）。 */
+export const httpClient = http
+
 // 请求拦截：管理认证 token
 http.interceptors.request.use((config) => {
   const token = localStorage.getItem(AUTH_TOKEN_KEY)

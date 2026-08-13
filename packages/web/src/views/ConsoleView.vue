@@ -11,6 +11,7 @@ import type { App } from '../types'
 const emit = defineEmits<{ (e: 'open-space', app: App): void }>()
 
 const apps = ref<App[]>([])
+const appTotal = ref(0)
 const instanceCount = ref(0)
 const overview = ref<{ levels: Record<string, number>; hourly: Array<{ bucket: string; count: number; errors: number }> }>({
   levels: { INFO: 0, WARN: 0, ERROR: 0 },
@@ -21,9 +22,11 @@ const consoleSlots = useSlotsOf('console')
 
 onMounted(async () => {
   try {
-    apps.value = await appApi.list()
-    const counts = await Promise.all(apps.value.map((a) => pluginApi.overview(a.id).catch(() => [])))
-    instanceCount.value = counts.reduce((s, rows) => s + rows.length, 0)
+    const res = await appApi.list(1, 100)
+    apps.value = res.rows
+    appTotal.value = res.total
+    const counts = await Promise.all(apps.value.map((a) => pluginApi.overview(a.id, 1, 1).catch(() => null)))
+    instanceCount.value = counts.reduce((s, r) => s + (r?.total ?? 0), 0)
   } catch {
     // 未登录
   }
@@ -51,7 +54,7 @@ const maxHourly = () => Math.max(1, ...overview.value.hourly.map((h) => h.count)
       <el-tooltip :content="apps.length ? `点击进入「${apps[0].name}」应用空间` : '暂无应用，先到应用管理创建'" placement="top">
         <div class="stat-card" @click="apps[0] && emit('open-space', apps[0])">
           <el-icon class="stat-icon"><Grid /></el-icon>
-          <div class="stat-num">{{ apps.length }}</div>
+          <div class="stat-num">{{ appTotal }}</div>
           <div class="stat-label">应用总数</div>
         </div>
       </el-tooltip>
@@ -84,7 +87,7 @@ const maxHourly = () => Math.max(1, ...overview.value.hourly.map((h) => h.count)
           <img v-if="typeof slot.icon === 'string' && slot.icon" :src="slot.icon" class="plugin-card-icon" alt="" />
           <span class="plugin-card-title">{{ slot.label }}</span>
         </div>
-        <PluginMount :load="slot.load" :plugin-type="slot.key.slice('plugin:'.length)" mode="console" :refresh="() => undefined" />
+        <PluginMount :load="slot.load" :plugin-type="slot.pluginType" mode="console" :refresh="() => undefined" />
       </div>
     </div>
     <div v-else class="empty-hint surface">

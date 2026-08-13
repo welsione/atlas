@@ -29,7 +29,13 @@ export class PluginUiController {
       return
     }
     const prefix = `/_pluginui/${pluginType}/`
-    const uri = req.originalUrl?.split('?')[0] ?? ''
+    // originalUrl 为未解码原始路径，与已解码的 @Param('pluginType') 对齐：先安全解码再截取
+    let uri = req.originalUrl?.split('?')[0] ?? ''
+    try {
+      uri = decodeURIComponent(uri)
+    } catch {
+      // 非法编码按原样处理（后续 isSafePath / resolve().startsWith 二次校验兜底）
+    }
     const idx = uri.indexOf(prefix)
     const name = idx >= 0 ? uri.slice(idx + prefix.length) : ''
     // icons/ 前缀 → 插件图标目录（manifest.icon 相对路径指向这里）

@@ -97,8 +97,8 @@ export async function initPluginSlots() {
 }
 
 /** 合并视图：核心 UI 在前，插件 UI 在后。icon：核心为 element 图标组件，插件为图片 URL。 */
-export function slotsOf(name: PluginSlotName): Array<{ key: string; label: string; icon: string | Component | null; load: () => Promise<PluginUiEntry> }> {
-  const result: Array<{ key: string; label: string; icon: string | Component | null; load: () => Promise<PluginUiEntry> }> = []
+export function slotsOf(name: PluginSlotName): Array<{ key: string; label: string; icon: string | Component | null; pluginType?: string; load: () => Promise<PluginUiEntry> }> {
+  const result: Array<{ key: string; label: string; icon: string | Component | null; pluginType?: string; load: () => Promise<PluginUiEntry> }> = []
   if (name === 'app-space') {
     for (const item of coreUiItems) {
       result.push({ key: `core:${item.tab}`, label: item.tab, icon: item.icon ?? null, load: item.load })
@@ -109,9 +109,10 @@ export function slotsOf(name: PluginSlotName): Array<{ key: string; label: strin
       if (s.slot !== name) continue
       const label = name === 'app-space' ? (s.tab ?? m.name) : (s.title ?? m.name)
       result.push({
-        key: `plugin:${m.pluginType}`,
+        key: `plugin:${m.pluginType}:${s.tab ?? s.title ?? 'slot'}`,
         label,
         icon: pluginIconUrl(m.pluginType, iconOf(m.pluginType)),
+        pluginType: m.pluginType,
         load: async () => (await import(/* @vite-ignore */ `/_pluginui/${m.pluginType}/${s.entry}`)).default as PluginUiEntry,
       })
     }
@@ -131,7 +132,12 @@ export function useSlotsOf(name: PluginSlotName) {
 export function toMountEntry(component: unknown): PluginUiEntry {
   return {
     mount: (el, ctx) => {
-      const app = createApp(component as never, { appId: ctx.appId })
+      const app = createApp(component as never, {
+        appId: ctx.appId,
+        pluginType: ctx.pluginType,
+        mode: ctx.mode,
+        refresh: ctx.refresh,
+      })
       app.use(ElementPlus)
       app.mount(el)
       return () => app.unmount()

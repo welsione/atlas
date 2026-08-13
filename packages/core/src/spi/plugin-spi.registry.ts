@@ -82,13 +82,14 @@ export class PluginSpiRegistry {
     }
   }
 
-  /** 解析：共享优先（@0），其次仅同 app 的本地实例（@consumerAppId）。不可用返回 null。
+  /** 解析：本 app 本地优先（@consumerAppId 覆盖共享），其次全局共享（@0）。不可用返回 null。
+   *  顺序与「APP_LOCAL 覆盖 GLOBAL_SHARED」语义一致：同插件在本 app 有本地覆盖实例时不再回落共享。
    *  opts.minVersion：消费方要求的契约版本下限（提供方 version 存在时按 semver 比较，不满足返回 null + warn）。 */
   resolve<T = unknown>(pluginType: string, namespace: string, consumerAppId: number, opts?: { minVersion?: string }): T | null {
-    const shared = this.regs.get(this.key(pluginType, 0))
-    if (shared) return this.build<T>(shared, namespace, consumerAppId, opts)
     const local = this.regs.get(this.key(pluginType, consumerAppId))
     if (local) return this.build<T>(local, namespace, consumerAppId, opts)
+    const shared = this.regs.get(this.key(pluginType, 0))
+    if (shared) return this.build<T>(shared, namespace, consumerAppId, opts)
     return null
   }
 

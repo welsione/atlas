@@ -9,7 +9,7 @@ const apps = ref<App[]>([])
 const rows = ref<OpsLogRow[]>([])
 const total = ref(0)
 const loading = ref(false)
-const overview = ref<OpsOverview>({ levels: { INFO: 0, WARN: 0, ERROR: 0 }, byPlugin: [], hourly: [] })
+const overview = ref<OpsOverview>({ levels: { INFO: 0, WARN: 0, ERROR: 0, DEBUG: 0 }, byPlugin: [], hourly: [] })
 
 const filters = ref<{ appId?: number; pluginType: string; level: string }>({
   appId: undefined,
@@ -17,7 +17,7 @@ const filters = ref<{ appId?: number; pluginType: string; level: string }>({
   level: '',
 })
 const page = ref(1)
-const size = ref(20)
+const size = ref(10)
 
 async function fetchOverview() {
   try {
@@ -46,7 +46,7 @@ async function fetchLogs() {
 
 onMounted(async () => {
   try {
-    apps.value = await appApi.list()
+    apps.value = (await appApi.list(1, 100)).rows
   } catch {
     // 未登录
   }
@@ -74,7 +74,7 @@ function detailOf(row: OpsLogRow): string {
 }
 
 function levelTag(level: string) {
-  return level === 'ERROR' ? 'danger' : level === 'WARN' ? 'warning' : 'info'
+  return level === 'ERROR' ? 'danger' : level === 'WARN' ? 'warning' : level === 'DEBUG' ? 'info' : 'success'
 }
 
 const maxHourly = () => Math.max(1, ...overview.value.hourly.map((h) => h.count))
@@ -100,6 +100,7 @@ const totalErrors = () => overview.value.byPlugin.reduce((s, p) => s + Number(p.
         <div class="level-row"><span class="level-dot info" />INFO <b>{{ overview.levels.INFO }}</b></div>
         <div class="level-row"><span class="level-dot warning" />WARN <b>{{ overview.levels.WARN }}</b></div>
         <div class="level-row"><span class="level-dot danger" />ERROR <b>{{ overview.levels.ERROR }}</b></div>
+        <div class="level-row"><span class="level-dot info" />DEBUG <b>{{ overview.levels.DEBUG }}</b></div>
       </div>
       <div class="overview-card surface">
         <div class="overview-title">近 24h 趋势（共 {{ overview.hourly.reduce((s, h) => s + h.count, 0) }} 条，错误 {{ totalErrors() }}）</div>
@@ -131,6 +132,7 @@ const totalErrors = () => overview.value.byPlugin.reduce((s, p) => s + Number(p.
         <el-option label="INFO" value="INFO" />
         <el-option label="WARN" value="WARN" />
         <el-option label="ERROR" value="ERROR" />
+        <el-option label="DEBUG" value="DEBUG" />
       </el-select>
       <el-button type="primary" :icon="Search" @click="search">查询</el-button>
       <el-tooltip content="重置筛选" placement="top">
@@ -169,7 +171,7 @@ const totalErrors = () => overview.value.byPlugin.reduce((s, p) => s + Number(p.
           layout="total, sizes, prev, pager, next"
           :total="total"
           :page-size="size"
-          :page-sizes="[20, 50, 100]"
+          :page-sizes="[10, 20, 50]"
           :current-page="page"
           @current-change="(p: number) => { page = p; fetchLogs() }"
           @size-change="(s: number) => { size = s; page = 1; fetchLogs() }"

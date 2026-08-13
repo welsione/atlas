@@ -63,6 +63,7 @@ const plugin: AtlasPlugin = {
         }
         list.push(next)
         await env.store().put('prompts', list)
+        env.ops().info(`新增提示词「${next.name}」`)
         return next
       },
     },
@@ -90,6 +91,7 @@ const plugin: AtlasPlugin = {
         }
         list[idx] = next
         await env.store().put('prompts', list)
+        env.ops().info(`更新提示词「${next.name}」${contentChanged ? `（版本 v${next.version}）` : ''}`)
         return next
       },
     },
@@ -121,7 +123,10 @@ const plugin: AtlasPlugin = {
       method: 'DELETE', path: 'delete/{id}', summary: '删除提示词',
       handle: async (env, params) => {
         const list = (await env.store().get<Prompt[]>('prompts')) ?? []
-        await env.store().put('prompts', list.filter((p) => p.id !== Number(params.id)))
+        const row = list.find((p) => p.id === Number(params.id))
+        if (!row) throw new Error(`提示词不存在: ${params.id}`)
+        await env.store().put('prompts', list.filter((p) => p.id !== row.id))
+        env.ops().warn(`删除提示词「${row.name}」`)
         return null
       },
     },

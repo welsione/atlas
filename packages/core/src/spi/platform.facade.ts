@@ -1,12 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common'
 import type { PluginPlatform } from '@atlas/types'
-import { CONFIG, type AtlasConfig } from '../config.js'
+import { CONFIG, platformVersion, type AtlasConfig } from '../config.js'
 
 /** env.platform() 门面：平台版本、安全子集配置、元信息。 */
 @Injectable()
 export class PlatformFacade implements PluginPlatform {
-  /** 平台版本（随构建发布提升）。 */
-  readonly version = '0.2.0'
+  /** 平台版本（读 monorepo 根 package.json，随发布自动同步）。 */
+  readonly version = platformVersion()
 
   constructor(@Inject(CONFIG) private readonly atlasConfig: AtlasConfig) {}
 

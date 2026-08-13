@@ -170,6 +170,23 @@ describe('PluginSpiRegistry', () => {
     expect(registry.providedNamespaces('topo-rc')).toEqual([])
   })
 
+  it('resolve 本 app 本地优先：本地覆盖实例遮蔽共享实例（M7 回归）', () => {
+    const r = new PluginSpiRegistry()
+    // 共享实例（@0）+ 同 app 本地覆盖实例（@9）
+    r.register('override', 1, 'GLOBAL_SHARED', {
+      ns: { describe: 's', create: () => ({ v: 'shared' }) },
+    }, makeEnv)
+    r.register('override', 9, 'APP_LOCAL', {
+      ns: { describe: 'l', create: () => ({ v: 'local' }) },
+    }, makeEnv)
+    // 本 app（9）命中本地覆盖；其他 app（2）无本地实例，回落共享
+    expect((r.resolve<{ v: string }>('override', 'ns', 9))?.v).toBe('local')
+    expect((r.resolve<{ v: string }>('override', 'ns', 2))?.v).toBe('shared')
+    // 注销本地覆盖后，本 app 回落共享
+    r.unregister('override', 9, 'APP_LOCAL')
+    expect((r.resolve<{ v: string }>('override', 'ns', 9))?.v).toBe('shared')
+  })
+
   it('审计回调：首次构建触发一次、缓存命中不触发（P2-3 回归）', () => {
     const audits: Array<{ pluginType: string; namespace: string; consumerAppId: number }> = []
     const hooked = new PluginSpiRegistry()

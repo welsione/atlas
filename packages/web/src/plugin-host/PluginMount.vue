@@ -17,11 +17,15 @@ const props = defineProps<{
 const host = ref<HTMLElement>()
 let mountedEntry: PluginUiEntry | null = null
 let unmount: (() => void) | undefined
+/** 挂载代数：unmount/重挂时递增，使进行中的异步 load 失效（防卸载后仍挂载到已卸载 host）。 */
+let mountSeq = 0
 
 async function mountUI() {
   if (!host.value) return
+  const seq = ++mountSeq
   const entry = await props.load()
-  if (!host.value || mountedEntry !== null) return
+  // load 异步进行期间被卸载/重挂：丢弃本次结果
+  if (seq !== mountSeq || !host.value) return
   mountedEntry = entry
   const returned = entry.mount(host.value, {
     appId: props.appId,
@@ -33,6 +37,7 @@ async function mountUI() {
 }
 
 function unmountUI() {
+  mountSeq += 1
   try {
     unmount?.()
   } catch {

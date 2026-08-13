@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common'
 import { existsSync, readFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { PluginRegistry } from './plugin.registry.js'
 import { CONFIG, type AtlasConfig } from '../config.js'
 import type { PluginUiManifest } from '@atlas/types'
@@ -62,7 +62,7 @@ export class PluginUiService {
   readIconFile(pluginType: string, path: string): string | null {
     if (!isSafePath(path)) return null
     const loaded = this.registry.byType(pluginType)
-    if (!loaded || loaded.builtin) return null
+    if (!loaded) return null
     const iconsDir = join(this.config.pluginsDir, loaded.artifact, 'icons')
     if (!existsSync(iconsDir)) return null
     const file = resolve(iconsDir, path)
@@ -77,22 +77,6 @@ export class PluginUiService {
   private uiDirOf(pluginType: string): string | null {
     const loaded = this.registry.byType(pluginType)
     if (!loaded) return null
-    if (loaded.builtin) {
-      try {
-        const pkgJson = require.resolve(`@atlas/plugin-${pluginType}/package.json`)
-        const pkgRoot = dirname(pkgJson)
-        const candidates = [
-          join(pkgRoot, 'ui'),
-          join(pkgRoot, 'dist', 'ui'),
-        ]
-        for (const c of candidates) {
-          if (existsSync(c)) return c
-        }
-      } catch {
-        return null
-      }
-      return null
-    }
     const dir = join(this.config.pluginsDir, loaded.artifact, 'ui')
     return existsSync(dir) ? dir : null
   }

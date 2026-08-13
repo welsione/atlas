@@ -10,7 +10,8 @@
   ],
   "scripts": {
     "build": "npm run build -w @atlas/types && npm run build -w @atlas/core",
-    "test": "npm run test -w @atlas/core",
+    "typecheck": "npm run typecheck -w @atlas/types && npm run typecheck -w @atlas/core && npm run typecheck -w @atlas/web",
+    "test": "npm run test -w @atlas/core && npm run test -w @atlas/web",
     "dev": "npm run start:dev -w @atlas/core",
     "build:web": "npm run build -w @atlas/web",
     "sync:static": "npm run build -w @atlas/web && rm -rf packages/core/static && cp -R packages/web/dist packages/core/static && rm -rf packages/core/dist/static && cp -R packages/web/dist packages/core/dist/static"

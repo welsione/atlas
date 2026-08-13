@@ -178,6 +178,14 @@ export interface OpsLogRow {
   createdAt: string
 }
 
+/** 通用分页结构：后端列表统一返回（page 从 1 起，size 默认 10 上限 100）。 */
+export interface Page<T> {
+  rows: T[]
+  total: number
+  page: number
+  size: number
+}
+
 export interface OpsLogPage {
   total: number
   page: number
@@ -207,6 +215,11 @@ export interface PluginStore {
   /** entityId 默认 ''，entityKey 为记录标识。 */
   get<T = unknown>(entityKey: string, entityId?: string): Promise<T | null>
   put(entityKey: string, value: unknown, entityId?: string): Promise<void>
+  /** 乐观锁写入（CAS）：仅当记录版本等于 expectedVersion 时写入并版本 +1；冲突返回 false 且不写入。
+   *  记录不存在视为版本 0（expectedVersion=0 时创建成功）。先 version() 再 putIfVersion 实现读-改-写。 */
+  putIfVersion(entityKey: string, value: unknown, expectedVersion: number, entityId?: string): Promise<boolean>
+  /** 读取记录版本（记录不存在返回 0）。 */
+  version(entityKey: string, entityId?: string): Promise<number>
   remove(entityKey: string, entityId?: string): Promise<void>
   list<T = unknown>(entityId?: string): Promise<T[]>
 }

@@ -63,10 +63,16 @@ export class PluginService implements OnApplicationBootstrap {
     @Inject(PLUGIN_SPI_REGISTRY) private readonly spiRegistry: PluginSpiRegistry,
   ) {}
 
-  /** 订阅热替换事件：unloaded 清 SPI、loaded 重建（对已启用实例）；注入解析级审计回调。 */
+  /** 订阅热替换事件：unloaded 清 SPI + dispose 实例 env；loaded 重建 SPI + re-init（对已启用实例）；注入解析级审计回调。 */
   onApplicationBootstrap(): void {
-    this.eventBus.on('plugin.unloaded', ({ pluginType }) => this.spiRegistry.unregister(pluginType))
-    this.eventBus.on('plugin.loaded', ({ pluginType }) => this.rebuildSpiFor(pluginType))
+    this.eventBus.on('plugin.unloaded', ({ pluginType }) => {
+      this.spiRegistry.unregister(pluginType)
+      this.disposeInstancesOf(pluginType)
+    })
+    this.eventBus.on('plugin.loaded', ({ pluginType }) => {
+      this.rebuildSpiFor(pluginType)
+      void this.reinitInstancesOf(pluginType)
+    })
     // P2-3 跨插件调用审计：能力对象首次构建（缓存 miss）时记录一次，缓存命中不记
     this.spiRegistry.setAuditHook(({ pluginType, namespace, consumerAppId }) => {
       this.opsLogService.write(consumerAppId, pluginType, 'INFO', `跨插件 SPI 调用：${pluginType}/${namespace}`)
@@ -104,7 +110,7 @@ export class PluginService implements OnApplicationBootstrap {
       version,
       icon,
       loaded,
-      builtin: artifact === 'builtin',
+      builtin: false,
       createdAt: nowTs,
       updatedAt: nowTs,
     })
@@ -124,7 +130,10 @@ export class PluginService implements OnApplicationBootstrap {
     const existing = this.repository.findInstance(appId, pluginType)
     if (existing) {
       if (requestedScope && requestedScope !== existing.dataScope) {
-        existing.dataScope = this.resolveScope(plugin, requestedScope)
+        const nextScope = this.resolveScope(plugin, requestedScope)
+        // scope 变更前先注销旧作用域的 SPI 注册，避免旧 @0/@appId 条目永久残留（规范 R-05）
+        this.spiRegistry.unregister(pluginType, appId, existing.dataScope)
+        existing.dataScope = nextScope
         existing.updatedAt = now()
         this.repository.updateInstance({
           id: existing.id, app_id: existing.appId, plugin_type: existing.pluginType,
@@ -202,14 +211,8 @@ export class PluginService implements OnApplicationBootstrap {
   /** 删除实例：APP_LOCAL 时清理该应用 store；共享插件只删实例（共享数据保留）。 */
   deleteInstance(appId: number, pluginType: string): void {
     const inst = this.requireInstance(appId, pluginType)
-    const loaded = this.registry.byType(pluginType)
-    if (loaded) {
-      try {
-        void loaded.plugin.destroy?.()
-      } catch (e) {
-        this.logger.warn(`插件销毁钩子异常: ${pluginType}，${(e as Error).message}`)
-      }
-    }
+    // 注意：这里不调用插件级 destroy()——destroy 无实例上下文，删除单实例时调用会
+    // 误伤其他应用共享的插件运行时状态（规范 R-01）。实例级清理见下方 store/事件/SPI 注销。
     if (inst.dataScope === 'APP_LOCAL') {
       // 仅清理该插件在该应用的通用存储（instance_id=appId + plugin_type），不动兄弟插件
       this.repository.storeDeleteInstance(appId, pluginType)
@@ -231,7 +234,7 @@ export class PluginService implements OnApplicationBootstrap {
     const want = pluginTypes && pluginTypes.length > 0 ? new Set(pluginTypes) : null
     const pending = this.repository
       .findAllDefs()
-      .filter((d) => (!want || want.has(d.pluginType)) && !this.repository.findInstance(appId, d.pluginType))
+      .filter((d) => d.loaded && (!want || want.has(d.pluginType)) && !this.repository.findInstance(appId, d.pluginType))
       .map((d) => d.pluginType)
     if (pending.length === 0) return
 
@@ -314,11 +317,15 @@ export class PluginService implements OnApplicationBootstrap {
   unload(pluginType: string): void {
     const loaded = this.registry.byType(pluginType)
     if (!loaded) throw new ValidationError(`插件未加载: ${pluginType}`)
-    if (loaded.builtin) throw new ValidationError('内置插件不支持卸载')
     this.spiRegistry.unregister(pluginType)
     this.registry.unregister(pluginType)
-    this.repository.markLoaded(pluginType, false)
+    this.markDefUnloaded(pluginType)
     this.logger.warn(`插件已卸载（数据保留）: ${pluginType}`)
+  }
+
+  /** 标记插件定义未加载（卸载/加载失败时调用；实例与数据保留，重集成可恢复）。 */
+  markDefUnloaded(pluginType: string): void {
+    this.repository.markLoaded(pluginType, false)
   }
 
   // ---------- 环境与查询 ----------
@@ -330,6 +337,25 @@ export class PluginService implements OnApplicationBootstrap {
       instance: instances.get(def.pluginType) ?? null,
       runtimeLoaded: this.registry.byType(def.pluginType) !== undefined,
     }))
+  }
+
+  /** 分页插件概览（page 从 1 起，defs 分页取数；instances 一次全量 join 状态）。 */
+  instanceOverviewPage(appId: number, page: number, size: number): import('@atlas/types').Page<{
+    plugin: import('@atlas/types').PluginDef
+    instance: import('@atlas/types').PluginInstance | null
+    runtimeLoaded: boolean
+  }> {
+    const instances = new Map(this.repository.findAllInstancesByApp(appId).map((i) => [i.pluginType, i]))
+    return {
+      rows: this.repository.findAllDefsPage(page, size).map((def) => ({
+        plugin: def,
+        instance: instances.get(def.pluginType) ?? null,
+        runtimeLoaded: this.registry.byType(def.pluginType) !== undefined,
+      })),
+      total: this.repository.countDefs(),
+      page,
+      size,
+    }
   }
 
   requireInstance(appId: number, pluginType: string): import('@atlas/types').PluginInstance {
@@ -479,6 +505,31 @@ export class PluginService implements OnApplicationBootstrap {
     }
   }
 
+  /** 插件卸载/热替换前，dispose 该插件全部实例（含停用）的 env，退订事件防泄漏（规范 R-03）。 */
+  private disposeInstancesOf(pluginType: string): void {
+    for (const inst of this.repository.findAllInstancesOf(pluginType)) {
+      this.activeEnvs.get(inst.id)?.dispose()
+      this.activeEnvs.delete(inst.id)
+    }
+  }
+
+  /** 插件热替换/重载后，对已启用实例重新 init（幂等）并重建 env 追踪（规范 R-04）。 */
+  private async reinitInstancesOf(pluginType: string): Promise<void> {
+    const loaded = this.registry.byType(pluginType)
+    if (!loaded) return
+    for (const inst of this.repository.findAllEnabledInstancesOf(pluginType)) {
+      const env = this.environmentOf(inst.appId, inst.id, pluginType, inst.dataScope)
+      this.activeEnvs.set(inst.id, env)
+      try {
+        await loaded.plugin.init?.(env)
+      } catch (e) {
+        this.logger.warn(`插件热重载后初始化异常（已隔离）: ${pluginType}，${(e as Error).message}`)
+      }
+      await this.syncPluginDatasets(inst.appId, pluginType).catch((e) =>
+        this.logger.warn(`插件数据集同步异常: ${pluginType}，${(e as Error).message}`))
+    }
+  }
+
   // ---------- 实例配置 ----------
 
   updateInstanceConfig(appId: number, pluginType: string, config: Record<string, unknown>): void {
@@ -538,6 +589,10 @@ class PlatformPluginEnvironment implements PluginEnvironment {
         (this.repository.storeGet(scopeKey, pluginType, entityKey, entityId) as T | null) ?? null,
       put: async (entityKey: string, value: unknown, entityId = '') =>
         this.repository.storePut(scopeKey, pluginType, entityKey, entityId, JSON.stringify(value), now()),
+      putIfVersion: async (entityKey: string, value: unknown, expectedVersion: number, entityId = '') =>
+        this.repository.storePutIfVersion(scopeKey, pluginType, entityKey, entityId, JSON.stringify(value), expectedVersion, now()),
+      version: async (entityKey: string, entityId = '') =>
+        this.repository.storeVersion(scopeKey, pluginType, entityKey, entityId),
       remove: async (entityKey: string, entityId = '') =>
         this.repository.storeRemove(scopeKey, pluginType, entityKey, entityId),
       list: async <T = unknown>(entityId = '') =>

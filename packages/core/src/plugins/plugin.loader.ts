@@ -14,9 +14,7 @@ import { createHash } from 'node:crypto'
 export const PLUGIN_MANIFEST = 'manifest.json'
 
 /**
- * 插件加载器：
- * - 内置插件：core 直接 import（编译期类型检查），artifact='builtin'
- * - 外部插件：data/plugins/<type>/ 目录（manifest.json + index.ts|js|mjs），动态 import
+ * 插件加载器：全部插件统一走目录加载（plugins/<type>/，manifest.json + index.ts|js|mjs），动态 import。
  */
 @Injectable()
 export class PluginLoader implements OnApplicationBootstrap {
@@ -66,8 +64,15 @@ export class PluginLoader implements OnApplicationBootstrap {
           this.registry.unregister(type)
         }
         const loaded = await this.loadExternalDir(join(dir, name), name, hash)
-        if (loaded) known.set(name, hash)
-        else known.delete(name)
+        if (loaded) {
+          known.set(name, hash)
+        } else {
+          // 加载失败：标记未加载，下次扫描按新增分支重试，避免反复热替换
+          known.delete(name)
+          for (const type of this.typesOfArtifact(name)) {
+            this.service.markDefUnloaded(type)
+          }
+        }
       }
     }
     // 删除
@@ -76,8 +81,7 @@ export class PluginLoader implements OnApplicationBootstrap {
         this.logger.log(`插件目录已删除，热卸载: ${name}`)
         for (const type of this.typesOfArtifact(name)) {
           this.registry.unregister(type)
-          const def = this.service.defOf(type)
-          if (def) this.service['repository'].markLoaded(type, false)
+          this.service.markDefUnloaded(type)
         }
         known.delete(name)
       }
@@ -120,11 +124,10 @@ export class PluginLoader implements OnApplicationBootstrap {
     return result
   }
 
-  /** 手动全量重载（POST /api/plugins/reload）：卸载全部外部插件 → 重新加载 → 同步注册表 → 重建表。 */
+  /** 手动全量重载（POST /api/plugins/reload）：卸载全部插件 → 重新加载 → 同步注册表 → 重建表。 */
   async reloadAll(): Promise<void> {
     for (const type of this.registry.types()) {
-      const loaded = this.registry.byType(type)
-      if (loaded && !loaded.builtin) this.registry.unregister(type)
+      this.registry.unregister(type)
     }
     await this.loadExternal()
     this.schemaBootstrap.execute()
@@ -211,8 +214,3 @@ function dirHash(pluginDir: string): string {
   walk(pluginDir, '')
   return hash.digest('hex').slice(0, 16)
 }
-
-/**
- * 内置插件清单（workspace 包）：core 静态依赖，启动注册。
- * P4 填充业务实现；当前为骨架（类型保留字 + 数据范围声明）。
- */

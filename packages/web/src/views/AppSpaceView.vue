@@ -37,6 +37,9 @@ const rotating = ref(false)
 const activeTab = ref(localStorage.getItem('atlas-space-tab') || 'instances')
 const overview = ref<PluginOverviewRow[]>([])
 const loading = ref(false)
+const page = ref(1)
+const size = ref(10)
+const total = ref(0)
 
 const appSpaceSlots = useSlotsOf('app-space')
 
@@ -99,10 +102,23 @@ async function handleRemove() {
 async function fetchOverview() {
   loading.value = true
   try {
-    overview.value = await pluginApi.overview(props.app.id)
+    const res = await pluginApi.overview(props.app.id, page.value, size.value)
+    overview.value = res.rows
+    total.value = res.total
   } finally {
     loading.value = false
   }
+}
+
+function switchPage(p: number) {
+  page.value = p
+  fetchOverview()
+}
+
+function switchSize(s: number) {
+  size.value = s
+  page.value = 1
+  fetchOverview()
 }
 
 onMounted(fetchOverview)
@@ -229,8 +245,7 @@ function scopeLabel(row: PluginOverviewRow): string {
           </span>
         </template>
         <div class="surface">
-          <el-table v-loading="loading" :data="overview" empty-text="暂无已注册插件">
-            <el-table-column label="插件" min-width="200">
+          <el-table v-loading="loading" :data="overview" empty-text="暂无已注册插件">            <el-table-column label="插件" min-width="200">
               <template #default="{ row }">
                 <div class="plugin-cell">
                   <img
@@ -240,8 +255,7 @@ function scopeLabel(row: PluginOverviewRow): string {
                     alt=""
                   />
                   <span class="plugin-name">{{ row.plugin.name }}</span>
-                  <el-tag v-if="row.plugin.builtin" size="small" type="info">内置</el-tag>
-                  <el-tag v-else size="small" type="warning">外部</el-tag>
+                  <el-tag size="small" type="warning">外部</el-tag>
                 </div>
               </template>
             </el-table-column>
@@ -284,6 +298,17 @@ function scopeLabel(row: PluginOverviewRow): string {
               </template>
             </el-table-column>
           </el-table>
+          <div class="pager">
+            <el-pagination
+              layout="total, sizes, prev, pager, next"
+              :total="total"
+              :page-size="size"
+              :page-sizes="[10, 20, 50]"
+              :current-page="page"
+              @current-change="switchPage"
+              @size-change="switchSize"
+            />
+          </div>
         </div>
       </el-tab-pane>
 
@@ -306,7 +331,7 @@ function scopeLabel(row: PluginOverviewRow): string {
             <span>{{ slot.label }}</span>
           </span>
         </template>
-        <PluginMount v-if="activeTab === slot.key" :load="slot.load" :app-id="app.id" :plugin-type="slot.key.slice('plugin:'.length)" mode="app-space" :refresh="fetchOverview" />
+        <PluginMount v-if="activeTab === slot.key" :load="slot.load" :app-id="app.id" :plugin-type="slot.pluginType" mode="app-space" :refresh="fetchOverview" />
       </el-tab-pane>
     </el-tabs>
 
@@ -414,5 +439,11 @@ function scopeLabel(row: PluginOverviewRow): string {
 
 .space-tabs {
   padding: 0 4px;
+}
+
+.pager {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 14px;
 }
 </style>
