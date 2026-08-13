@@ -11,6 +11,9 @@ on:
 
 permissions:
   id-token: write
+  contents: read
+  pull-requests: write
+  issues: write
 
 jobs:
   opencode:
@@ -27,6 +30,8 @@ jobs:
       - uses: anomalyco/opencode/github@latest
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           model: opencode-go/deepseek-v4-flash
           share: false
+          use_github_token: true
