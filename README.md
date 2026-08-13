@@ -139,3 +139,4 @@ plugins/weather/
 ## AI 链路验证
 
 触发 PR 更新
+触发 PR 审查验证
