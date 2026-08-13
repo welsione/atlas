@@ -1,52 +1,90 @@
-# Atlas 插件模板
+# {插件名}（`{pluginType}`）
 
-复制本目录即可开发新插件：`cp -R plugins/template plugins/my-plugin`。
+一句话定位：{插件解决什么问题、核心能力一句话}。
 
-## 目录结构
+## 元信息
 
-```
-plugins/my-plugin/
-├── manifest.json   # 插件声明（pluginType/name/description/version/defaultDataScope/icon/entry）
-├── icons/          # 插件图标目录（可选；manifest.icon 相对路径指向这里）
-├── src/
-│   └── index.ts    # AtlasPlugin 实现（Node 22 原生运行 TS，无需编译）
-├── ui/             # 前端面板构建产物（可选，npm run ui:build 自动生成）
-└── ui-src/         # 前端面板源码（可选；从 plugins/providers/ui-src 复制改造）
-```
+| 字段 | 值 |
+|------|-----|
+| type | `{pluginType}`（全局唯一，与 `manifest.json.pluginType` 一致） |
+| 版本 | `{x.y.z}`（与 `manifest.json.version` 一致） |
+| 数据作用域 | `APP_LOCAL` / `GLOBAL_SHARED`（与 `manifest.json.defaultDataScope` 一致） |
+| 作用域覆盖 | `{是/否}`（`scopeOverrideAllowed`，仅允许 SHARED → LOCAL） |
+| 插件目录 | `plugins/{pluginType}/` |
 
-## 快速开始
+## 插件作用
 
-1. **声明**：改 `manifest.json` —— `pluginType` 全局唯一，`entry` 固定 `src/index.ts`
-2. **图标**（可选）：`icons/` 目录放 SVG/PNG，`manifest.json` 的 `icon` 写 `icons/xxx.svg`（或 data URI / http URL）；应用空间 Tab、插件实例表格、插件注册表、控制台卡片统一展示
-3. **实现**：改 `src/index.ts` —— `AtlasPlugin.type` 必须与 `manifest.pluginType` 一致（不一致加载跳过）
-4. **验证**：保存后约 10s 自动热加载（日志可见注册信息），端点即生效
+- {能力一}：{说明}
+- {能力二}：{说明}
+- {典型场景}：{说明}
 
-## 核心契约速查
+## 版本信息
 
-| 能力 | 用法 |
+| 版本 | 说明 |
 |------|------|
-| 通用存储 | `env.store().get/put/remove/list(key, entityId?)` |
-| 文件存储 | `env.files().write/read/remove/list`；公开托管 `publish(relPath, name)` → `/api/files/{token}/download` |
-| 敏感加密 | `env.crypto().encrypt/decrypt`（API Key 等必须加密落库） |
-| 数据集发布 | `env.datasets().publish(key, name, sensitivity, json)` / `upsertSecret`；声明 `datasetSource().render(env)` 供调度刷新 |
-| 操作审计 | `env.ops().info/warn/error/log(level, msg, detail?)` |
-| 配置 | `env.config()` / `await env.updateConfig(cfg)` |
-| 端点 | `endpoints()` 声明 `{method, path, summary, handle}`，地址 `/api/apps/{appId}/plugins/{type}/ep/{path}`，返回即 data，抛错即失败响应 |
-| 初始化 | `init(env)` 实例启用时执行（种子数据）；`destroy()` 清理 |
+| {x.y.z} | {当前版本变更说明；首个版本写明能力范围} |
 
-## 数据作用域
+> 版本演进维护约定：新增能力 / 破坏性变更 bump `manifest.json.version` 并在本表追加一行。
 
-- `APP_LOCAL`：每应用一份（默认）
-- `GLOBAL_SHARED`：全局共享一份（如供应商配置）
+## 系统 SPI（平台能力使用情况）
 
-## 前端面板（可选）
+{选填。列出本插件实际用到的平台 SPI；未用到的项不列。}
 
-- 复制 `plugins/providers/ui-src` 改造：`src/main.js` 导出 `{ mount(el, ctx) }`（ctx 含 `appId/pluginType/refresh`），`App.vue` 接收 `props.appId`
-- 运行时依赖（vue / element-plus / @element-plus/icons-vue / @atlas/runtime）由平台提供，**不要打包**
-- 接口调用：`import { get, post, put, del } from '@atlas/runtime'`
-- 构建：`cd ui-src && npm install && npm run ui:build` → 产物进 `ui/`（entry 内容哈希）
+- **通用能力**：
+  - `env.store()` —— {用途，如：键值存储业务数据}
+  - `env.crypto()` —— {用途，如：API Key 加密落库}
+  - `env.datasets()` —— {用途，如：发布数据集 / 同步敏感凭证}
+  - `env.files()` —— {用途，如：文件读写 + publish 公开托管}
+  - `env.ops()` / `env.info()/warn()` —— {用途，如：增删改审计}
+  - `env.config()` —— {用途，如：读取实例配置}
+- **能力门面**：{`env.apps()` / `env.monitor()` / `env.security()` / `env.platform()` 中实际用到者}
+- **事件订阅**：`env.events().on(...)` —— {订阅了哪些事件、用途}
+- **声明式接入**：
+  - `schema.sql` —— {建了哪些表}
+  - `cleanupTables()` —— {应用删除级联清理哪些表}
+  - `logTables()` —— {声明哪些日志表由平台定时清理}
+  - `publicUrls()` / `resourceName()` —— {如用到}
 
-## 提交规范
+{若仅使用基础能力，写：目前仅使用 `env.store()` 等基础通用能力，未使用能力门面 / 事件 / 声明式接入。}
 
-- 后端 `src/` 与前端 `ui-src/` 源码 + `ui/` 构建产物一并提交（仓库内插件目录即分发源）
-- 参考官方插件：`plugins/{providers,prompts,model-files}`；完整规范见 `docs/plugin-development.md`
+## 提供的 SPI（双向 SPI）
+
+{选填。若本插件通过 `provides()` 向其他插件/内核暴露能力，列出；未暴露则不写本节。}
+
+| 命名空间 | 版本 | 能力说明 | 消费方式 |
+|----------|------|----------|----------|
+| `{namespace}` | `{version}` | {能力对象做什么；密钥/权限约定} | `env.spi<{接口}>('{pluginType}', '{namespace}')` |
+
+> 能力接口类型定义在 `packages/types/src/spi/`，消费方据此获得类型安全。
+
+## 依赖的其他插件 SPI（选填）
+
+{若通过 `dependsOn()` 声明了对其他插件的能力依赖，列出；否则不写本节。}
+
+- `{pluginType}/{namespace}` —— {依赖原因}（消费方式：`env.spi(...)`）
+
+## 端点（endpoints）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `list` | {说明} |
+| POST | `create` | {说明} |
+
+外部调用地址：`/api/apps/{appId}/plugins/{pluginType}/ep/{path}`
+
+## 前端 UI（可选）
+
+- {slot}（`console` 控制台卡片 / `app-space` 应用空间 Tab / `system-menu` 系统侧边菜单）—— {说明}
+
+## 开发与构建
+
+```bash
+# 前端面板改动后重建
+cd ui-src && npm install && npm run ui:build   # → ../ui/（构建产物随仓库提交）
+
+# 后端改动无需编译，Node 22 type-stripping 直接运行；等待约 10s 热重载
+```
+
+> 约定：加载器用 `?v={hash}` 做 cache-busting，插件内 `import.meta.url` 会带 query，取相对路径必须先 `.split('?')[0]`（参考 providers 的 `loadBuiltinReference`）。
+
+> 完整插件开发规范见 [`docs/plugin-development.md`](../../docs/plugin-development.md)。
