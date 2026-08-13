@@ -5,50 +5,113 @@
       "release-type": "node",
       "package-name": "atlas",
       "extra-files": [
-        { "type": "json", "path": "package-lock.json", "jsonpath": "$.version" }
-      ]
+        {
+          "type": "json",
+          "path": "package-lock.json",
+          "jsonpath": "$.version"
+        }
+      ],
+      "include-component-in-tag": false
     },
     "packages/types": {
       "release-type": "node",
       "package-name": "@atlas/types",
       "extra-files": [
-        { "type": "json", "path": "package-lock.json", "jsonpath": "$.packages[\"packages/types\"].version" }
-      ]
+        {
+          "type": "json",
+          "path": "package-lock.json",
+          "jsonpath": "$.packages[\"packages/types\"].version"
+        }
+      ],
+      "include-component-in-tag": false
     },
     "packages/core": {
       "release-type": "node",
       "package-name": "@atlas/core",
       "extra-files": [
-        { "type": "json", "path": "package-lock.json", "jsonpath": "$.packages[\"packages/core\"].version" }
-      ]
+        {
+          "type": "json",
+          "path": "package-lock.json",
+          "jsonpath": "$.packages[\"packages/core\"].version"
+        }
+      ],
+      "include-component-in-tag": false
     },
     "packages/web": {
       "release-type": "node",
       "package-name": "@atlas/web",
       "extra-files": [
-        { "type": "json", "path": "package-lock.json", "jsonpath": "$.packages[\"packages/web\"].version" }
-      ]
+        {
+          "type": "json",
+          "path": "package-lock.json",
+          "jsonpath": "$.packages[\"packages/web\"].version"
+        }
+      ],
+      "include-component-in-tag": false
     }
   },
   "plugins": [
     {
       "type": "linked-versions",
       "groupName": "atlas",
-      "components": [".", "packages/types", "packages/core", "packages/web"],
+      "components": [
+        ".",
+        "packages/types",
+        "packages/core",
+        "packages/web"
+      ],
       "tag-pattern": "v{version}"
     }
   ],
   "changelog-sections": [
-    { "type": "feat", "section": "新增" },
-    { "type": "fix", "section": "修复" },
-    { "type": "perf", "section": "性能" },
-    { "type": "refactor", "section": "重构" },
-    { "type": "test", "section": "测试" },
-    { "type": "docs", "section": "文档" },
-    { "type": "build", "section": "构建", "hidden": true },
-    { "type": "chore", "section": "杂项", "hidden": true },
-    { "type": "ci", "section": "持续集成", "hidden": true },
-    { "type": "style", "section": "样式", "hidden": true },
-    { "type": "revert", "section": "回滚", "hidden": true }
+    {
+      "type": "feat",
+      "section": "新增"
+    },
+    {
+      "type": "fix",
+      "section": "修复"
+    },
+    {
+      "type": "perf",
+      "section": "性能"
+    },
+    {
+      "type": "refactor",
+      "section": "重构"
+    },
+    {
+      "type": "test",
+      "section": "测试"
+    },
+    {
+      "type": "docs",
+      "section": "文档"
+    },
+    {
+      "type": "build",
+      "section": "构建",
+      "hidden": true
+    },
+    {
+      "type": "chore",
+      "section": "杂项",
+      "hidden": true
+    },
+    {
+      "type": "ci",
+      "section": "持续集成",
+      "hidden": true
+    },
+    {
+      "type": "style",
+      "section": "样式",
+      "hidden": true
+    },
+    {
+      "type": "revert",
+      "section": "回滚",
+      "hidden": true
+    }
   ]
 }
