@@ -38,6 +38,6 @@
 
 ## 归属
 
-本行为准则改编自 [Contributor Covenant][homepage] 2.1 版，可在 https://www.contributor-covenant.org/version/2/1/code_of_conduct.html 查阅。
+本行为准则改编自 [Contributor Covenant][homepage] 2.1 版，可在 <https://www.contributor-covenant.org/version/2/1/code_of_conduct.html> 查阅。
 
 [homepage]: https://www.contributor-covenant.org

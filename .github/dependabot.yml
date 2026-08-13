@@ -1,0 +1,16 @@
+# Dependabot：npm 依赖每周检查，minor/patch 分组提醒（不自动合并，人工确认后合并）。
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "02:00"
+    groups:
+      minor-patch:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
+    labels: ["dependencies"]
+    versioning-strategy: increase
+    open-pull-requests-limit: 10

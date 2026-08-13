@@ -86,5 +86,5 @@ cd ui-src && npm install && npm run ui:build   # → ../ui/（构建产物随仓
 ```
 
 > 约定：加载器用 `?v={hash}` 做 cache-busting，插件内 `import.meta.url` 会带 query，取相对路径必须先 `.split('?')[0]`（参考 providers 的 `loadBuiltinReference`）。
-
+>
 > 完整插件开发规范见 [`docs/plugin-development.md`](../../docs/plugin-development.md)。

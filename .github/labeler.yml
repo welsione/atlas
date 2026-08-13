@@ -1,0 +1,20 @@
+docs:
+  - "docs/**/*"
+  - "*.md"
+  - "AGENTS.md"
+  - "CHANGELOG.md"
+
+core:
+  - "packages/core/**/*"
+  - "packages/types/**/*"
+
+web:
+  - "packages/web/**/*"
+
+plugins:
+  - "plugins/**/*"
+
+ci:
+  - ".github/**/*"
+  - "package.json"
+  - "package-lock.json"

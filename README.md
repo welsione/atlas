@@ -17,7 +17,7 @@
 
 ## 目录结构
 
-```
+```text
 packages/
   types/      # 共享 DTO + 插件 SPI 契约（@atlas/types）
   core/       # NestJS 后端：应用/凭证/插件引擎/数据集/安全/运维台
@@ -43,13 +43,14 @@ npm run dev              # 后端（http://127.0.0.1:18081）
 ## 核心概念
 
 ### 应用空间（一级实体）
+
 一切数据挂靠在应用上：插件实例、数据集、敏感凭证、审计。创建应用自动实例化全部已注册插件；`app_id + app_secret`（SHA-256，仅创建/轮换时展示一次）换短时效令牌（`POST /api/v1/app/auth`），吊销即时生效。
 
 ### 插件（前后端一体）
 
 **目录插件**（无内置概念，全部从仓库根 `plugins/` 加载，`ATLAS_PLUGINS_DIR` 可覆盖；`template` 目录被加载器跳过）：
 
-```
+```text
 plugins/weather/
   manifest.json    # {pluginType, name, description, version, defaultDataScope, icon, entry}
   icons/           # 插件图标（manifest.icon 相对路径指向这里，可选）
@@ -68,6 +69,7 @@ plugins/weather/
 - **插件开发**：复制 `plugins/template/` 起步，完整规范见 [docs/plugin-development.md](docs/plugin-development.md)（含 SPI 契约、env API、UI slot、安全规范、FAQ）
 
 ### 数据集（版本化数据分发）
+
 内容哈希驱动版本：内容变更才 bump 版本，消费方轮询 meta、变化才下载（`If-None-Match` → 304 免流量）。
 
 #### 密级与访问控制
@@ -90,19 +92,25 @@ plugins/weather/
 匿名访问 meta 各密级均开放；data/assets 按密级鉴权（PUBLIC 直达，INTERNAL/SECRET 需 Bearer 应用令牌且消费方应用在授权白名单内）；secrets 仅 SECRET 级。应用空间可对数据集做「跨应用授权」（grants）、撤销与审计查看。
 
 #### 资产（文件数据）
+
 数据集除 JSON 内容外可携带文件资产（`assets_json` 清单 + 下载端点），密级管理/授权/审计与内容完全一致：
+
 - **手动数据集**：管理面 `POST/DELETE /api/apps/{appId}/datasets/{id}/assets` 上传/删除（multipart 或 base64，单文件 ≤64MB），磁盘存储于 `{dataDir}/dataset-files/{datasetId}/`
 - **插件注册数据集**：插件声明 `assets()` 清单 + `assetSource()` 懒加载字节（core 不落盘，如供应商图标读插件目录、模型文件经 `env.files()`），内容即时生效
 
 #### 插件注册数据集
+
 插件通过 `AtlasPlugin.datasets()` 声明数据集（如供应商配置、模型文件），平台在实例启用/启动补同步时自动创建并持续维护：
+
 - **管理面内容锁定**：不可删除、不可编辑内容/名称（交由插件管理），仅可调整敏感度（密级管理）；授权白名单、审计查看保留
 - 内容（`render`）、敏感凭证（`secrets`，SECRET 级自动同步/停用）、资产清单（`assets`）均由插件声明，数据变更后 `env.datasets().refresh(key)` 即时同步
 
 #### 手动数据集管理（应用空间 → 数据集）
+
 新建/管理抽屉：名称/描述/内容 JSON 编辑、敏感度调整、文件上传、访问方式（URL + curl 示例一键复制）、刷新、删除。刷新模式 `MANUAL`（手动）或 `SCHEDULED`（定时，插件渲染源）。
 
 ### 控制台 / 运维台
+
 - **控制台**（默认首页）：统计卡片 + 插件注册的 console slot 卡片；侧边栏渲染系统级插件（system-menu slot）菜单项
 - **运维台**：跨应用工作日志（`ops_logs`），插件经 `env.ops()` 写入；按应用/插件/级别过滤 + 24h 趋势
 
@@ -123,3 +131,7 @@ plugins/weather/
 - 管理面：`/api/apps`（应用 CRUD/凭证轮换吊销）、`/api/plugins`（注册表/卸载）、`/api/apps/{appId}/plugins/...`（实例与内置插件数据）、`/api/apps/{appId}/datasets...`（数据集 CRUD/敏感度/内容/资产上传删除/授权/审计/刷新）、`/api/ops/...`（运维台）
 - 数据面（公开）：`/api/v1/app/auth`（应用凭证换令牌）、`/api/v1/datasets/{token}/meta|data|secrets|assets/{path}`（数据集消费）、`/api/v1/app/{appId}/plugins/{type}/ep/{path}`（插件数据面网关，应用凭证 Bearer 鉴权）、`/api/files/{token}/meta|download`（插件文件公开托管下载）
 - 插件 UI：`/api/plugins/ui`（清单，管理认证）、`/_pluginui/{type}/{path}`（资源，公开）
+
+## 仓库运维
+
+仓库自动化运维套件（release-please 发布、opencode AI 审查、Dependabot、markdownlint/commitlint 门禁等）见 [docs/repository-ops.md](docs/repository-ops.md)；贡献流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。

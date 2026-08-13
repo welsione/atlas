@@ -13,7 +13,7 @@ Atlas 是一个全 TypeScript 的 AI 服务基础平台，核心能力全部通�
 
 ## 1. 插件模型总览
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │ Atlas 平台 (packages/core)                                   │
 │  · 插件加载器（目录扫描 + 热更新，约 10s 轮询）                 │
@@ -41,7 +41,7 @@ Atlas 是一个全 TypeScript 的 AI 服务基础平台，核心能力全部通�
 
 ## 2. 目录结构规范
 
-```
+```text
 plugins/<type>/
 ├── manifest.json          # 插件声明（必填，含 icon）
 ├── icons/                 # 插件图标目录（可选，SVG/PNG，manifest.icon 相对路径指向这里）
@@ -168,6 +168,7 @@ export default plugin
 ```
 
 ### 生命周期
+
 1. **平台启动**：加载器扫描 `plugins/` 目录 → 校验 manifest（字段齐全、entry 存在、
    导出 `AtlasPlugin`、type 与 manifest 一致）→ 注册到插件注册表 → 执行插件目录 `schema.sql` 建表。
 2. **实例启用**（某应用启用该插件）：`cleanupTables()` 关联的插件表已由 `schema.sql` 建好；
@@ -294,23 +295,28 @@ dependsOn: () => [
 ## 7. 端点（endpoints）规范
 
 ### 路由与调用地址
+
 - `path` 为 `/ep/` 之后的相对路径，支持 `{param}` 占位，如 `update/{id}`。
 - 外部访问地址：`/api/apps/{appId}/plugins/{pluginType}/ep/{path}`。
 - 前端面板调用：
+
   ```js
   import { get, post, put, del } from '@atlas/runtime'
   const base = () => `/api/apps/${appId}/plugins/my-plugin/ep`
   const rows = await get(base() + '/list')
   await put(base() + `/update/${id}`, { name })
   ```
+
 - `handle(env, pathParams, body)`：`pathParams` 为 `{param}` 解析结果（字符串）；
   `body` 为请求体（JSON 对象或数组，未传为 `undefined`）。
 
 ### 返回包装
+
 - handler 的**返回值**即接口 `data`，平台统一包装为 `{ code: 0, message: 'ok', data }`。
 - handler **抛错**（`throw new Error(...)`）→ 平台统一包装为失败响应 `{ code: 1, message }`，HTTP 400/500 语义由平台处理。
 
 ### multipart 上传与二进制下载
+
 - 请求为 `multipart/form-data` 时，`body = { fields: {...}, files: [{ originalname, buffer }] }`。
 - handler 返回 `{ $binary: <base64 字符串 | Buffer>, $mime: 'application/pdf', $filename: 'a.pdf' }`
   时，平台直接以二进制流响应（下载）。**小文件**可返回 base64 字符串；**大文件**直接返回
@@ -408,6 +414,7 @@ void env.datasets().refresh('providers-config') // 同步数据集（fire-and-fo
 ## 10. 前端 UI 面板规范
 
 ### slot 模型
+
 UI manifest 声明面板挂载点，平台在三类位置渲染：
 
 | slot | 位置 | 声明字段 |
@@ -422,6 +429,7 @@ UI manifest 声明面板挂载点，平台在三类位置渲染：
   （参考 machine-monitor 插件：`GET /api/apps` 取第一个应用拼接端点地址）。
 
 ### ui-src 约定
+
 ```js
 // src/main.js —— 必须 default 导出 mount 契约
 import { createApp } from 'vue'
@@ -437,6 +445,7 @@ export default {
   },
 }
 ```
+
 - `ctx = { appId, pluginType, mode, refresh }`：`refresh()` 可触发父容器刷新；
   `mode` 为挂载场景（`console` / `app-space` / `system-menu`），面板可按场景
   差异化渲染（如卡片模式出概要、菜单模式出详情）；
@@ -447,6 +456,7 @@ export default {
   直接 `import { get, post, put, del } from '@atlas/runtime'` 即可。
 
 ### src/manifest.json 与构建
+
 ```json
 {
   "pluginType": "my-plugin",
@@ -459,13 +469,15 @@ export default {
   ]
 }
 ```
+
 `npm run ui:build`（node build.mjs）执行 vite 构建并对 entry 做内容哈希
 （`entry.<sha256:8>.js`），自动生成 `ui/manifest.json` 与 `ui/entry.*.js`。
 平台经 `GET /api/plugins/ui` 汇总全部 manifest，按 `/_pluginui/{type}/{entry}`
 动态加载（`import(/* @vite-ignore */ ...)`，哈希文件名保证缓存更新）。
 
 ### UI 调用链汇总
-```
+
+```text
 面板组件 → import { get, post, put, del } from '@atlas/runtime'
         → GET/POST/PUT/DELETE /api/apps/{appId}/plugins/{type}/ep/...
 面板 API 地址自动携带管理 token（AUTH_TOKEN_KEY 由平台注入）。
