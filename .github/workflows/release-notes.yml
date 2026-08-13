@@ -2,11 +2,17 @@ name: release-notes
 
 # Release Notes AI 润色：release 发布后，用 opencode（OpenCode Go 订阅）把
 # release-please 生成的机械 notes 归纳为可读中文 Release Notes 并更新 release body。
+# 也可手动触发（workflow_dispatch + release-tag 输入）对已有 release 补跑。
 # 依赖 secrets：OPENCODE_API_KEY。
 
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      release-tag:
+        description: "要润色的 release tag（如 v0.4.0）"
+        required: true
 
 permissions:
   contents: write
@@ -31,10 +37,10 @@ jobs:
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ github.event.release.tag_name || inputs.release-tag }}
         run: |
           gh release view "$TAG" --json body -q .body > /tmp/notes.md
-          OPENCODE_DISABLE_AUTOUPDATE=1 opencode run --auto --format text \
+          OPENCODE_DISABLE_AUTOUPDATE=1 opencode run --auto \
             "你是 Atlas 发布编辑。将下面 release 的机械 notes 归纳为简洁的中文 Release Notes：按【新增/修复/其他】分组，保留关键变化与破坏性变更提示，删除逐条 commit 行，不要编造内容。直接输出最终 notes。" \
             --file /tmp/notes.md > /tmp/polished.md
           gh release edit "$TAG" --notes-file /tmp/polished.md
