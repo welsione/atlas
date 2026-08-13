@@ -9,11 +9,13 @@
 
 | 分支 | 定位 | 发布行为 |
 |------|------|----------|
-| `master` | **产品发布分支（主分支）**：全部正式发布从这里出 | release-please 监听（合并 release PR → tag + GitHub Release → GHCR 镜像） |
-| `pre-release` | **测试发布分支**：预发布验证、灰度测试环境使用 | 仅跑 CI，不触发 release-please、不构建生产镜像 |
+| `master` | **默认分支 / 日常开发主线**：所有 PR 合并到这里 | 仅跑 CI，**不发布**（不触发 release-please、不构建镜像） |
+| `pre-release` | **测试发布分支**：预发布验证、灰度测试环境使用 | 仅跑 CI，不触发发布 |
+| `release` | **产品发布分支**：版本号提升、构建镜像、GitHub Release 全部由这里触发 | release-please 监听：合并 release PR → tag + GitHub Release → GHCR 镜像 |
 | 功能分支 | 日常开发（`feat/` `fix/` `docs/` 等） | 仅跑 CI |
 
-> 流程建议：功能分支 → 合入 `pre-release` 测试验证 → 验证通过再合入 `master` 正式发布。
+> **发布流程**：功能分支 → 合入 `master`（日常开发，不发布）→ 合入 `pre-release` 测试验证（可选）→ 合入 `release` 正式发布。
+> 只有当 `release` 分支上有新提交时，版本号才会提升并触发构建/发布；`master` 上的提交不会影响版本。
 
 ### 套件总览
 

@@ -1,12 +1,13 @@
 name: Release
 
-# release-please 全自动发布：master 推送后按 Conventional Commits 评估版本，
+# release-please 全自动发布：release 分支推送后按 Conventional Commits 评估版本，
 # 开 release PR（bump 版本 + 更新 CHANGELOG + package-lock），合并后自动打 tag + GitHub Release。
 # tag 触发 build-push.yml 构建 GHCR 镜像；release 创建触发 release-notes.yml（AI 润色）。
+# 注意：仅监听 release 分支——master 是日常开发分支，不触发发布。
 
 on:
   push:
-    branches: [master]
+    branches: [release]
 
 permissions:
   contents: write
