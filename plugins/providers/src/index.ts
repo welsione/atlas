@@ -118,6 +118,7 @@ const plugin: AtlasPlugin = {
   provides: () => ({
     'model-gateway': {
       describe: 'OpenAI 兼容供应商对话网关（密钥由 providers 保管，消费方无需感知）',
+      version: '1.0.0',
       create: (env: PluginEnvironment): ModelGatewaySpi => ({
         async listProviders() {
           const list = (await env.store().get<Provider[]>('providers')) ?? []
@@ -320,6 +321,7 @@ const plugin: AtlasPlugin = {
         list[idx] = next
         await env.store().put('providers', list)
         void env.datasets().refresh('providers-config').catch(() => undefined)
+        env.ops().info(`更新供应商：${next.name}`)
         return masked(next)
       },
     },

@@ -72,6 +72,7 @@ describe('PluginService', () => {
   let appService: AppService
   let dir: string
   let registry: PluginRegistry
+  let spiRegistry: PluginSpiRegistry
 
   beforeAll(async () => {
     dir = mkdtempSync(join(tmpdir(), 'atlas-plugin-test-'))
@@ -129,6 +130,7 @@ describe('PluginService', () => {
     service = moduleRef.get(PluginService)
     appService = moduleRef.get(AppService)
     registry = moduleRef.get(PluginRegistry)
+    spiRegistry = moduleRef.get(PluginSpiRegistry)
 
     registry.register({ plugin: sharedPlugin, artifact: 'builtin', artifactHash: '', version: '', builtin: true })
     registry.register({ plugin: localPlugin, artifact: 'builtin', artifactHash: '', version: '', builtin: true })
@@ -213,6 +215,30 @@ describe('PluginService', () => {
     expect(await envShared.store().get('scope-key')).toEqual({ s: 'shared' })
   })
 
+  it('plugin_store 乐观锁：版本匹配写入成功，冲突拒绝写入（L3）', async () => {
+    const env = service.environment(97, 'test-local2')
+    const store = env.store()
+    // 初始：记录不存在 → version 0
+    expect(await store.version('opt-key')).toBe(0)
+    // 创建成功（expectedVersion=0 → 写入后 version=1）
+    expect(await store.putIfVersion('opt-key', { v: 1 }, 0)).toBe(true)
+    expect(await store.version('opt-key')).toBe(1)
+    expect(await store.get('opt-key')).toEqual({ v: 1 })
+
+    // 版本冲突：期望 0（已变成 1）→ 拒绝，值保持
+    expect(await store.putIfVersion('opt-key', { v: 2 }, 0)).toBe(false)
+    expect(await store.get('opt-key')).toEqual({ v: 1 })
+
+    // 版本匹配（1）→ 写入成功，version 递增为 2
+    expect(await store.putIfVersion('opt-key', { v: 3 }, 1)).toBe(true)
+    expect(await store.version('opt-key')).toBe(2)
+    expect(await store.get('opt-key')).toEqual({ v: 3 })
+
+    // 普通 put 仍自动递增版本
+    await store.put('opt-key', { v: 4 })
+    expect(await store.version('opt-key')).toBe(3)
+  })
+
   it('env.events() 订阅/退订平台生命周期事件（返回退订函数）', async () => {
     const received: Array<{ pluginType: string }> = []
     service.autoInstantiate(95, ['test-local'])
@@ -272,6 +298,33 @@ describe('PluginService', () => {
     service.deleteInstance(80, 'test-gateway')
     const env = service.environment(80, 'test-consumer')
     expect(env.spi('test-gateway', 'gw')).toBeNull()
+  })
+
+  it('SPI resolve 本 app 本地覆盖优先于共享实例（M7 service 层回归）', () => {
+    const p: AtlasPlugin = {
+      type: 'test-m7',
+      name: 'M7',
+      describe: '验证本地优先解析',
+      defaultDataScope: 'GLOBAL_SHARED',
+      scopeOverrideAllowed: true,
+      provides: () => ({
+        ns: { describe: 'ns', create: (env) => ({ v: `app-${env.instance().appId}` }) },
+      }),
+    }
+    registry.register({ plugin: p, artifact: 'builtin', artifactHash: '', version: '', builtin: true })
+    service.syncDefs()
+    service.enableInstance(70, 'test-m7', 'APP_LOCAL')      // 本 app 本地覆盖
+    service.enableInstance(71, 'test-m7', 'GLOBAL_SHARED')  // 其他 app 共享实例
+
+    // 本 app（70）命中本地覆盖；其他 app（71）无本地实例，回落共享
+    const env70 = service.environment(70, 'test-m7')
+    const env71 = service.environment(71, 'test-m7')
+    expect(env70.spi<{ v: string }>('test-m7', 'ns')?.v).toBe('app-70')
+    expect(env71.spi<{ v: string }>('test-m7', 'ns')?.v).toBe('app-71')
+
+    // 删除本地覆盖后，本 app 回落共享实例
+    service.deleteInstance(70, 'test-m7')
+    expect(env70.spi<{ v: string }>('test-m7', 'ns')?.v).toBe('app-71')
   })
 
   it('autoInstantiate 按 dependsOn 拓扑排序（被依赖方先启用）', () => {
@@ -374,5 +427,99 @@ describe('PluginService', () => {
     expect(service.repository.findInstance(84, 'test-cyc2-b')).toBeUndefined()
     expect(service.repository.findInstance(84, 'test-cyc2-c')).toBeUndefined()
     expect(service.repository.findInstance(84, 'test-cyc2-d')).toBeUndefined()
+  })
+
+  it('删除单个实例不触发插件级 destroy（H1 回归）', () => {
+    let destroyCalls = 0
+    const sharedWithDestroy: AtlasPlugin = {
+      type: 'test-destroy',
+      name: '销毁隔离',
+      describe: '验证删除单实例不销毁插件',
+      defaultDataScope: 'GLOBAL_SHARED',
+      destroy: () => { destroyCalls += 1 },
+    }
+    registry.register({ plugin: sharedWithDestroy, artifact: 'builtin', artifactHash: '', version: '', builtin: true })
+    service.syncDefs()
+    service.enableInstance(90, 'test-destroy')
+    service.enableInstance(91, 'test-destroy')
+    service.deleteInstance(90, 'test-destroy')
+    // 删除单个实例不应调用插件级 destroy；另一应用实例仍可用
+    expect(destroyCalls).toBe(0)
+    expect(service.repository.findInstance(91, 'test-destroy')).toBeDefined()
+  })
+
+  it('autoInstantiate 跳过未加载插件，不抛错（H2 回归）', () => {
+    const extPlugin: AtlasPlugin = {
+      type: 'test-unloaded-ext',
+      name: '已卸载外部插件',
+      describe: '验证卸载后新建应用不被中断',
+      defaultDataScope: 'APP_LOCAL',
+    }
+    registry.register({ plugin: extPlugin, artifact: 'external', artifactHash: '', version: '', builtin: false })
+    service.syncDefs()
+    service.unload('test-unloaded-ext') // 卸载 → loaded=false，def 保留
+
+    expect(() => service.autoInstantiate(89)).not.toThrow()
+    expect(service.repository.findInstance(89, 'test-unloaded-ext')).toBeUndefined()
+  })
+
+  it('实例 scope 从共享改为独立时注销旧作用域 SPI（H4 回归）', () => {
+    const gw: AtlasPlugin = {
+      type: 'test-scope-switch',
+      name: '作用域切换',
+      describe: '验证 scope 变更注销旧 SPI',
+      defaultDataScope: 'GLOBAL_SHARED',
+      scopeOverrideAllowed: true,
+      provides: () => ({ ns: { describe: 'ns', create: () => ({ ping: () => 'pong' }) } }),
+    }
+    registry.register({ plugin: gw, artifact: 'builtin', artifactHash: '', version: '', builtin: true })
+    service.syncDefs()
+    service.enableInstance(92, 'test-scope-switch', 'GLOBAL_SHARED')
+    expect(spiRegistry.resolve('test-scope-switch', 'ns', 93)).not.toBeNull() // 其他 app 可解析（共享）
+
+    service.enableInstance(92, 'test-scope-switch', 'APP_LOCAL') // scope 变更 → 注销 @0，注册 @92
+    // 变更后其他 app 不再能解析（旧 @0 已注销），仅 app 92 可解析
+    expect(spiRegistry.resolve('test-scope-switch', 'ns', 93)).toBeNull()
+    expect(spiRegistry.resolve('test-scope-switch', 'ns', 92)).not.toBeNull()
+  })
+
+  it('热重载：卸载 dispose 实例 env，重载后对已启用实例 re-init（H3 回归）', async () => {
+    let initCalls = 0
+    let eventHits = 0
+    const hotPlugin: AtlasPlugin = {
+      type: 'test-hot',
+      name: '热重载测试',
+      describe: '验证卸载 dispose + 重载 re-init',
+      defaultDataScope: 'APP_LOCAL',
+      init(env) {
+        initCalls += 1
+        env.events().on('plugin.enabled', () => { eventHits += 1 })
+      },
+    }
+    registry.register({ plugin: hotPlugin, artifact: 'hot', artifactHash: 'v1', version: '', builtin: false })
+    service.syncDefs()
+    service.onApplicationBootstrap() // 激活 plugin.unloaded/plugin.loaded 事件处理器
+
+    service.enableInstance(85, 'test-hot') // init 调用 1 次 + 订阅 plugin.enabled
+    await new Promise((r) => setTimeout(r, 20))
+    expect(initCalls).toBe(1)
+
+    // 订阅生效：触发一次 plugin.enabled → 命中 +1
+    let before = eventHits
+    service.enableInstance(86, 'test-local')
+    await new Promise((r) => setTimeout(r, 5))
+    expect(eventHits - before).toBe(1)
+
+    // 模拟热替换：卸载（dispose env）→ 重新注册（re-init）
+    registry.unregister('test-hot')
+    registry.register({ plugin: hotPlugin, artifact: 'hot', artifactHash: 'v2', version: '', builtin: false })
+    await new Promise((r) => setTimeout(r, 20))
+    expect(initCalls).toBe(2) // 重载后对已启用实例 re-init
+
+    // 旧 env 订阅已 dispose：再次触发只应命中 re-init 后的新订阅（+1，而非 +2 幽灵累积）
+    before = eventHits
+    service.enableInstance(87, 'test-local')
+    await new Promise((r) => setTimeout(r, 5))
+    expect(eventHits - before).toBe(1)
   })
 })

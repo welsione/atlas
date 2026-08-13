@@ -46,14 +46,14 @@ function bool(name: string, def = false): boolean {
   return raw === '1' || raw.toLowerCase() === 'true'
 }
 
-function repoRootOf(): string {
-  // 找含 workspaces 字段的根 package.json（monorepo 根）
+/** 找含 workspaces 字段的根 package.json（monorepo 根）。 */
+export function repoRootOf(): string {
   let d = process.cwd()
   while (d && d !== '/') {
     const pkgPath = join(d, 'package.json')
     if (existsSync(pkgPath)) {
       try {
-        const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'))
+        const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as { workspaces?: string[]; version?: string }
         if (Array.isArray(pkg.workspaces)) return d
       } catch {
         // 忽略解析失败，继续向上
@@ -62,6 +62,16 @@ function repoRootOf(): string {
     d = dirname(d)
   }
   return process.cwd()
+}
+
+/** 平台版本：读取 monorepo 根 package.json 的 version，避免与构建发布版本漂移。 */
+export function platformVersion(): string {
+  try {
+    const pkg = JSON.parse(readFileSync(join(repoRootOf(), 'package.json'), 'utf8')) as { version?: string }
+    return pkg.version ?? '0.0.0'
+  } catch {
+    return '0.0.0'
+  }
 }
 
 export function loadConfig(overrides: Partial<AtlasConfig> = {}): AtlasConfig {

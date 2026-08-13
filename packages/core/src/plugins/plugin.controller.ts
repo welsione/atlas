@@ -1,6 +1,7 @@
-import { Body, Controller, Delete, Get, Inject, Param, Post } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Inject, Param, Post, Query } from '@nestjs/common'
 import type { Request } from 'express'
 import { ok, error, ValidationError, NotFoundError } from '../common/response.js'
+import { pageParams } from '../common/utils.js'
 import { PluginService } from './plugin.service.js'
 import { PluginRegistry } from './plugin.registry.js'
 import { PluginUiService } from './plugin-ui.service.js'
@@ -19,14 +20,17 @@ export class PluginController {
   ) {}
 
   @Get()
-  list() {
-    return ok(
-      this.service.instanceOverview(0).map((row) => ({
+  list(@Query('page') page?: string, @Query('size') size?: string) {
+    const { page: p, size: s } = pageParams(page, size)
+    const result = this.service.instanceOverviewPage(0, p, s)
+    return ok({
+      ...result,
+      rows: result.rows.map((row) => ({
         plugin: row.plugin,
         runtimeLoaded: row.runtimeLoaded,
         runtimeArtifact: this.registry.byType(row.plugin.pluginType)?.artifact ?? '',
       })),
-    )
+    })
   }
 
   @Get('spi-overview')
@@ -62,8 +66,9 @@ export class PluginInstanceController {
   constructor(@Inject(PluginService) private readonly service: PluginService) {}
 
   @Get(':appId/plugins')
-  overview(@Param('appId') appId: string) {
-    return ok(this.service.instanceOverview(Number(appId)))
+  overview(@Param('appId') appId: string, @Query('page') page?: string, @Query('size') size?: string) {
+    const { page: p, size: s } = pageParams(page, size)
+    return ok(this.service.instanceOverviewPage(Number(appId), p, s))
   }
 
   @Post(':appId/plugins/:pluginType/enable')

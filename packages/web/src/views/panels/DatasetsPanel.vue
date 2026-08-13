@@ -6,10 +6,13 @@ import { datasetApi } from '../../services/datasetApi'
 import { copyText as copyShared } from '../../clipboard'
 import type { Dataset, DatasetSensitivity } from '../../types'
 
-const props = defineProps<{ appId: number }>()
+const props = defineProps<{ appId: number; mode?: string; refresh?: () => void }>()
 
 const rows = ref<Dataset[]>([])
 const loading = ref(false)
+const page = ref(1)
+const size = ref(10)
+const total = ref(0)
 const drawerVisible = ref(false)
 const form = ref({ name: '', description: '', sensitivity: 'PUBLIC' as DatasetSensitivity, contentJson: '{}' })
 const creating = ref(false)
@@ -203,10 +206,23 @@ curl '${accessSecretsUrl(row)}' \\
 async function fetchAll() {
   loading.value = true
   try {
-    rows.value = await datasetApi.list(props.appId)
+    const res = await datasetApi.list(props.appId, page.value, size.value)
+    rows.value = res.rows
+    total.value = res.total
   } finally {
     loading.value = false
   }
+}
+
+function switchPage(p: number) {
+  page.value = p
+  fetchAll()
+}
+
+function switchSize(s: number) {
+  size.value = s
+  page.value = 1
+  fetchAll()
 }
 
 onMounted(fetchAll)
@@ -282,6 +298,17 @@ function sensTag(s: string) {
         </template>
       </el-table-column>
     </el-table>
+    <div class="pager">
+      <el-pagination
+        layout="total, sizes, prev, pager, next"
+        :total="total"
+        :page-size="size"
+        :page-sizes="[10, 20, 50]"
+        :current-page="page"
+        @current-change="switchPage"
+        @size-change="switchSize"
+      />
+    </div>
 
     <el-drawer v-model="drawerVisible" title="新建数据集" direction="rtl" size="560px">
       <el-form label-width="80px">
@@ -424,6 +451,12 @@ function sensTag(s: string) {
   justify-content: flex-end;
   gap: 8px;
   margin-bottom: 12px;
+}
+
+.pager {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 14px;
 }
 
 .detail-head {

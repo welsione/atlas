@@ -1,47 +1,153 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { Refresh, Connection, DataLine, Select, CircleClose, User, Monitor } from '@element-plus/icons-vue'
-import { monitorApi, type MonitorOverview, type MonitorRow, type MonitorRange } from '../../services/monitorApi'
+import { Refresh, Connection, DataLine, Select, CircleClose, SetUp, TrendCharts } from '@element-plus/icons-vue'
+import { monitorApi, type MonitorOverview, type MonitorRow, type MonitorRange, type MonitorInterfaceRow } from '../../services/monitorApi'
 
-const props = defineProps<{ appId: number }>()
+const props = defineProps<{ appId: number; mode?: string; refresh?: () => void }>()
+
+const monitorTab = ref(localStorage.getItem('atlas-monitor-tab') || 'manage')
 
 const range = ref<MonitorRange>('24h')
 const overview = ref<MonitorOverview>({
   total: 0, totalBytes: 0, notModified: 0, failures: 0, activeApps: 0, activeIps: 0,
 })
-const endpoints = ref<MonitorRow[]>([])
-const topResources = ref<MonitorRow[]>([])
-const topIps = ref<MonitorRow[]>([])
-const topApps = ref<MonitorRow[]>([])
-const recent = ref<MonitorRow[]>([])
 const series = ref<MonitorRow[]>([])
 const loading = ref(false)
+
+// 接口管理（分页 10/页）
+const interfaces = ref<MonitorInterfaceRow[]>([])
+const interfaceLoading = ref(false)
+const ifPage = ref(1)
+const ifSize = ref(10)
+const ifTotal = ref(0)
+
+// 流量分析各表独立分页
+const endpoints = ref<MonitorRow[]>([])
+const epPage = ref(1)
+const epSize = ref(10)
+const epTotal = ref(0)
+const topResources = ref<MonitorRow[]>([])
+const resPage = ref(1)
+const resSize = ref(10)
+const resTotal = ref(0)
+const topIps = ref<MonitorRow[]>([])
+const ipPage = ref(1)
+const ipSize = ref(10)
+const ipTotal = ref(0)
+const topApps = ref<MonitorRow[]>([])
+const appPage = ref(1)
+const appSize = ref(10)
+const appTotal = ref(0)
+const recent = ref<MonitorRow[]>([])
+const recPage = ref(1)
+const recSize = ref(10)
+const recTotal = ref(0)
+
+// ---------- 接口管理 ----------
+
+async function fetchInterfaces() {
+  interfaceLoading.value = true
+  try {
+    const res = await monitorApi.interfaces(props.appId, ifPage.value, ifSize.value)
+    interfaces.value = res.rows
+    ifTotal.value = res.total
+  } finally {
+    interfaceLoading.value = false
+  }
+}
+
+function switchInterfacePage(p: number) {
+  ifPage.value = p
+  fetchInterfaces()
+}
+
+const interfaceGroups = computed(() => {
+  const map = new Map<string, { pluginType: string; pluginName: string; rows: MonitorInterfaceRow[] }>()
+  for (const r of interfaces.value) {
+    let g = map.get(r.pluginType)
+    if (!g) {
+      g = { pluginType: r.pluginType, pluginName: r.pluginName, rows: [] }
+      map.set(r.pluginType, g)
+    }
+    g.rows.push(r)
+  }
+  return [...map.values()].map((g) => ({ ...g, disabledCount: g.rows.filter((r) => !r.enabled).length }))
+})
+
+async function toggleInterface(row: MonitorInterfaceRow, enabled: boolean) {
+  await monitorApi.setInterfaceEnabled(props.appId, row.pluginType, row.method, row.path, enabled)
+  row.enabled = enabled
+}
+
+async function resetInterface(row: MonitorInterfaceRow) {
+  await monitorApi.resetInterfaceRule(props.appId, row.pluginType, row.method, row.path)
+  row.enabled = true
+}
+
+// ---------- 流量分析 ----------
+
+async function fetchEndpoints() {
+  const res = await monitorApi.endpoints(props.appId, range.value, epPage.value, epSize.value)
+  endpoints.value = res.rows
+  epTotal.value = res.total
+}
+
+async function fetchTopResources() {
+  const res = await monitorApi.topResources(props.appId, range.value, resPage.value, resSize.value)
+  topResources.value = res.rows
+  resTotal.value = res.total
+}
+
+async function fetchTopIps() {
+  const res = await monitorApi.topIps(props.appId, range.value, ipPage.value, ipSize.value)
+  topIps.value = res.rows
+  ipTotal.value = res.total
+}
+
+async function fetchTopApps() {
+  const res = await monitorApi.topApps(props.appId, range.value, appPage.value, appSize.value)
+  topApps.value = res.rows
+  appTotal.value = res.total
+}
+
+async function fetchRecent() {
+  const res = await monitorApi.recent(props.appId, recPage.value, recSize.value)
+  recent.value = res.rows
+  recTotal.value = res.total
+}
 
 async function fetchAll() {
   loading.value = true
   try {
     const r = range.value
-    ;[overview.value, endpoints.value, topResources.value, topIps.value, topApps.value, series.value] =
-      await Promise.all([
-        monitorApi.overview(props.appId, r),
-        monitorApi.endpoints(props.appId, r),
-        monitorApi.topResources(props.appId, r),
-        monitorApi.topIps(props.appId, r),
-        monitorApi.topApps(props.appId, r),
-        monitorApi.series(props.appId, r),
-      ])
-    recent.value = await monitorApi.recent(props.appId)
+    ;[overview.value, series.value] = await Promise.all([
+      monitorApi.overview(props.appId, r),
+      monitorApi.series(props.appId, r),
+    ])
+    await Promise.all([fetchEndpoints(), fetchTopResources(), fetchTopIps(), fetchTopApps(), fetchRecent()])
   } finally {
     loading.value = false
   }
 }
 
-onMounted(fetchAll)
-
 function switchRange(r: MonitorRange) {
   range.value = r
+  epPage.value = 1
+  resPage.value = 1
+  ipPage.value = 1
+  appPage.value = 1
   fetchAll()
 }
+
+function switchTab(tab: string) {
+  monitorTab.value = tab
+  localStorage.setItem('atlas-monitor-tab', tab)
+}
+
+onMounted(() => {
+  fetchAll()
+  fetchInterfaces()
+})
 
 const notModifiedRate = computed(() =>
   overview.value.total > 0 ? Math.round((overview.value.notModified / overview.value.total) * 100) : 0,
@@ -52,6 +158,7 @@ const failureRate = computed(() =>
 const maxSeries = () => Math.max(1, ...series.value.map((s) => Number(s.count ?? 0)))
 const fmtBytes = (b: number) => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : b >= 1024 ? `${(b / 1024).toFixed(1)} KB` : `${b} B`)
 const statusTag = (s: number) => (s >= 400 ? 'danger' : s === 304 ? 'warning' : 'success')
+const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'primary' : m === 'PUT' ? 'warning' : 'danger')
 </script>
 
 <template>
@@ -67,119 +174,183 @@ const statusTag = (s: number) => (s >= 400 ? 'danger' : s === 304 ? 'warning' : 
       </el-tooltip>
     </div>
 
-    <!-- 统计卡片 -->
-    <div class="stat-grid">
-      <el-tooltip content="数据面消费总调用次数" placement="top">
-        <div class="stat-card surface"><el-icon class="stat-icon"><Connection /></el-icon><div class="stat-num">{{ overview.total }}</div><div class="stat-label">总调用</div></div>
-      </el-tooltip>
-      <el-tooltip content="响应体累计流量（不含 304）" placement="top">
-        <div class="stat-card surface"><el-icon class="stat-icon"><DataLine /></el-icon><div class="stat-num">{{ fmtBytes(overview.totalBytes) }}</div><div class="stat-label">流量</div></div>
-      </el-tooltip>
-      <el-tooltip content="条件请求命中（304）占比，越高缓存越有效" placement="top">
-        <div class="stat-card surface"><el-icon class="stat-icon"><Select /></el-icon><div class="stat-num">{{ overview.notModified }}（{{ notModifiedRate }}%）</div><div class="stat-label">304 命中</div></div>
-      </el-tooltip>
-      <el-tooltip content="4xx/5xx 失败请求数与占比" placement="top">
-        <div class="stat-card surface"><el-icon class="stat-icon" :class="{ 'is-error': overview.failures > 0 }"><CircleClose /></el-icon><div class="stat-num" :class="{ 'is-error': overview.failures > 0 }">{{ overview.failures }}（{{ failureRate }}%）</div><div class="stat-label">失败</div></div>
-      </el-tooltip>
-      <el-tooltip content="携带有效应用令牌的消费方数量" placement="top">
-        <div class="stat-card surface"><el-icon class="stat-icon"><User /></el-icon><div class="stat-num">{{ overview.activeApps }}</div><div class="stat-label">活跃消费应用</div></div>
-      </el-tooltip>
-      <el-tooltip content="去重后的客户端 IP 数量" placement="top">
-        <div class="stat-card surface"><el-icon class="stat-icon"><Monitor /></el-icon><div class="stat-num">{{ overview.activeIps }}</div><div class="stat-label">活跃 IP</div></div>
-      </el-tooltip>
-    </div>
-
-    <!-- 趋势 -->
-    <div class="surface section">
-      <div class="section-title">调用趋势（按小时）</div>
-      <div class="trend">
-        <div v-for="(s, i) in series" :key="i" class="trend-col" :title="`${s.bucket}：${s.count} 次`">
-          <div class="trend-bar" :style="{ height: `${(Number(s.count) / maxSeries()) * 100}%` }" />
-          <div class="trend-label">{{ String(s.bucket).slice(11, 13) }}时</div>
+    <el-tabs :model-value="monitorTab" class="monitor-tabs" @tab-change="switchTab">
+      <!-- ==================== 接口管理 ==================== -->
+      <el-tab-pane name="manage">
+        <template #label>
+          <span class="tab-label"><el-icon><SetUp /></el-icon>接口管理</span>
+        </template>
+        <div v-loading="interfaceLoading" class="if-list">
+          <div v-for="group in interfaceGroups" :key="group.pluginType" class="plugin-card surface">
+            <div class="plugin-card-head">
+              <span class="plugin-name">{{ group.pluginName }}</span>
+              <code class="mono muted">{{ group.pluginType }}</code>
+              <span v-if="group.disabledCount > 0" class="disabled-badge">{{ group.disabledCount }} 个已停用</span>
+              <div class="spacer" />
+              <span class="muted">{{ group.rows.length }} 个端点</span>
+            </div>
+            <div class="ep-rows">
+              <div
+                v-for="ep in group.rows"
+                :key="`${ep.method}-${ep.path}`"
+                class="ep-row"
+                :class="{ 'is-disabled': !ep.enabled }"
+              >
+                <el-tag size="small" :type="methodTag(ep.method)">{{ ep.method }}</el-tag>
+                <code class="mono ep-path">{{ ep.path }}</code>
+                <span class="muted ep-summary" :title="ep.summary">{{ ep.summary }}</span>
+                <span class="muted ep-stats" :title="`调用 ${ep.count} 次，失败 ${ep.failures}`">
+                  {{ ep.count }} 次
+                  <span v-if="ep.failures > 0" class="is-error">· {{ ep.failures }} 失败</span>
+                </span>
+                <span v-if="!ep.enabled" class="ep-disabled-tag">已停用</span>
+                <div class="spacer" />
+                <el-switch
+                  :model-value="ep.enabled"
+                  :loading="interfaceLoading"
+                  inline-prompt
+                  style="--el-switch-on-color: var(--atlas-accent)"
+                  @change="(v: string | number | boolean) => toggleInterface(ep, !!v)"
+                />
+                <el-button v-if="!ep.enabled" size="small" text type="warning" @click="resetInterface(ep)">恢复默认</el-button>
+              </div>
+            </div>
+          </div>
+          <el-empty v-if="!interfaceLoading && interfaces.length === 0" description="暂无对外暴露的插件端点" :image-size="80" />
+          <div v-if="ifTotal > ifSize" class="pager">
+            <el-pagination layout="total, prev, pager, next" :total="ifTotal" :page-size="ifSize" :current-page="ifPage" @current-change="switchInterfacePage" />
+          </div>
         </div>
-        <div v-if="series.length === 0" class="empty">暂无数据</div>
-      </div>
-    </div>
+      </el-tab-pane>
 
-    <div class="grid-2">
-      <!-- 端点分布 -->
-      <div class="surface section">
-        <div class="section-title">端点分布</div>
-        <el-table :data="endpoints" size="small" empty-text="暂无">
-          <el-table-column prop="endpoint" label="端点" show-overflow-tooltip />
-          <el-table-column prop="count" label="调用" width="70" />
-          <el-table-column prop="bytes" label="流量" width="80">
-            <template #default="{ row }">{{ fmtBytes(Number(row.bytes)) }}</template>
-          </el-table-column>
-          <el-table-column prop="not_modified" label="304" width="60" />
-          <el-table-column prop="failures" label="失败" width="60" />
-        </el-table>
-      </div>
+      <!-- ==================== 流量分析 ==================== -->
+      <el-tab-pane name="analytics">
+        <template #label>
+          <span class="tab-label"><el-icon><TrendCharts /></el-icon>流量分析</span>
+        </template>
 
-      <!-- Top 资源 -->
-      <div class="surface section">
-        <div class="section-title">Top 资源</div>
-        <el-table :data="topResources" size="small" empty-text="暂无">
-          <el-table-column label="资源" min-width="120" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.name || `${row.resource_type}#${row.resource_id}` }}</template>
-          </el-table-column>
-          <el-table-column prop="count" label="调用" width="70" />
-          <el-table-column prop="bytes" label="流量" width="80">
-            <template #default="{ row }">{{ fmtBytes(Number(row.bytes)) }}</template>
-          </el-table-column>
-          <el-table-column prop="not_modified" label="304" width="60" />
-        </el-table>
-      </div>
-    </div>
+        <!-- 统计卡片 -->
+        <div class="stat-grid">
+          <el-tooltip content="数据面消费总调用次数" placement="top">
+            <div class="stat-card surface"><el-icon class="stat-icon"><Connection /></el-icon><div class="stat-num">{{ overview.total }}</div><div class="stat-label">总调用</div></div>
+          </el-tooltip>
+          <el-tooltip content="响应体累计流量（不含 304）" placement="top">
+            <div class="stat-card surface"><el-icon class="stat-icon"><DataLine /></el-icon><div class="stat-num">{{ fmtBytes(overview.totalBytes) }}</div><div class="stat-label">流量</div></div>
+          </el-tooltip>
+          <el-tooltip content="条件请求命中（304）占比，越高缓存越有效" placement="top">
+            <div class="stat-card surface"><el-icon class="stat-icon"><Select /></el-icon><div class="stat-num">{{ overview.notModified }}（{{ notModifiedRate }}%）</div><div class="stat-label">304 命中</div></div>
+          </el-tooltip>
+          <el-tooltip content="4xx/5xx 失败请求数与占比" placement="top">
+            <div class="stat-card surface"><el-icon class="stat-icon" :class="{ 'is-error': overview.failures > 0 }"><CircleClose /></el-icon><div class="stat-num" :class="{ 'is-error': overview.failures > 0 }">{{ overview.failures }}（{{ failureRate }}%）</div><div class="stat-label">失败</div></div>
+          </el-tooltip>
+        </div>
 
-    <div class="grid-2">
-      <!-- Top IP -->
-      <div class="surface section">
-        <div class="section-title">Top IP</div>
-        <el-table :data="topIps" size="small" empty-text="暂无">
-          <el-table-column prop="ip" label="IP" show-overflow-tooltip />
-          <el-table-column prop="count" label="调用" width="80" />
-          <el-table-column prop="bytes" label="流量" width="90">
-            <template #default="{ row }">{{ fmtBytes(Number(row.bytes)) }}</template>
-          </el-table-column>
-        </el-table>
-      </div>
+        <!-- 趋势 -->
+        <div class="surface section">
+          <div class="section-title">调用趋势（按小时）</div>
+          <div class="trend">
+            <div v-for="(s, i) in series" :key="i" class="trend-col" :title="`${s.bucket}：${s.count} 次`">
+              <div class="trend-bar" :style="{ height: `${(Number(s.count) / maxSeries()) * 100}%` }" />
+              <div class="trend-label">{{ String(s.bucket).slice(11, 13) }}时</div>
+            </div>
+            <div v-if="series.length === 0" class="empty">暂无数据</div>
+          </div>
+        </div>
 
-      <!-- Top 消费应用 -->
-      <div class="surface section">
-        <div class="section-title">Top 消费应用</div>
-        <el-table :data="topApps" size="small" empty-text="暂无">
-          <el-table-column label="消费方" min-width="120">
-            <template #default="{ row }">{{ Number(row.app_id) === 0 ? '匿名 token' : `应用 #${row.app_id}` }}</template>
-          </el-table-column>
-          <el-table-column prop="count" label="调用" width="80" />
-          <el-table-column prop="bytes" label="流量" width="90">
-            <template #default="{ row }">{{ fmtBytes(Number(row.bytes)) }}</template>
-          </el-table-column>
-        </el-table>
-      </div>
-    </div>
+        <div class="grid-2">
+          <!-- 端点分布 -->
+          <div class="surface section">
+            <div class="section-title">端点分布</div>
+            <el-table :data="endpoints" size="small" empty-text="暂无">
+              <el-table-column prop="endpoint" label="端点" show-overflow-tooltip />
+              <el-table-column prop="count" label="调用" width="70" />
+              <el-table-column prop="bytes" label="流量" width="80">
+                <template #default="{ row }">{{ fmtBytes(Number(row.bytes)) }}</template>
+              </el-table-column>
+              <el-table-column prop="failures" label="失败" width="60" />
+            </el-table>
+            <div v-if="epTotal > epSize" class="pager">
+              <el-pagination layout="total, prev, pager, next" :total="epTotal" :page-size="epSize" :current-page="epPage" @current-change="(p: number) => { epPage = p; fetchEndpoints() }" />
+            </div>
+          </div>
 
-    <!-- 最近调用 -->
-    <div class="surface section">
-      <div class="section-title">最近调用</div>
-      <el-table :data="recent" size="small" empty-text="暂无">
-        <el-table-column prop="accessed_at" label="时间" width="170" />
-        <el-table-column prop="endpoint" label="端点" width="100" />
-        <el-table-column label="资源" min-width="120" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.name || `${row.resource_type}#${row.resource_id}` }}</template>
-        </el-table-column>
-        <el-table-column label="状态" width="80">
-          <template #default="{ row }">
-            <el-tag size="small" :type="statusTag(Number(row.http_status))">{{ row.http_status }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="ip" label="IP" width="130" />
-        <el-table-column label="流量" width="90">
-          <template #default="{ row }">{{ fmtBytes(Number(row.bytes)) }}</template>
-        </el-table-column>
-      </el-table>
-    </div>
+          <!-- Top 资源 -->
+          <div class="surface section">
+            <div class="section-title">Top 资源</div>
+            <el-table :data="topResources" size="small" empty-text="暂无">
+              <el-table-column label="资源" min-width="120" show-overflow-tooltip>
+                <template #default="{ row }">{{ row.name || `${row.resource_type}#${row.resource_id}` }}</template>
+              </el-table-column>
+              <el-table-column prop="count" label="调用" width="70" />
+              <el-table-column prop="bytes" label="流量" width="80">
+                <template #default="{ row }">{{ fmtBytes(Number(row.bytes)) }}</template>
+              </el-table-column>
+            </el-table>
+            <div v-if="resTotal > resSize" class="pager">
+              <el-pagination layout="total, prev, pager, next" :total="resTotal" :page-size="resSize" :current-page="resPage" @current-change="(p: number) => { resPage = p; fetchTopResources() }" />
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <!-- Top IP -->
+          <div class="surface section">
+            <div class="section-title">Top IP</div>
+            <el-table :data="topIps" size="small" empty-text="暂无">
+              <el-table-column prop="ip" label="IP" show-overflow-tooltip />
+              <el-table-column prop="count" label="调用" width="80" />
+              <el-table-column prop="bytes" label="流量" width="90">
+                <template #default="{ row }">{{ fmtBytes(Number(row.bytes)) }}</template>
+              </el-table-column>
+            </el-table>
+            <div v-if="ipTotal > ipSize" class="pager">
+              <el-pagination layout="total, prev, pager, next" :total="ipTotal" :page-size="ipSize" :current-page="ipPage" @current-change="(p: number) => { ipPage = p; fetchTopIps() }" />
+            </div>
+          </div>
+
+          <!-- Top 消费应用 -->
+          <div class="surface section">
+            <div class="section-title">Top 消费应用</div>
+            <el-table :data="topApps" size="small" empty-text="暂无">
+              <el-table-column label="消费方" min-width="120">
+                <template #default="{ row }">{{ Number(row.app_id) === 0 ? '匿名 token' : `应用 #${row.app_id}` }}</template>
+              </el-table-column>
+              <el-table-column prop="count" label="调用" width="80" />
+              <el-table-column prop="bytes" label="流量" width="90">
+                <template #default="{ row }">{{ fmtBytes(Number(row.bytes)) }}</template>
+              </el-table-column>
+            </el-table>
+            <div v-if="appTotal > appSize" class="pager">
+              <el-pagination layout="total, prev, pager, next" :total="appTotal" :page-size="appSize" :current-page="appPage" @current-change="(p: number) => { appPage = p; fetchTopApps() }" />
+            </div>
+          </div>
+        </div>
+
+        <!-- 最近调用 -->
+        <div class="surface section">
+          <div class="section-title">最近调用</div>
+          <el-table :data="recent" size="small" empty-text="暂无">
+            <el-table-column prop="accessed_at" label="时间" width="170" />
+            <el-table-column prop="endpoint" label="端点" width="100" />
+            <el-table-column label="资源" min-width="120" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.name || `${row.resource_type}#${row.resource_id}` }}</template>
+            </el-table-column>
+            <el-table-column label="状态" width="80">
+              <template #default="{ row }">
+                <el-tag size="small" :type="statusTag(Number(row.http_status))">{{ row.http_status }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="ip" label="IP" width="130" />
+            <el-table-column label="流量" width="90">
+              <template #default="{ row }">{{ fmtBytes(Number(row.bytes)) }}</template>
+            </el-table-column>
+          </el-table>
+          <div v-if="recTotal > recSize" class="pager">
+            <el-pagination layout="total, prev, pager, next" :total="recTotal" :page-size="recSize" :current-page="recPage" @current-change="(p: number) => { recPage = p; fetchRecent() }" />
+          </div>
+        </div>
+      </el-tab-pane>
+    </el-tabs>
   </div>
 </template>
 
@@ -189,6 +360,16 @@ const statusTag = (s: number) => (s >= 400 ? 'danger' : s === 304 ? 'warning' : 
   align-items: center;
   justify-content: space-between;
   margin-bottom: 16px;
+}
+
+.tab-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.tab-label .el-icon {
+  color: var(--atlas-accent);
 }
 
 .stat-grid {
@@ -278,5 +459,105 @@ const statusTag = (s: number) => (s >= 400 ? 'danger' : s === 304 ? 'warning' : 
 .empty {
   color: var(--atlas-muted);
   font-size: 13px;
+}
+
+.pager {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 12px;
+}
+
+/* ---------- 接口管理 ---------- */
+.if-list {
+  min-height: 120px;
+}
+
+.plugin-card {
+  border-radius: 12px;
+  margin-bottom: 12px;
+  padding: 12px 16px;
+}
+
+.plugin-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--atlas-stroke);
+}
+
+.plugin-name {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.disabled-badge {
+  font-size: 11px;
+  color: #f56c6c;
+  background: rgba(245, 108, 108, 0.12);
+  border-radius: 8px;
+  padding: 1px 8px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.ep-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.ep-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 4px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.ep-row:hover {
+  background: rgba(127, 127, 127, 0.06);
+}
+
+.ep-row.is-disabled {
+  opacity: 0.55;
+  background: rgba(245, 108, 108, 0.06);
+}
+
+.ep-path {
+  font-size: 12px;
+}
+
+.ep-summary {
+  font-size: 12px;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ep-stats {
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.ep-disabled-tag {
+  font-size: 11px;
+  color: #f56c6c;
+  border: 1px solid rgba(245, 108, 108, 0.5);
+  border-radius: 4px;
+  padding: 0 6px;
+  flex-shrink: 0;
+}
+
+.muted {
+  color: var(--atlas-muted);
+}
+
+.is-error {
+  color: #f56c6c;
 }
 </style>

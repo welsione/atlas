@@ -2,22 +2,35 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, VideoPlay, FolderOpened, InfoFilled } from '@element-plus/icons-vue'
-import { pluginApi } from '../services/pluginApi'
-import type { PluginDef } from '../types'
+import { pluginApi, type DefRow } from '../services/pluginApi'
 import { iconOf, pluginIconUrl } from '../plugin-host/slotRegistry'
-
-type DefRow = { plugin: PluginDef; runtimeLoaded: boolean; runtimeArtifact: string }
 
 const rows = ref<DefRow[]>([])
 const loading = ref(false)
+const page = ref(1)
+const size = ref(10)
+const total = ref(0)
 
 async function fetchAll() {
   loading.value = true
   try {
-    rows.value = await pluginApi.listDefs()
+    const res = await pluginApi.listDefs(page.value, size.value)
+    rows.value = res.rows
+    total.value = res.total
   } finally {
     loading.value = false
   }
+}
+
+function switchPage(p: number) {
+  page.value = p
+  fetchAll()
+}
+
+function switchSize(s: number) {
+  size.value = s
+  page.value = 1
+  fetchAll()
 }
 
 onMounted(fetchAll)
@@ -58,14 +71,13 @@ async function handleUnload(row: DefRow) {
                 alt=""
               />
               <span class="plugin-name">{{ row.plugin.name }}</span>
-              <el-tag v-if="row.plugin.builtin" size="small" type="info">内置</el-tag>
-              <el-tag v-else size="small" type="warning">外部</el-tag>
+              <el-tag size="small" type="warning">外部</el-tag>
             </div>
           </template>
         </el-table-column>
         <el-table-column label="标识" width="150">
           <template #default="{ row }">
-            <el-tooltip :content="`目录：${row.plugin.artifact || 'builtin'}`" placement="top">
+            <el-tooltip :content="`目录：${row.plugin.artifact}`" placement="top">
               <code class="mono">{{ row.plugin.pluginType }}</code>
             </el-tooltip>
           </template>
@@ -90,12 +102,23 @@ async function handleUnload(row: DefRow) {
         </el-table-column>
         <el-table-column label="操作" width="100" fixed="right">
           <template #default="{ row }">
-            <el-tooltip v-if="!row.plugin.builtin && row.runtimeLoaded" content="卸载后实例与数据保留，重新集成可恢复" placement="top">
+            <el-tooltip v-if="row.runtimeLoaded" content="卸载后实例与数据保留，重新集成可恢复" placement="top">
               <el-button size="small" plain :icon="VideoPlay" @click="handleUnload(row)">卸载</el-button>
             </el-tooltip>
           </template>
         </el-table-column>
       </el-table>
+      <div class="pager">
+        <el-pagination
+          layout="total, sizes, prev, pager, next"
+          :total="total"
+          :page-size="size"
+          :page-sizes="[10, 20, 50]"
+          :current-page="page"
+          @current-change="switchPage"
+          @size-change="switchSize"
+        />
+      </div>
     </div>
 
     <div class="install-hint">
@@ -124,6 +147,12 @@ async function handleUnload(row: DefRow) {
 
 .plugin-name {
   font-weight: 600;
+}
+
+.pager {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 14px;
 }
 
 .install-hint {

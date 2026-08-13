@@ -226,6 +226,7 @@ import type { ModelGatewaySpi } from '@atlas/types/spi/model-gateway'
 provides: () => ({
   'model-gateway': {
     describe: 'OpenAI 兼容供应商对话网关（密钥由 providers 保管，消费方无需感知）',
+    version: '1.0.0', // 可选：能力契约版本（破坏性变更时提升，消费方可经 minVersion 约束）
     create: (env: PluginEnvironment): ModelGatewaySpi => ({
       async listProviders() { /* 经 env.store() 读取供应商配置 */ },
       async chat(req) { /* 调用 OpenAI 兼容 /chat/completions，Key 用 env.crypto() 解密 */ },
@@ -252,7 +253,8 @@ const res = await gw.chat({
 `env.spi<T>(pluginType, namespace, targetAppId?) => T | null`：
 
 - 缺省以当前实例 `appId` 作为消费方上下文；`targetAppId` 可显式指定消费方作用域。
-- **作用域匹配**：提供方为 `GLOBAL_SHARED` → 任意 app 可解析（共享优先）；`APP_LOCAL` → 仅同 app 的实例可解析。
+- **作用域匹配**：本 app 本地覆盖实例优先（`APP_LOCAL`），其次全局共享实例（`GLOBAL_SHARED`，
+  任意 app 可解析）；`APP_LOCAL` 实例仅同 app 可解析。
 - 返回 `null` 的情形：提供方未启用、命名空间不存在、能力构建抛错（平台已隔离，不冒泡）。
 - **惰性求值 + 缓存**：首次解析才构建提供方 env 并 `create()` 能力对象，此后同实例复用；未消费的能力不产生开销。
 
@@ -310,8 +312,9 @@ dependsOn: () => [
 
 ### multipart 上传与二进制下载
 - 请求为 `multipart/form-data` 时，`body = { fields: {...}, files: [{ originalname, buffer }] }`。
-- handler 返回 `{ $binary: <base64>, $mime: 'application/pdf', $filename: 'a.pdf' }`
-  时，平台直接以二进制流响应（下载）。
+- handler 返回 `{ $binary: <base64 字符串 | Buffer>, $mime: 'application/pdf', $filename: 'a.pdf' }`
+  时，平台直接以二进制流响应（下载）。**小文件**可返回 base64 字符串；**大文件**直接返回
+  `Buffer`（如 `env.files().read()` 的结果），避免 base64 全量往返的内存与 CPU 翻倍。
 
 ```ts
 {
@@ -328,7 +331,7 @@ dependsOn: () => [
   handle: async (env, p) => {
     const buf = await env.files().read(p.name)
     if (!buf) throw new Error(`文件不存在: ${p.name}`)
-    return { $binary: buf.toString('base64'), $mime: 'application/octet-stream', $filename: p.name }
+    return { $binary: buf, $mime: 'application/octet-stream', $filename: p.name }
   },
 },
 ```
@@ -476,6 +479,8 @@ export default {
   type 与 manifest 不一致）：记录 warning 跳过，不影响平台与其他插件。
 - **热更新**：watcher 轮询目录哈希（dirHash），检测到变化约 **10s** 内重载；
   加载用 cache-busting URL（`?v={dirHash}`）绕过 Node 模块缓存。
+  > 因此插件内 `import.meta.url` **会带 query**，取相对路径必须先 `.split('?')[0]`
+  > （参考 providers 的 `loadBuiltinReference`），否则 `fileURLToPath` 会抛错。
 - **开发期**：改后端源码 → 等待 10s 热重载（或重启服务）；
   改前端面板 → `npm run ui:build` 后同样热更新（哈希 entry 变体）。
 - 加载失败**隔离**：单个插件崩溃不影响平台运行。
@@ -524,9 +529,9 @@ cd plugins/my-plugin/ui-src && npm install && npm run ui:build   # → ../ui/
 
 | 插件 | type | 作用域 | 可学习点 |
 |------|------|--------|----------|
-| providers | 供应商管理 | GLOBAL_SHARED | 种子数据 init、crypto 加密、CRUD 端点、UI 面板（ep+store 全链路）、**双向 SPI 提供方**（`provides()` 暴露 model-gateway，见 §6） |
-| prompts | 提示词管理 | APP_LOCAL | 渲染端点、版本历史、APP_LOCAL 作用域 |
-| model-files | 模型文件 | APP_LOCAL | files() 存储 + publish 公开托管 + 元数据表 |
+| providers | 供应商管理 | GLOBAL_SHARED | 种子数据 init、crypto 加密、CRUD 端点、UI 面板（ep+store 全链路）、**双向 SPI 提供方**（`provides()` 暴露 model-gateway，带 version，见 §6） |
+| prompts | 提示词管理 | APP_LOCAL | 渲染端点、版本历史、APP_LOCAL 作用域、增删改 ops 审计 |
+| model-files | 模型文件 | APP_LOCAL | files() 存储 + publish 公开托管 + 元数据表、**logTables() 声明插件日志表** |
 | machine-monitor | 机器监控 | GLOBAL_SHARED | 系统级插件（system-menu 侧边菜单 + console 卡片）、Node 内置模块指标采集、滚动历史、datasetSource 定时采样 |
 | template | 模板 | - | 最小骨架（加载器恒跳过） |
 
