@@ -1,5 +1,9 @@
 # Atlas — 全 TS 插件化 AI 服务基础平台
 
+<p align="center">
+  <img src="packages/web/public/icons/atlas.svg" width="120" height="120" alt="Atlas Logo" />
+</p>
+
 [![CI](https://github.com/welsione/atlas/actions/workflows/ci.yml/badge.svg)](https://github.com/welsione/atlas/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%3E%3D22-brightgreen.svg)](https://nodejs.org)
@@ -135,3 +139,4 @@ plugins/weather/
 ## 仓库运维
 
 仓库自动化运维套件（release-please 发布、opencode AI 审查、Dependabot、markdownlint/commitlint 门禁等）见 [docs/repository-ops.md](docs/repository-ops.md)；贡献流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+sync
