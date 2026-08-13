@@ -44,7 +44,7 @@ jobs:
           images: ${{ env.IMAGE }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,prefix=master-,format=short
+            type=sha,prefix=release-,format=short
             type=ref,event=tag
 
       - name: Build and push
