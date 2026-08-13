@@ -42,8 +42,8 @@ npm run typecheck
 1. **Fork 仓库**并在本地建功能分支：`git checkout -b feat/xxx` 或 `fix/xxx`。
 2. **小步提交**：每个提交只做一件事，便于评审与回溯。
 3. **写测试**：改动后端逻辑必须补 `*.spec.ts`；改动前端纯逻辑补前端测试。
-4. **跑本地检查**：`npm run typecheck && npm test`，前端改动需 `npm run sync:static`。
-5. **提交 PR**：填写 PR 模板，说明动机、改动、验证方式；关联相关 issue。
+4. **跑本地检查**：`npm run lint:md && npm run typecheck && npm test`，前端改动需 `npm run sync:static`。
+5. **提交 PR**：填写 PR 模板，说明动机、改动、验证方式；关联相关 issue。PR 打开后 opencode 会自动 AI 审查。
 
 ### 分支命名
 
@@ -56,7 +56,7 @@ npm run typecheck
 
 采用 [Conventional Commits](https://www.conventionalcommits.org/)，格式：
 
-```
+```text
 <type>(<scope>): <subject>
 
 [body]
@@ -64,17 +64,23 @@ npm run typecheck
 [footer]
 ```
 
-- `type`：`feat` / `fix` / `docs` / `test` / `refactor` / `chore` / `perf`
+- `type`：`feat` / `fix` / `docs` / `test` / `refactor` / `chore` / `perf` / `build` / `ci` / `style` / `revert`
 - `scope`（可选）：`core` / `web` / `types` / `plugins` / `datasets` / `security` 等
 - `subject`：祈使句、首字母小写、不超过 72 字符、不加句号
 
 示例：
 
-```
+```text
 feat(plugins): 支持插件声明式数据集注册
 fix(core): 修复卸载插件后新建应用失败的问题
 docs(agent): 新增后端核心框架开发规范
 ```
+
+> **⚠️ 提交类型决定发布版本**（release-please 全自动发布）：`feat` → minor、`fix` → patch、
+> `feat!` / `BREAKING CHANGE` → major。每次 `feat` 合并都会触发一次版本发布，
+> 请勿滥用 `feat` 描述小改动。
+
+提交格式由本地钩子（commitlint）与 CI 双重强制，格式不合规将被拒绝。
 
 ## 代码规范
 
@@ -121,8 +127,9 @@ npm test -- --watch      # 监听模式
 
 ## 评审流程
 
-1. 维护者会检查：规范红线（`docs/agent/`）、测试、文档一致性。
+1. 维护者会检查：规范红线（`docs/agent/`）、测试、文档一致性；PR 打开时 opencode 自动出 AI 审查意见。
 2. 评审意见请以客观、建设性方式提出（见行为准则）。
 3. 通过后由维护者合并；重大变更可能需要多次往返。
+4. 需要 AI 协助时，可在 PR/issue 评论中提及 `/opencode`（见 [docs/repository-ops.md](docs/repository-ops.md)）。
 
 再次感谢你的贡献！🎉

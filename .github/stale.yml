@@ -1,0 +1,28 @@
+name: Stale
+
+# 30 天无活动的 issue/PR 标记 stale，再 7 天无回应自动关闭。
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          stale-issue-message: "此 issue 30 天无活动，标记为 stale；7 天后无回应将自动关闭。"
+          stale-pr-message: "此 PR 30 天无活动，标记为 stale；7 天后无回应将自动关闭。"
+          close-issue-message: "此 issue 因长期无活动已关闭。"
+          close-pr-message: "此 PR 因长期无活动已关闭。"
+          days-before-stale: 30
+          days-before-close: 7
+          stale-issue-label: stale
+          stale-pr-label: stale
+          exempt-issue-labels: "dependencies,security"
+          exempt-pr-labels: "dependencies,security"

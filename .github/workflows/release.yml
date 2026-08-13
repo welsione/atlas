@@ -1,0 +1,21 @@
+name: Release
+
+# release-please 全自动发布：master 推送后按 Conventional Commits 评估版本，
+# 开 release PR（bump 版本 + 更新 CHANGELOG + package-lock），合并后自动打 tag + GitHub Release。
+# tag 触发 build-push.yml 构建 GHCR 镜像；release 创建触发 release-notes.yml（AI 润色）。
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}

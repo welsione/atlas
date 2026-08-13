@@ -1,0 +1,22 @@
+name: Link Check
+
+# 每周检查文档相对链接/外链是否失效（定时任务，不阻塞 PR）。
+on:
+  schedule:
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  links:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check links
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: --no-progress 'README.md' 'CONTRIBUTING.md' 'SECURITY.md' 'AGENTS.md' 'docs/**/*.md'
+          fail: false

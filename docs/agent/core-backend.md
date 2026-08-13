@@ -6,7 +6,7 @@
 
 ## 1. 分层职责
 
-```
+```text
 Controller  →  只做：参数解析（@Param/@Query/@Body）、调用 service、ok() 包装
 Service     →  业务逻辑、事务边界、跨模块编排、事件 emit、插件生命周期
 Repository  →  纯 SQL 存取 + 行↔实体映射（rowToDef/rowToInstance）
@@ -39,6 +39,7 @@ list(@Query('page') page?: string, @Query('size') size?: string) {
   3. `ModuleRef.get(X, { strict: false })` 惰性解析（`AppFacade`/`ExtensionRegistry` 模式）。
 - **禁止静态 `import` 门面类到 service**（会引入 app→plugin→spi→app 的运行时环）。
 - **禁止 `require()`**（ESM 脆弱性，review M1 来源）：全仓 `"type": "module"`、源码 ESM，用 CJS `require` 会依赖 tsc 把 core 编译为 CJS 才可用，一旦 `packages/core/package.json` 补 `"type": "module"` 生产即 `require is not defined`。第三方 CJS 库用默认导入（`import busboy from 'busboy'`）或 `createRequire`。
+
   ```ts
   // ✅
   import busboy from 'busboy'

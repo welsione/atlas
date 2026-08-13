@@ -6,7 +6,7 @@
 
 ## 1. 目录与分层
 
-```
+```text
 views/         页面（组合层）：App.vue / ConsoleView / AppSpaceView / ...
 services/      API 层：唯一 HTTP 出口，薄封装 http.ts
 plugin-host/   插件挂载运行时：PluginMount.vue + slotRegistry.ts（契约单一入口）

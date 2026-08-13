@@ -1,7 +1,8 @@
 name: CI
 
-# 每次推送与 PR 都跑：安装 → 类型检查 → 构建 → 测试。
+# 每次推送与 PR 都跑：文档规范 → 提交规范 → 类型检查 → 构建 → 测试。
 # 镜像构建/推送由 build-push.yml 负责（master/tag 触发），与本流水线互补。
+# AI 审查由 opencode-review.yml 负责；版本发布由 release.yml（release-please）负责。
 on:
   push:
     branches: ['**']
@@ -16,6 +17,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -25,6 +28,14 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Markdown lint
+        run: npm run lint:md
+
+      - name: Commitlint
+        uses: wwh/commitlint@v1
+        with:
+          commitlint-config: '{"extends":["@commitlint/config-conventional"]}'
 
       - name: Type check
         run: npm run typecheck

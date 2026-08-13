@@ -1,0 +1,36 @@
+name: opencode-review
+
+# PR 自动 AI 审查：打开/更新 PR 时，opencode 按仓库规范（docs/agent/）审查并评论。
+# 依赖 secrets：OPENCODE_API_KEY（OpenCode Go 订阅 key）。
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: read
+  issues: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: anomalyco/opencode/github@latest
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          model: opencode-go/deepseek-v4-flash
+          use_github_token: true
+          prompt: |
+            你是 Atlas 仓库的高级代码评审。依据 docs/agent/ 下的开发规范（core-backend.md / core-frontend.md / plugins.md / ui-design.md）审查本 PR：
+            - 红线：ESM 统一（禁 require）、显式 @Inject、路径防穿越双重校验、数据面错误脱敏、密钥不落日志、UI 只用 --atlas-* token、删除操作二次确认
+            - 检查潜在 bug、数据一致性、插件生命周期对称性（init/destroy/dispose）
+            - 检查提交是否符合 Conventional Commits、代码改动是否同步 CHANGELOG
+            输出（中文）：PR 摘要 → 问题清单（按 严重/建议 分级，标注 file:line）→ 改进建议。无问题则简明确认。
