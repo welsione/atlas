@@ -7,7 +7,7 @@
 [![CI](https://github.com/welsione/atlas/actions/workflows/ci.yml/badge.svg)](https://github.com/welsione/atlas/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%3E%3D22-brightgreen.svg)](https://nodejs.org)
-[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/github/v/release/welsione/atlas?sort=semver&label=version&color=blue)](CHANGELOG.md)
 
 以应用为核心的多租户平台：数据集版本化分发（PUBLIC/INTERNAL/SECRET + 信封加密）、插件体系（前后端一体打包、目录热加载）、接口监控、运维台工作日志。
 
@@ -42,7 +42,7 @@ npm run sync:static      # 前端构建产物同步到 core/static 与 core/dist
 npm run dev              # 后端（http://127.0.0.1:18081）
 ```
 
-测试：`npm test`（后端 Jest，13 用例）。
+测试：`npm test`（后端 Jest 98 用例 + 前端 Vitest 13 用例）。
 
 ## 核心概念
 
@@ -132,7 +132,7 @@ plugins/weather/
 
 ## 主要 API
 
-- 管理面：`/api/apps`（应用 CRUD/凭证轮换吊销）、`/api/plugins`（注册表/卸载）、`/api/apps/{appId}/plugins/...`（实例与内置插件数据）、`/api/apps/{appId}/datasets...`（数据集 CRUD/敏感度/内容/资产上传删除/授权/审计/刷新）、`/api/ops/...`（运维台）
+- 管理面：`/api/apps`（应用 CRUD/凭证轮换吊销）、`/api/plugins`（注册表/卸载）、`/api/apps/{appId}/plugins/...`（实例与插件数据）、`/api/apps/{appId}/datasets...`（数据集 CRUD/敏感度/内容/资产上传删除/授权/审计/刷新）、`/api/ops/...`（运维台）
 - 数据面（公开）：`/api/v1/app/auth`（应用凭证换令牌）、`/api/v1/datasets/{token}/meta|data|secrets|assets/{path}`（数据集消费）、`/api/v1/app/{appId}/plugins/{type}/ep/{path}`（插件数据面网关，应用凭证 Bearer 鉴权）、`/api/files/{token}/meta|download`（插件文件公开托管下载）
 - 插件 UI：`/api/plugins/ui`（清单，管理认证）、`/_pluginui/{type}/{path}`（资源，公开）
 

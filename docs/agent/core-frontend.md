@@ -68,10 +68,16 @@ result.push({ key: `plugin:${m.pluginType}`, ... })
 
 ## 6. 测试规范
 
-- 当前前端零测试。**至少补齐**：
-  - `slotRegistry`：`slotsOf` / `useSlotsOf` / `pluginIconUrl` / `toMountEntry`（纯逻辑，易测）；
-  - `http.ts`：拦截器（401 派发 `atlas:unauthorized`、错误提示）用 mock adapter；
-  - `PluginMount`：mount → unmount → 重挂的清理行为（`@vue/test-utils`）。
+- 已有基础覆盖（`vitest run`，jsdom）：
+  - `slotRegistry.spec.ts`：`slotsOf` / `useSlotsOf` / `pluginIconUrl` / `toMountEntry` / `initPluginSlots`（纯逻辑 + mock http）；
+  - `http.spec.ts`：请求拦截（Bearer）、401 派发 `atlas:unauthorized`、错误提示（mock adapter）；
+  - `PluginMount.spec.ts`：mount → unmount 清理、load 进行中卸载的竞态；
+  - `App.spec.ts`：认证门（登录/登出切换）+ 登录后重拉插件 slot（F-02 回归）。
+- 新增逻辑**必须补测试**的硬性场景：
+  - slotRegistry 的新增 slot 类型 / key 生成规则（唯一 key 回归）；
+  - http.ts 拦截器行为变更（401/错误码处理）；
+  - `PluginMount` / `App` 生命周期改动（挂载/卸载对称、认证门）；
+  - 认证相关回归（F-02：登录成功必须 `initPluginSlots()`）。
 - 优先测纯函数与契约边界，组件快照测试不作硬性要求。
 
 ## 7. 反模式（Code Review 拦截项）

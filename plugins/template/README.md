@@ -72,6 +72,9 @@
 
 外部调用地址：`/api/apps/{appId}/plugins/{pluginType}/ep/{path}`
 
+> 二进制下载：handler 返回 `{ $binary: <Buffer | base64 字符串>, $mime, $filename }` 即流式响应；
+> 非小文件直接返回 `Buffer`（如 `env.files().read()` 的结果）避免 base64 全量往返，更大的文件走 `env.files().publish()` 公开托管端点。
+
 ## 前端 UI（可选）
 
 - {slot}（`console` 控制台卡片 / `app-space` 应用空间 Tab / `system-menu` 系统侧边菜单）—— {说明}
