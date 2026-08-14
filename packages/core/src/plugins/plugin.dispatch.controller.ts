@@ -3,7 +3,7 @@ import type { Request, Response } from 'express'
 import { PluginRegistry } from './plugin.registry.js'
 import { PluginService } from './plugin.service.js'
 import { OpsLogService } from './ops-log.service.js'
-import { EndpointRuleRepository } from '../monitor/endpoint-rule.repository.js'
+import { ExternalInterfaceRuleRepository } from '../monitor/external-interface-rule.repository.js'
 import { error } from '../common/response.js'
 import { dispatchPluginEndpoint } from './plugin-dispatch.utils.js'
 
@@ -15,8 +15,8 @@ import { dispatchPluginEndpoint } from './plugin-dispatch.utils.js'
  * 数据面（应用凭证 Bearer）访问走 PluginDataController（/api/v1/app/{appId}/plugins/...）。
  *
  * 与管理面一致性（review M2）：
- * - 端点启停规则同样强制（endpoint_rules 停用即拦截）；管理面为认证管理员，返回 403 明示原因
- *   （数据面为防探测返回 404 伪装不存在）；
+ * - 对外接口（public:true）启停规则强制（external_interface_rules 停用即拦截）；管理面为认证管理员，返回 403 明示原因
+ *   （数据面为防探测返回 404 伪装不存在）；内部端点（插件面板交互，非 public）不参与启停，始终可用；
  * - 调用审计写入 ops_logs（运维台工作日志），不写 api_access_logs——避免控制台自身流量
  *   污染「对外接口目录」的消费统计（interfaceStats/topApps 以数据面消费方为准）。
  */
@@ -27,7 +27,7 @@ export class PluginDispatchController {
   constructor(
     @Inject(PluginRegistry) private readonly registry: PluginRegistry,
     @Inject(PluginService) private readonly service: PluginService,
-    @Inject(EndpointRuleRepository) private readonly rules: EndpointRuleRepository,
+    @Inject(ExternalInterfaceRuleRepository) private readonly rules: ExternalInterfaceRuleRepository,
     @Inject(OpsLogService) private readonly opsLog: OpsLogService,
   ) {}
 
@@ -56,9 +56,10 @@ export class PluginDispatchController {
       res,
       logger: this.logger,
       guard: ({ endpoint, method, suffix }) =>
-        this.rules.isAllowed(targetAppId, pluginType, endpoint.method, endpoint.path)
-          ? null
-          : { status: 403, message: `插件端点已停用: ${method} ${suffix}` },
+        // 接口启停规则仅作用于对外开放（public）接口；内部管理端点（插件面板交互）始终可用，不受规则约束。
+        endpoint.public === true && !this.rules.isAllowed(targetAppId, 'PLUGIN_EP', `${endpoint.method} ${endpoint.path}`)
+          ? { status: 403, message: `插件端点已停用: ${method} ${suffix}` }
+          : null,
       onAccess: (ctx) =>
         this.opsLog.write(
           targetAppId,

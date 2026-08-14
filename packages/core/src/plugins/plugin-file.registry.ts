@@ -64,6 +64,13 @@ export class PluginFileRegistry {
     return this.db.prepare('SELECT * FROM plugin_file_tokens WHERE token = ?').get(token) as PluginFileTokenRow | undefined
   }
 
+  /** 某作用域下已公开的文件（scope_key = appId 或 0=GLOBAL_SHARED），供对外接口目录。 */
+  listByScope(scopeKey: number): PluginFileTokenRow[] {
+    return this.db
+      .prepare('SELECT * FROM plugin_file_tokens WHERE scope_key = ? ORDER BY id')
+      .all(scopeKey) as PluginFileTokenRow[]
+  }
+
   /** 文件实际路径（与 env.files 同根：dataDir/plugin-files/{scopeKey}/{pluginType}/{relPath}）。 */
   filePathOf(row: PluginFileTokenRow): string {
     return resolve(this.config.dataDir, 'plugin-files', String(row.scope_key), row.plugin_type, row.rel_path)

@@ -260,6 +260,8 @@ const plugin: AtlasPlugin = {
     },
     {
       method: 'GET', path: 'config', summary: '对外配置（数据面/应用凭证访问；exposeApiKey 开关控制是否含明文 Key）',
+      public: true,
+      sensitivity: 'INTERNAL',
       handle: async (env) => {
         const list = (await env.store().get<Provider[]>('providers')) ?? []
         await migrate(env, list)

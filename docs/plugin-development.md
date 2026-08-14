@@ -307,6 +307,30 @@ dependsOn: () => [
   await put(base() + `/update/${id}`, { name })
   ```
 
+### 对外开放（数据面暴露）
+
+`endpoints()` 声明的端点**默认仅管理面可用**（插件面板交互，数据面不对消费应用暴露）。若要对外提供数据面接口，给端点加 `public: true`：
+
+```ts
+// 对外配置接口：属主应用可经数据面读取
+{
+  method: 'GET', path: 'config', summary: '对外配置',
+  public: true, sensitivity: 'INTERNAL',
+  handle: async (env) => ({ ... }),
+},
+```
+
+- `public?: boolean`：是否对外开放（数据面可访问）。默认 `false` = 仅管理面。
+- `sensitivity?: 'PUBLIC' | 'INTERNAL' | 'SECRET'`：仅 `public` 生效，默认 `PUBLIC`。`INTERNAL`/`SECRET` 数据面仅属主应用可读。
+- 数据面（对外开放）消费入口（**破坏性变更，消费方需同步**）：
+
+  ```text
+  GET /api/v1/app/{appId}/plugins/{pluginType}/{apiToken}/ep/{method}/{path}
+  ```
+
+  其中 `{apiToken}` 为平台按插件公开端点生成的防穷举 token（实例启用时派生，停用/卸载自动注销）。非 `public`、未启用或 token 不匹配一律 404（防探测）。
+- 对外公开的接口会进入**接口管理页（对外接口目录）**，可启停、查看调用统计；插件面板内部交互接口不在该目录、不受启停规则约束。
+
 - `handle(env, pathParams, body)`：`pathParams` 为 `{param}` 解析结果（字符串）；
   `body` 为请求体（JSON 对象或数组，未传为 `undefined`）。
 

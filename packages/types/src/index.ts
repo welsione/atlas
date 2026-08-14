@@ -207,8 +207,20 @@ export interface PluginEndpoint {
   /** ep/ 之后的路径，支持 {param} 占位。 */
   path: string
   summary: string
+  /**
+   * 是否对外开放（数据面 /api/v1/app 应用凭证可访问）。默认 false = 仅管理面（插件面板内部交互）使用：
+   * - 仅管理面可用、不进接口管理目录、不受接口启停规则约束；
+   * - 数据面不暴露（消费应用无法以 token 调用）。
+   * 设置为 true 的接口会进入接口管理目录（对外接口），供管理员启停与统计，且数据面消费方可用。
+   */
+  public?: boolean
+  /** 仅 public 生效：对外敏感度。PUBLIC 任意持 token 消费方可访问；INTERNAL/SECRET 需属主或应用授权。 */
+  sensitivity?: ExternalInterfaceSensitivity
   handle(env: PluginEnvironment, pathParams: Record<string, string>, body: unknown): Promise<unknown> | unknown
 }
+
+/** 对外接口敏感度（与数据集密级一致）。 */
+export type ExternalInterfaceSensitivity = 'PUBLIC' | 'INTERNAL' | 'SECRET'
 
 export interface PluginStore {
   /** entityId 默认 ''，entityKey 为记录标识。 */

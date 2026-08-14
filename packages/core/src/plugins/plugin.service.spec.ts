@@ -99,6 +99,10 @@ describe('PluginService', () => {
       environmentOrNull: () => null,
     }
     const fileRegistryMock = { publish: () => ({ token: '', relPath: '' }), unpublish: () => undefined }
+    const epTokensMock = {
+      sync: () => undefined, removeByPlugin: () => undefined, matchToken: () => false,
+      findByToken: () => undefined, listByApp: () => [],
+    }
     const moduleRef = await Test.createTestingModule({
       imports: [EventEmitterModule.forRoot()],
       providers: [
@@ -120,7 +124,8 @@ describe('PluginService', () => {
           provide: PluginService,
           useFactory: (cfg, reg, repo, ops, eventBus, spiReg) =>
             new PluginService(
-              cfg, reg, repo, ops, pluginServiceMock as never, fileRegistryMock as never, eventBus,
+              cfg, reg, repo, ops, pluginServiceMock as never, fileRegistryMock as never, epTokensMock,
+              eventBus,
               undefined as never, undefined as never, undefined as never, undefined as never, spiReg,
             ),
           inject: [CONFIG, PluginRegistry, PluginRepository, OpsLogService, PlatformEventEmitter, PluginSpiRegistry],

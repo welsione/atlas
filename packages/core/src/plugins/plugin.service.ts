@@ -22,6 +22,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, readdirSync
 import { join, resolve } from 'node:path'
 import { PluginRegistry } from './plugin.registry.js'
 import { PluginRepository } from './plugin.repository.js'
+import { PluginEpTokenRepository } from './plugin-ep-token.repository.js'
 import { OpsLogService } from './ops-log.service.js'
 import { DatasetService } from '../datasets/dataset.service.js'
 import { PluginFileRegistry } from './plugin-file.registry.js'
@@ -55,6 +56,7 @@ export class PluginService implements OnApplicationBootstrap {
     @Inject(OpsLogService) private readonly opsLogService: OpsLogService,
     @Inject(forwardRef(() => DatasetService)) private readonly datasetService: DatasetService,
     @Inject(PluginFileRegistry) private readonly fileRegistry: PluginFileRegistry,
+    @Inject(PluginEpTokenRepository) private readonly epTokens: PluginEpTokenRepository,
     @Inject(PlatformEventEmitter) private readonly eventBus: PlatformEventEmitter,
     @Inject(APP_FACADE) private readonly appFacade: AppFacade,
     @Inject(MONITOR_FACADE) private readonly monitorFacade: MonitorFacade,
@@ -152,8 +154,9 @@ export class PluginService implements OnApplicationBootstrap {
       }
       void this.syncPluginDatasets(appId, pluginType).catch((e) =>
         this.logger.warn(`插件数据集同步异常: ${pluginType}，${(e as Error).message}`))
-      // 恢复时重建 SPI（此前可能已注册）
+      // 恢复时重建 SPI（此前可能已注册）+ 同步对外端点 token
       this.registerSpiFor(appId, pluginType, existing.dataScope)
+      this.syncEpTokens(appId, pluginType)
       this.eventBus.emit('plugin.enabled', { appId, pluginType, instanceId: existing.id })
       return existing
     }
@@ -166,6 +169,7 @@ export class PluginService implements OnApplicationBootstrap {
     const env = this.environmentOf(appId, id, pluginType, scope)
     this.activeEnvs.set(id, env)
     this.registerSpiFor(appId, pluginType, scope)
+    this.syncEpTokens(appId, pluginType)
     void (async () => {
       try {
         await plugin.init?.(env)
@@ -203,6 +207,8 @@ export class PluginService implements OnApplicationBootstrap {
         enabled: 0, created_at: inst.createdAt, updated_at: inst.updatedAt,
       })
     }
+    // 停用 → 对外端点 token 立即注销（数据面不可用）
+    this.epTokens.removeByPlugin(appId, pluginType)
     this.eventBus.emit('plugin.disabled', { appId, pluginType, instanceId: inst.id })
     return inst
   }
@@ -212,6 +218,8 @@ export class PluginService implements OnApplicationBootstrap {
     const inst = this.requireInstance(appId, pluginType)
     // 注意：这里不调用插件级 destroy()——destroy 无实例上下文，删除单实例时调用会
     // 误伤其他应用共享的插件运行时状态（规范 R-01）。实例级清理见下方 store/事件/SPI 注销。
+    // 删除 → 对外端点 token 注销
+    this.epTokens.removeByPlugin(appId, pluginType)
     if (inst.dataScope === 'APP_LOCAL') {
       // 仅清理该插件在该应用的通用存储（instance_id=appId + plugin_type），不动兄弟插件
       this.repository.storeDeleteInstance(appId, pluginType)
@@ -501,6 +509,21 @@ export class PluginService implements OnApplicationBootstrap {
   private rebuildSpiFor(pluginType: string): void {
     for (const inst of this.repository.findAllEnabledInstancesOf(pluginType)) {
       this.registerSpiFor(inst.appId, pluginType, inst.dataScope)
+      this.syncEpTokens(inst.appId, pluginType)
+    }
+  }
+
+  /** 同步某应用某插件的对外端点 token：按 endpoints() 中 public:true 声明 upsert，非公开旧 token 注销。 */
+  private syncEpTokens(appId: number, pluginType: string): void {
+    const loaded = this.registry.byType(pluginType)
+    if (!loaded) return
+    const declared = (loaded.plugin.endpoints?.() ?? [])
+      .filter((e) => e.public === true)
+      .map((e) => ({ method: e.method, endpointPath: e.path, sensitivity: e.sensitivity ?? 'PUBLIC' }))
+    try {
+      this.epTokens.sync(appId, pluginType, declared)
+    } catch (e) {
+      this.logger.warn(`对外端点 token 同步失败: ${pluginType}，${(e as Error).message}`)
     }
   }
 
@@ -509,6 +532,8 @@ export class PluginService implements OnApplicationBootstrap {
     for (const inst of this.repository.findAllInstancesOf(pluginType)) {
       this.activeEnvs.get(inst.id)?.dispose()
       this.activeEnvs.delete(inst.id)
+      // 卸载 → 对外端点 token 注销（重载后经 rebuildSpiFor 重建）
+      this.epTokens.removeByPlugin(inst.appId, pluginType)
     }
   }
 

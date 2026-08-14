@@ -104,6 +104,8 @@ export class AppRepository {
       db.prepare('DELETE FROM plugin_file_tokens WHERE scope_key = ?').run(appId)
       db.prepare('DELETE FROM api_access_logs WHERE owner_app_id = ?').run(appId)
       db.prepare('DELETE FROM endpoint_rules WHERE app_id = ?').run(appId)
+      db.prepare('DELETE FROM plugin_ep_tokens WHERE app_id = ?').run(appId)
+      db.prepare('DELETE FROM external_interface_rules WHERE app_id = ?').run(appId)
       db.prepare('DELETE FROM ops_logs WHERE app_id = ?').run(appId)
       db.prepare('DELETE FROM auth_logs WHERE app_id = ?').run(appId)
       db.prepare('DELETE FROM app_credentials WHERE app_id = ?').run(appId)

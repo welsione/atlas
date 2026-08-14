@@ -150,7 +150,7 @@ plugins/weather/
 ## 主要 API
 
 - 管理面：`/api/apps`（应用 CRUD/凭证轮换吊销）、`/api/plugins`（注册表/卸载）、`/api/apps/{appId}/plugins/...`（实例与插件数据）、`/api/apps/{appId}/datasets...`（数据集 CRUD/敏感度/内容/资产上传删除/授权/审计/刷新）、`/api/ops/...`（运维台）
-- 数据面（公开）：`/api/v1/app/auth`（应用凭证换令牌）、`/api/v1/datasets/{token}/meta|data|secrets|assets/{path}`（数据集消费）、`/api/v1/app/{appId}/plugins/{type}/ep/{path}`（插件数据面网关，应用凭证 Bearer 鉴权）、`/api/files/{token}/meta|download`（插件文件公开托管下载）
+- 数据面（公开）：`/api/v1/app/auth`（应用凭证换令牌）、`/api/v1/datasets/{token}/meta|data|secrets|assets/{path}`（数据集消费）、`/api/v1/app/{appId}/plugins/{type}/{apiToken}/ep/{path}`（插件数据面网关；仅对外开放 `public:true` 端点，`apiToken` 为平台派生的防穷举 token，应用凭证 Bearer 鉴权）、`/api/files/{token}/meta|download`（插件文件公开托管下载）
 - 插件 UI：`/api/plugins/ui`（清单，管理认证）、`/_pluginui/{type}/{path}`（资源，公开）
 
 ### 快速示例（curl）
@@ -165,7 +165,7 @@ curl -X POST http://127.0.0.1:18081/api/v1/app/auth \
   -H 'Content-Type: application/json' \
   -d '{"appId":"<app_id>","secret":"<app_secret>"}'
 
-# 3. 携带 Bearer 访问插件数据面端点
-curl http://127.0.0.1:18081/api/v1/app/<appId>/plugins/providers/ep/list \
+# 3. 携带 Bearer 访问插件数据面端点（apiToken 见接口管理目录 / 插件公开端点）
+curl http://127.0.0.1:18081/api/v1/app/<appId>/plugins/providers/<apiToken>/ep/config \
   -H "Authorization: Bearer <token>"
 ```

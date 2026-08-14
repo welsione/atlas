@@ -71,6 +71,39 @@ export class SchemaInitializer {
         )
       },
     },
+    {
+      // v4：对外接口统一治理 —— plugin_ep_tokens（插件公开 ep 防枚举 token + 敏感度）
+      // 与 external_interface_rules（数据集/插件 ep/文件 统一启停位）由 schema.sql 建表；
+      // 迁移在此为历史库补建（已存在则跳过）。
+      version: 4,
+      up: (db) => {
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS plugin_ep_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            app_id INTEGER NOT NULL,
+            plugin_type TEXT NOT NULL,
+            method TEXT NOT NULL,
+            endpoint_path TEXT NOT NULL,
+            token TEXT NOT NULL UNIQUE,
+            sensitivity TEXT NOT NULL DEFAULT 'PUBLIC',
+            enabled INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(app_id, plugin_type, method, endpoint_path)
+          );
+          CREATE TABLE IF NOT EXISTS external_interface_rules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            app_id INTEGER NOT NULL,
+            kind TEXT NOT NULL,
+            key TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(app_id, kind, key)
+          );
+        `)
+      },
+    },
   ]
 
   /** 打开（或创建）数据库并完成结构初始化。 */
@@ -108,6 +141,7 @@ export class SchemaInitializer {
     'datasets', 'secrets', 'dataset_app_grants',
     'dataset_download_logs', 'secret_access_logs', 'auth_logs',
     'api_access_logs', 'ops_logs', 'plugin_file_tokens', 'endpoint_rules',
+    'plugin_ep_tokens', 'external_interface_rules',
     'providers', 'prompts', 'prompt_versions', 'model_files',
     'download_logs', 'upload_logs',
   ]

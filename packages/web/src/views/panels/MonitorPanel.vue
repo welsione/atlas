@@ -61,26 +61,31 @@ function switchInterfacePage(p: number) {
   fetchInterfaces()
 }
 
+const interfaceKindLabel = (k: string) =>
+  ({ DATASET: '数据集', PLUGIN_EP: '插件端点', PUBLIC_FILE: '文件下载' } as Record<string, string>)[k] ?? k
 const interfaceGroups = computed(() => {
-  const map = new Map<string, { pluginType: string; pluginName: string; rows: MonitorInterfaceRow[] }>()
+  const order = ['PLUGIN_EP', 'DATASET', 'PUBLIC_FILE'] as const
+  const map = new Map<string, { kind: string; label: string; rows: MonitorInterfaceRow[] }>()
   for (const r of interfaces.value) {
-    let g = map.get(r.pluginType)
+    let g = map.get(r.kind)
     if (!g) {
-      g = { pluginType: r.pluginType, pluginName: r.pluginName, rows: [] }
-      map.set(r.pluginType, g)
+      g = { kind: r.kind, label: interfaceKindLabel(r.kind), rows: [] }
+      map.set(r.kind, g)
     }
     g.rows.push(r)
   }
-  return [...map.values()].map((g) => ({ ...g, disabledCount: g.rows.filter((r) => !r.enabled).length }))
+  return [...map.values()]
+    .sort((a, b) => order.indexOf(a.kind as (typeof order)[number]) - order.indexOf(b.kind as (typeof order)[number]))
+    .map((g) => ({ ...g, disabledCount: g.rows.filter((r) => !r.enabled).length }))
 })
 
 async function toggleInterface(row: MonitorInterfaceRow, enabled: boolean) {
-  await monitorApi.setInterfaceEnabled(props.appId, row.pluginType, row.method, row.path, enabled)
+  await monitorApi.setInterfaceEnabled(props.appId, row.kind, row.key, enabled)
   row.enabled = enabled
 }
 
 async function resetInterface(row: MonitorInterfaceRow) {
-  await monitorApi.resetInterfaceRule(props.appId, row.pluginType, row.method, row.path)
+  await monitorApi.resetInterfaceRule(props.appId, row.kind, row.key)
   row.enabled = true
 }
 
@@ -181,24 +186,28 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
           <span class="tab-label"><el-icon><SetUp /></el-icon>接口管理</span>
         </template>
         <div v-loading="interfaceLoading" class="if-list">
-          <div v-for="group in interfaceGroups" :key="group.pluginType" class="plugin-card surface">
+          <div v-for="group in interfaceGroups" :key="group.kind" class="plugin-card surface">
             <div class="plugin-card-head">
-              <span class="plugin-name">{{ group.pluginName }}</span>
-              <code class="mono muted">{{ group.pluginType }}</code>
+              <span class="plugin-name">{{ group.label }}</span>
               <span v-if="group.disabledCount > 0" class="disabled-badge">{{ group.disabledCount }} 个已停用</span>
               <div class="spacer" />
-              <span class="muted">{{ group.rows.length }} 个端点</span>
+              <span class="muted">{{ group.rows.length }} 个对外接口</span>
             </div>
             <div class="ep-rows">
               <div
                 v-for="ep in group.rows"
-                :key="`${ep.method}-${ep.path}`"
+                :key="`${ep.kind}-${ep.key}`"
                 class="ep-row"
                 :class="{ 'is-disabled': !ep.enabled }"
               >
-                <el-tag size="small" :type="methodTag(ep.method)">{{ ep.method }}</el-tag>
-                <code class="mono ep-path">{{ ep.path }}</code>
+                <el-tag v-if="ep.method" size="small" :type="methodTag(ep.method)">{{ ep.method }}</el-tag>
+                <el-tag v-else size="small" type="info">{{ ep.kind === 'DATASET' ? 'DS' : 'FILE' }}</el-tag>
+                <code v-if="ep.path" class="mono ep-path">{{ ep.path }}</code>
+                <code v-else class="mono ep-path">{{ ep.name }}</code>
                 <span class="muted ep-summary" :title="ep.summary">{{ ep.summary }}</span>
+                <el-tag size="small" :type="ep.sensitivity === 'SECRET' ? 'danger' : ep.sensitivity === 'INTERNAL' ? 'warning' : 'success'">
+                  {{ ep.sensitivity }}
+                </el-tag>
                 <span class="muted ep-stats" :title="`调用 ${ep.count} 次，失败 ${ep.failures}`">
                   {{ ep.count }} 次
                   <span v-if="ep.failures > 0" class="is-error">· {{ ep.failures }} 失败</span>
@@ -216,7 +225,7 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
               </div>
             </div>
           </div>
-          <el-empty v-if="!interfaceLoading && interfaces.length === 0" description="暂无对外暴露的插件端点" :image-size="80" />
+          <el-empty v-if="!interfaceLoading && interfaces.length === 0" description="暂无对外暴露的接口" :image-size="80" />
           <div v-if="ifTotal > ifSize" class="pager">
             <el-pagination layout="total, prev, pager, next" :total="ifTotal" :page-size="ifSize" :current-page="ifPage" @current-change="switchInterfacePage" />
           </div>

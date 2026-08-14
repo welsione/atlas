@@ -182,6 +182,33 @@ CREATE TABLE IF NOT EXISTS endpoint_rules (
     UNIQUE(app_id, plugin_type, method, endpoint_path)
 );
 
+-- ---------- 插件公开端点 token（对外接口统一寻址：防枚举 + 敏感度） ----------
+CREATE TABLE IF NOT EXISTS plugin_ep_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    app_id INTEGER NOT NULL,
+    plugin_type TEXT NOT NULL,
+    method TEXT NOT NULL,
+    endpoint_path TEXT NOT NULL,              -- 插件声明路径（ep/ 之后）
+    token TEXT NOT NULL UNIQUE,               -- 32 字节随机，防穷举
+    sensitivity TEXT NOT NULL DEFAULT 'PUBLIC', -- PUBLIC / INTERNAL / SECRET
+    enabled INTEGER NOT NULL DEFAULT 1,       -- 对外启用位（默认启用）
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(app_id, plugin_type, method, endpoint_path)
+);
+
+-- ---------- 对外接口统一启停（数据集 / 文件 + 插件公开 ep 共用治理位） ----------
+CREATE TABLE IF NOT EXISTS external_interface_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    app_id INTEGER NOT NULL,
+    kind TEXT NOT NULL,                       -- DATASET / PLUGIN_EP / PUBLIC_FILE
+    key TEXT NOT NULL,                        -- 数据集 id / 插件 ep "{method} {path}" / 文件 token
+    enabled INTEGER NOT NULL DEFAULT 1,       -- 0=停用 1=启用；无规则行 = 默认启用
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(app_id, kind, key)
+);
+
 -- ---------- 运维台工作日志（平台级：插件通过 env.ops() 写入，运维台跨应用查看） ----------
 CREATE TABLE IF NOT EXISTS ops_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

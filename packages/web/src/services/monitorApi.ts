@@ -15,11 +15,16 @@ export type MonitorOverview = {
 export type MonitorRow = Record<string, string | number>
 
 export type MonitorInterfaceRow = {
+  kind: 'DATASET' | 'PLUGIN_EP' | 'PUBLIC_FILE'
+  key: string
+  appId: number
   pluginType: string
-  pluginName: string
+  name: string
   method: string
   path: string
   summary: string
+  sensitivity: 'PUBLIC' | 'INTERNAL' | 'SECRET'
+  token: string
   enabled: boolean
   count: number
   failures: number
@@ -35,10 +40,10 @@ export const monitorApi = {
     get<Page<MonitorRow>>(`/api/apps/${appId}/monitor/endpoints?range=${range}&page=${page}&size=${size}`),
   interfaces: (appId: number, page = 1, size = 10) =>
     get<Page<MonitorInterfaceRow>>(`/api/apps/${appId}/monitor/interfaces?page=${page}&size=${size}`),
-  setInterfaceEnabled: (appId: number, pluginType: string, method: string, path: string, enabled: boolean) =>
-    put(`/api/apps/${appId}/monitor/interfaces/${pluginType}/${method}`, { path, enabled }),
-  resetInterfaceRule: (appId: number, pluginType: string, method: string, path: string) =>
-    post(`/api/apps/${appId}/monitor/interfaces/${pluginType}/${method}/reset`, { path }),
+  setInterfaceEnabled: (appId: number, kind: string, key: string, enabled: boolean) =>
+    put(`/api/apps/${appId}/monitor/interfaces`, { kind, key, enabled }),
+  resetInterfaceRule: (appId: number, kind: string, key: string) =>
+    post(`/api/apps/${appId}/monitor/interfaces/reset`, { kind, key }),
   topResources: (appId: number, range: MonitorRange, page = 1, size = 10) =>
     get<Page<MonitorRow>>(`/api/apps/${appId}/monitor/top-resources?range=${range}&page=${page}&size=${size}`),
   topIps: (appId: number, range: MonitorRange, page = 1, size = 10) =>

@@ -102,6 +102,25 @@ export class MonitorRepository {
       .all(appId) as Array<Record<string, unknown>>
   }
 
+  /** 非插件对外接口调用统计：数据集/文件按 (kind, key) 聚合（统一对外接口目录数据源）。 */
+  externalStats(appId: number, range: MonitorRange): Array<Record<string, unknown>> {
+    const since = this.since(range)
+    const where = since
+      ? 'WHERE l.owner_app_id = ? AND l.resource_type IN (\'DATASET\',\'MODEL_FILE\') AND l.accessed_at >= ' + since
+      : 'WHERE l.owner_app_id = ? AND l.resource_type IN (\'DATASET\',\'MODEL_FILE\')'
+    return this.db
+      .prepare(
+        `SELECT l.resource_type resource_type,
+           CASE WHEN l.resource_type='DATASET' THEN CAST(l.resource_id AS TEXT) ELSE l.token END key,
+           COUNT(*) count, COALESCE(SUM(l.bytes),0) bytes,
+           SUM(CASE WHEN l.http_status>=400 THEN 1 ELSE 0 END) failures,
+           MAX(l.accessed_at) last_access
+         FROM api_access_logs l ${where}
+         GROUP BY l.resource_type, key`,
+      )
+      .all(appId) as Array<Record<string, unknown>>
+  }
+
   /** Top 资源：JOIN datasets/model_files 名称；非内置资源类型经 ExtensionRegistry 解析显示名。不含 PLUGIN_EP（接口目录单独展示）。 */
   topResources(appId: number, range: MonitorRange, page: number, size: number): Page<Record<string, unknown>> {
     const since = this.since(range)

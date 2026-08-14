@@ -120,6 +120,8 @@ export function sanitizeDispositionFilename(name: string): string {
 export interface EndpointMatched {
   method: string
   path: string
+  /** 是否对外开放（数据面可访问）。内部端点（未标记 public）仅管理面可用。 */
+  public?: boolean
 }
 
 /** 端点访问审计上下文（成功或异常后回调）。 */
@@ -180,7 +182,7 @@ export async function dispatchPluginEndpoint(opts: PluginDispatchOptions): Promi
   for (const endpoint of endpoints) {
     const params = matchPath(method, endpoint.path, suffix, endpoint.method)
     if (params === null) continue
-    const matched: EndpointMatched = { method: endpoint.method, path: endpoint.path }
+    const matched: EndpointMatched = { method: endpoint.method, path: endpoint.path, public: endpoint.public === true }
     const blocked = opts.guard?.({ endpoint: matched, method, suffix })
     if (blocked) {
       res.status(blocked.status).json(error(blocked.status, blocked.message))
