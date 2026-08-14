@@ -15,7 +15,6 @@ interface PluginDefRow {
   version: string
   icon: string
   loaded: number
-  builtin: number
   created_at: string
   updated_at: string
 }
@@ -43,7 +42,6 @@ export const rowToDef = (r: PluginDefRow): PluginDef => ({
   version: r.version,
   icon: r.icon ?? '',
   loaded: r.loaded === 1,
-  builtin: r.builtin === 1,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 })
@@ -67,8 +65,8 @@ export class PluginRepository {
     this.db
       .prepare(
         `INSERT INTO plugins (plugin_type, name, description, default_data_scope, scope_override_allowed,
-           artifact, artifact_hash, version, icon, loaded, builtin, created_at, updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+           artifact, artifact_hash, version, icon, loaded, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
          ON CONFLICT(plugin_type) DO UPDATE SET
            name=excluded.name, description=excluded.description,
            default_data_scope=excluded.default_data_scope, scope_override_allowed=excluded.scope_override_allowed,
@@ -77,7 +75,7 @@ export class PluginRepository {
       )
       .run(
         def.pluginType, def.name, def.description, def.defaultDataScope, def.scopeOverrideAllowed ? 1 : 0,
-        def.artifact, def.artifactHash, def.version, def.icon ?? '', def.loaded ? 1 : 0, def.builtin ? 1 : 0,
+        def.artifact, def.artifactHash, def.version, def.icon ?? '', def.loaded ? 1 : 0,
         def.createdAt, def.updatedAt,
       )
   }

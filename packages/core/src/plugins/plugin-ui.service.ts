@@ -6,9 +6,7 @@ import { CONFIG, type AtlasConfig } from '../config.js'
 import type { PluginUiManifest } from '@atlas/types'
 
 /**
- * 插件 UI 资源服务：
- * - 内置插件：包内 ui/ 目录（node_modules/@atlas/plugin-{type}/ui/）
- * - 外部插件：data/plugins/{type}/ui/ 目录
+ * 插件 UI 资源服务：全部插件统一目录加载，ui/ 目录位于插件目录内（plugins/{type}/ui/）。
  * 统一约定 ui/ 目录含 manifest.json + entry.{hash}.js + assets。
  */
 @Injectable()

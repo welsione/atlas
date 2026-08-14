@@ -166,7 +166,6 @@ export class PluginLoader implements OnApplicationBootstrap {
         artifactHash: hash,
         version: manifest.version ?? '0.0.0',
         icon: manifest.icon ?? '',
-        builtin: false,
         schemaSql: readSchemaSql(pluginDir),
         module: mod,
       }

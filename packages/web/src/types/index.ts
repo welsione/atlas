@@ -41,7 +41,6 @@ export type PluginDef = {
   artifactHash: string
   version: string
   loaded: boolean
-  builtin: boolean
   createdAt: string
   updatedAt: string
 }

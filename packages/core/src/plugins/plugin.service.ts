@@ -110,7 +110,6 @@ export class PluginService implements OnApplicationBootstrap {
       version,
       icon,
       loaded,
-      builtin: false,
       createdAt: nowTs,
       updatedAt: nowTs,
     })

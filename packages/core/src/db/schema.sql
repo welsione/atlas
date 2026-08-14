@@ -29,17 +29,16 @@ CREATE TABLE IF NOT EXISTS app_credentials (
 -- ---------- 插件注册表（平台级） ----------
 CREATE TABLE IF NOT EXISTS plugins (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    plugin_type TEXT NOT NULL UNIQUE,         -- 插件专用 key（全局唯一，内置类型为保留字）
+    plugin_type TEXT NOT NULL UNIQUE,         -- 插件专用 key（全局唯一）
     name TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
     default_data_scope TEXT NOT NULL DEFAULT 'APP_LOCAL',  -- APP_LOCAL / GLOBAL_SHARED
     scope_override_allowed INTEGER NOT NULL DEFAULT 1,     -- 单向：仅允许 SHARED->LOCAL
-    artifact TEXT NOT NULL DEFAULT '',        -- 外部 jar 文件名；内置为 ''
-    artifact_hash TEXT NOT NULL DEFAULT '',   -- jar SHA-256（识别同一插件不同拷贝/更新）
+    artifact TEXT NOT NULL DEFAULT '',        -- 插件目录名（全部插件统一目录加载）
+    artifact_hash TEXT NOT NULL DEFAULT '',   -- 目录内容哈希（识别同一插件不同拷贝/更新）
     version TEXT NOT NULL DEFAULT '',
     icon TEXT NOT NULL DEFAULT '',             -- 插件图标：data:/http(s)/icons/xxx.svg（相对路径经 /_pluginui/{type}/icons/ 服务）
     loaded INTEGER NOT NULL DEFAULT 1,        -- 软卸载：loaded=0 数据全保留
-    builtin INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );

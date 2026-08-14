@@ -3,20 +3,19 @@ import type { AtlasPlugin, DataScope } from '@atlas/types'
 /** 插件运行时注册项。 */
 export interface LoadedPlugin {
   plugin: AtlasPlugin
-  /** 来源标识：builtin / 外部目录名。 */
+  /** 来源标识：外部目录名（全部插件统一目录加载，无内置插件概念）。 */
   artifact: string
   artifactHash: string
   version: string
   /** 插件图标声明（data:/http(s)/相对路径）。 */
   icon: string
-  builtin: boolean
   /** 插件自有建表 SQL（目录 schema.sql 内容，加载器自动读取；SchemaBootstrapService 启动执行）。 */
   schemaSql?: string
   /** 外部插件的入口模块（动态 import 结果），用于卸载后引用。 */
   module?: unknown
 }
 
-/** 插件目录 manifest（内置/外部同构）。 */
+/** 插件目录 manifest（统一目录加载）。 */
 export interface PluginManifest {
   pluginType: string
   name: string

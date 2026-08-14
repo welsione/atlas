@@ -73,7 +73,7 @@ export class AppRepository {
   }
 
   /**
-   * 级联删除应用的全部数据（事务）：插件实例、数据集及其子表、内置插件表数据、
+   * 级联删除应用的全部数据（事务）：插件实例、数据集及其子表、插件自有表数据、
    * 公开文件 token、各类访问/工作日志、凭证历史。防止孤儿数据（数据集 token 残留可消费）。
    */
   deleteCascade(appId: number): void {

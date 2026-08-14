@@ -132,8 +132,8 @@ describe('PluginService', () => {
     registry = moduleRef.get(PluginRegistry)
     spiRegistry = moduleRef.get(PluginSpiRegistry)
 
-    registry.register({ plugin: sharedPlugin, artifact: 'builtin', artifactHash: '', version: '', builtin: true })
-    registry.register({ plugin: localPlugin, artifact: 'builtin', artifactHash: '', version: '', builtin: true })
+    registry.register({ plugin: sharedPlugin, artifact: 'dir', artifactHash: '', version: '', })
+    registry.register({ plugin: localPlugin, artifact: 'dir', artifactHash: '', version: '', })
     service.syncDefs()
   })
 
@@ -161,7 +161,7 @@ describe('PluginService', () => {
   })
 
   it('重复注册拒绝（type 唯一）', () => {
-    const ok = registry.register({ plugin: sharedPlugin, artifact: 'dup', artifactHash: '', version: '', builtin: false })
+    const ok = registry.register({ plugin: sharedPlugin, artifact: 'dup', artifactHash: '', version: '', })
     expect(ok).toBe(false)
   })
 
@@ -184,7 +184,7 @@ describe('PluginService', () => {
   })
 
   it('plugin_store 按插件类型分区：同应用同 key 不碰撞，删除一实例不清另一实例数据', async () => {
-    registry.register({ plugin: localPlugin2, artifact: 'builtin', artifactHash: '', version: '', builtin: true })
+    registry.register({ plugin: localPlugin2, artifact: 'dir', artifactHash: '', version: '', })
     service.syncDefs()
     service.autoInstantiate(97, ['test-local', 'test-local2'])
     expect(service.repository.findInstance(97, 'test-local')).toBeDefined()
@@ -265,7 +265,7 @@ describe('PluginService', () => {
         env.events().on('plugin.enabled', () => received.push('x'))
       },
     }
-    registry.register({ plugin: subPlugin, artifact: 'builtin', artifactHash: '', version: '', builtin: true })
+    registry.register({ plugin: subPlugin, artifact: 'dir', artifactHash: '', version: '', })
     service.enableInstance(96, 'test-events') // init 订阅（env 由平台 activeEnvs 追踪）
     await new Promise((r) => setTimeout(r, 20))
     service.enableInstance(95, 'test-local') // 触发事件
@@ -280,8 +280,8 @@ describe('PluginService', () => {
   })
 
   it('env.spi() 解析其他插件暴露的能力（双向 SPI）', () => {
-    registry.register({ plugin: gatewayPlugin, artifact: 'builtin', artifactHash: '', version: '', builtin: true })
-    registry.register({ plugin: consumerPlugin, artifact: 'builtin', artifactHash: '', version: '', builtin: true })
+    registry.register({ plugin: gatewayPlugin, artifact: 'dir', artifactHash: '', version: '', })
+    registry.register({ plugin: consumerPlugin, artifact: 'dir', artifactHash: '', version: '', })
     service.syncDefs()
     service.autoInstantiate(80, ['test-consumer', 'test-gateway'])
 
@@ -311,7 +311,7 @@ describe('PluginService', () => {
         ns: { describe: 'ns', create: (env) => ({ v: `app-${env.instance().appId}` }) },
       }),
     }
-    registry.register({ plugin: p, artifact: 'builtin', artifactHash: '', version: '', builtin: true })
+    registry.register({ plugin: p, artifact: 'dir', artifactHash: '', version: '', })
     service.syncDefs()
     service.enableInstance(70, 'test-m7', 'APP_LOCAL')      // 本 app 本地覆盖
     service.enableInstance(71, 'test-m7', 'GLOBAL_SHARED')  // 其他 app 共享实例
@@ -350,7 +350,7 @@ describe('PluginService', () => {
         { pluginType: 'not-loaded', spi: 'anything' }, // 提供方未加载
       ],
     }
-    registry.register({ plugin: staleDepsPlugin, artifact: 'builtin', artifactHash: '', version: '', builtin: true })
+    registry.register({ plugin: staleDepsPlugin, artifact: 'dir', artifactHash: '', version: '', })
     service.syncDefs()
 
     const logger = (service as unknown as { logger: { warn: (m: string) => void } }).logger
@@ -385,8 +385,8 @@ describe('PluginService', () => {
       type: 'test-cyc-b', name: '环B', describe: '', defaultDataScope: 'APP_LOCAL',
       dependsOn: () => [{ pluginType: 'test-cyc-a' }],
     }
-    registry.register({ plugin: cycA, artifact: 'builtin', artifactHash: '', version: '', builtin: true })
-    registry.register({ plugin: cycB, artifact: 'builtin', artifactHash: '', version: '', builtin: true })
+    registry.register({ plugin: cycA, artifact: 'dir', artifactHash: '', version: '', })
+    registry.register({ plugin: cycB, artifact: 'dir', artifactHash: '', version: '', })
     service.syncDefs()
     service.autoInstantiate(82, ['test-cyc-a', 'test-cyc-b'])
     // 环成员未被启用
@@ -411,10 +411,10 @@ describe('PluginService', () => {
       type: 'test-cyc2-d', name: '环2D', describe: '', defaultDataScope: 'APP_LOCAL',
       dependsOn: () => [{ pluginType: 'test-cyc2-c' }],
     }
-    registry.register({ plugin: cycA, artifact: 'builtin', artifactHash: '', version: '', builtin: true })
-    registry.register({ plugin: cycB, artifact: 'builtin', artifactHash: '', version: '', builtin: true })
-    registry.register({ plugin: cycC, artifact: 'builtin', artifactHash: '', version: '', builtin: true })
-    registry.register({ plugin: cycD, artifact: 'builtin', artifactHash: '', version: '', builtin: true })
+    registry.register({ plugin: cycA, artifact: 'dir', artifactHash: '', version: '', })
+    registry.register({ plugin: cycB, artifact: 'dir', artifactHash: '', version: '', })
+    registry.register({ plugin: cycC, artifact: 'dir', artifactHash: '', version: '', })
+    registry.register({ plugin: cycD, artifact: 'dir', artifactHash: '', version: '', })
     service.syncDefs()
 
     const logger = (service as unknown as { logger: { error: (m: string) => void } }).logger
@@ -438,7 +438,7 @@ describe('PluginService', () => {
       defaultDataScope: 'GLOBAL_SHARED',
       destroy: () => { destroyCalls += 1 },
     }
-    registry.register({ plugin: sharedWithDestroy, artifact: 'builtin', artifactHash: '', version: '', builtin: true })
+    registry.register({ plugin: sharedWithDestroy, artifact: 'dir', artifactHash: '', version: '', })
     service.syncDefs()
     service.enableInstance(90, 'test-destroy')
     service.enableInstance(91, 'test-destroy')
@@ -455,7 +455,7 @@ describe('PluginService', () => {
       describe: '验证卸载后新建应用不被中断',
       defaultDataScope: 'APP_LOCAL',
     }
-    registry.register({ plugin: extPlugin, artifact: 'external', artifactHash: '', version: '', builtin: false })
+    registry.register({ plugin: extPlugin, artifact: 'external', artifactHash: '', version: '', })
     service.syncDefs()
     service.unload('test-unloaded-ext') // 卸载 → loaded=false，def 保留
 
@@ -472,7 +472,7 @@ describe('PluginService', () => {
       scopeOverrideAllowed: true,
       provides: () => ({ ns: { describe: 'ns', create: () => ({ ping: () => 'pong' }) } }),
     }
-    registry.register({ plugin: gw, artifact: 'builtin', artifactHash: '', version: '', builtin: true })
+    registry.register({ plugin: gw, artifact: 'dir', artifactHash: '', version: '', })
     service.syncDefs()
     service.enableInstance(92, 'test-scope-switch', 'GLOBAL_SHARED')
     expect(spiRegistry.resolve('test-scope-switch', 'ns', 93)).not.toBeNull() // 其他 app 可解析（共享）
@@ -496,7 +496,7 @@ describe('PluginService', () => {
         env.events().on('plugin.enabled', () => { eventHits += 1 })
       },
     }
-    registry.register({ plugin: hotPlugin, artifact: 'hot', artifactHash: 'v1', version: '', builtin: false })
+    registry.register({ plugin: hotPlugin, artifact: 'hot', artifactHash: 'v1', version: '', })
     service.syncDefs()
     service.onApplicationBootstrap() // 激活 plugin.unloaded/plugin.loaded 事件处理器
 
@@ -512,7 +512,7 @@ describe('PluginService', () => {
 
     // 模拟热替换：卸载（dispose env）→ 重新注册（re-init）
     registry.unregister('test-hot')
-    registry.register({ plugin: hotPlugin, artifact: 'hot', artifactHash: 'v2', version: '', builtin: false })
+    registry.register({ plugin: hotPlugin, artifact: 'hot', artifactHash: 'v2', version: '', })
     await new Promise((r) => setTimeout(r, 20))
     expect(initCalls).toBe(2) // 重载后对已启用实例 re-init
 

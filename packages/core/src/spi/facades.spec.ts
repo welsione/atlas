@@ -129,10 +129,9 @@ describe('SPI 门面', () => {
         publicUrls: () => ['/api/deep/'],
         resourceName: () => [{ resourceType: 'CUSTOM_RES', nameOf: (id) => `资源#${id}` }],
       },
-      artifact: 'builtin',
+      artifact: 'spi-test',
       artifactHash: '',
       version: '',
-      builtin: true,
       schemaSql: 'CREATE TABLE IF NOT EXISTS spi_item (id INTEGER PRIMARY KEY, app_id INTEGER);',
     })
 
@@ -152,10 +151,9 @@ describe('SPI 门面', () => {
         describe: '建表测试',
         defaultDataScope: 'GLOBAL_SHARED',
       },
-      artifact: 'builtin',
+      artifact: 'spi-boot',
       artifactHash: '',
       version: '',
-      builtin: true,
       schemaSql: 'CREATE TABLE IF NOT EXISTS spi_boot (id INTEGER PRIMARY KEY, app_id INTEGER);',
     })
     const svc = new SchemaBootstrapService(db, extensions)
