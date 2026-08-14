@@ -231,6 +231,7 @@ const head = usePageHeadAction()
   gap: 2px;
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .mi {
