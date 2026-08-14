@@ -207,7 +207,7 @@ const total24h = computed(() => overview.value.hourly.reduce((s, h) => s + h.cou
 .stat .mini-bar .bar-seg {
   flex: 1;
   background: var(--atlas-accent-soft);
-  border-radius: 2px 2px 0 0;
+  border-radius: 6px 6px 0 0;
   transition: height 0.2s;
 }
 
@@ -291,7 +291,7 @@ const total24h = computed(() => overview.value.hourly.reduce((s, h) => s + h.cou
 }
 
 .tag {
-  font-size: 10px;
+  font-size: 11px;
   padding: 2px 8px;
   border-radius: 20px;
   background: var(--atlas-good-soft);

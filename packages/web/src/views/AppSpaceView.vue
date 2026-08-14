@@ -541,7 +541,7 @@ function scopeLabel(row: PluginOverviewRow): string {
 .metric-chip {
   width: 28px;
   height: 28px;
-  border-radius: 8px;
+  border-radius: var(--atlas-r-s);
   background: var(--atlas-accent-soft);
   display: flex;
   align-items: center;
@@ -635,7 +635,7 @@ function scopeLabel(row: PluginOverviewRow): string {
 .tab-icon {
   width: 16px;
   height: 16px;
-  border-radius: 3px;
+  border-radius: 4px;
 }
 
 .tab-label .el-icon,

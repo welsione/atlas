@@ -104,12 +104,14 @@ async function doLogin() {
 .login-logo {
   width: 56px;
   height: 56px;
-  border-radius: 12px;
+  border-radius: var(--atlas-r-l);
 }
 .login-title {
-  font-size: 20px;
-  font-weight: 700;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
   margin-top: 10px;
+  color: var(--atlas-text);
 }
 .login-sub {
   font-size: 13px;

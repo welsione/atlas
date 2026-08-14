@@ -301,7 +301,7 @@ const head = usePageHeadAction()
   color: var(--atlas-bg);
   font-size: 12px;
   padding: 5px 9px;
-  border-radius: 6px;
+  border-radius: var(--atlas-r-s);
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;

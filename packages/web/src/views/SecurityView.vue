@@ -87,7 +87,7 @@ async function copyVar(name: string) {
   gap: 4px;
   background: var(--atlas-bg);
   border: 1px solid var(--atlas-stroke);
-  border-radius: 6px;
+  border-radius: var(--atlas-r-s);
   padding: 2px 4px 2px 8px;
 }
 

@@ -442,14 +442,14 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
   width: 100%;
   max-width: 18px;
   background: var(--atlas-accent);
-  border-radius: 3px 3px 0 0;
+  border-radius: 6px 6px 0 0;
   opacity: 0.85;
   flex: 1;
   min-height: 2px;
 }
 
 .trend-label {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--atlas-muted);
   margin-top: 4px;
 }
@@ -494,7 +494,7 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
   font-size: 11px;
   color: var(--atlas-danger);
   background: var(--atlas-danger-weak);
-  border-radius: 8px;
+  border-radius: var(--atlas-r-s);
   padding: 1px 8px;
 }
 
@@ -546,7 +546,7 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
   font-size: 11px;
   color: var(--atlas-danger);
   border: 1px solid var(--atlas-danger-line);
-  border-radius: 4px;
+  border-radius: var(--atlas-r-s);
   padding: 0 6px;
   flex-shrink: 0;
 }

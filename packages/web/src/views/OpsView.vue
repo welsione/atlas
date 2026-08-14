@@ -88,14 +88,14 @@ const totalErrors = () => overview.value.byPlugin.reduce((s, p) => s + Number(p.
     <!-- 概览 -->
     <div class="overview-grid">
       <div class="overview-card surface">
-        <div class="overview-title">级别分布</div>
+        <div class="ttl-row"><h2>级别分布</h2></div>
         <div class="level-row"><span class="level-dot info" />INFO <b>{{ overview.levels.INFO }}</b></div>
         <div class="level-row"><span class="level-dot warning" />WARN <b>{{ overview.levels.WARN }}</b></div>
         <div class="level-row"><span class="level-dot danger" />ERROR <b>{{ overview.levels.ERROR }}</b></div>
         <div class="level-row"><span class="level-dot info" />DEBUG <b>{{ overview.levels.DEBUG }}</b></div>
       </div>
       <div class="overview-card surface">
-        <div class="overview-title">近 24h 趋势（共 {{ overview.hourly.reduce((s, h) => s + h.count, 0) }} 条，错误 {{ totalErrors() }}）</div>
+        <div class="ttl-row"><h2>近 24h 趋势（共 {{ overview.hourly.reduce((s, h) => s + h.count, 0) }} 条，错误 {{ totalErrors() }}）</h2></div>
         <div v-if="overview.hourly.length" class="trend">
           <div v-for="(h, i) in overview.hourly" :key="i" class="trend-col" :title="`${h.bucket}：${h.count} 条（错误 ${h.errors}）`">
             <div class="trend-bar" :style="{ height: `${(h.count / maxHourly()) * 100}%` }" :class="{ 'is-error': h.errors > 0 }" />
@@ -105,7 +105,7 @@ const totalErrors = () => overview.value.byPlugin.reduce((s, p) => s + Number(p.
         <div v-else class="trend-empty">近 24h 暂无工作日志</div>
       </div>
       <div class="overview-card surface">
-        <div class="overview-title">按插件（近 7 天）</div>
+        <div class="ttl-row"><h2>按插件（近 7 天）</h2></div>
         <div v-for="p in overview.byPlugin" :key="p.pluginType" class="plugin-row">
           <code class="mono">{{ p.pluginType || '平台' }}</code>
           <el-tag size="small" :type="p.errors > 0 ? 'danger' : 'info'">{{ p.count }} 条{{ p.errors > 0 ? ` / ${p.errors} 错` : '' }}</el-tag>
@@ -186,12 +186,6 @@ const totalErrors = () => overview.value.byPlugin.reduce((s, p) => s + Number(p.
   border-radius: var(--atlas-r-m);
 }
 
-.overview-title {
-  font-weight: 600;
-  font-size: 13px;
-  margin-bottom: 12px;
-}
-
 .level-row {
   display: flex;
   align-items: center;
@@ -242,7 +236,7 @@ const totalErrors = () => overview.value.byPlugin.reduce((s, p) => s + Number(p.
   width: 100%;
   max-width: 22px;
   background: var(--atlas-accent);
-  border-radius: 3px 3px 0 0;
+  border-radius: 6px 6px 0 0;
   opacity: 0.85;
   flex: 1;
   min-height: 2px;
@@ -253,7 +247,7 @@ const totalErrors = () => overview.value.byPlugin.reduce((s, p) => s + Number(p.
 }
 
 .trend-label {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--atlas-muted);
   margin-top: 4px;
 }

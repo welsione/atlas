@@ -65,7 +65,6 @@ async function handleUnload(row: DefRow) {
                 alt=""
               />
               <span class="plugin-name">{{ row.plugin.name }}</span>
-              <el-tag size="small" type="warning">外部</el-tag>
             </div>
           </template>
         </el-table-column>
@@ -133,9 +132,9 @@ async function handleUnload(row: DefRow) {
 }
 
 .plugin-icon {
-  width: 22px;
-  height: 22px;
-  border-radius: 5px;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--atlas-r-s);
   flex-shrink: 0;
 }
 
@@ -155,7 +154,7 @@ async function handleUnload(row: DefRow) {
   gap: 8px;
   margin-top: 12px;
   padding: 12px 16px;
-  border-radius: 10px;
+  border-radius: var(--atlas-r-m);
   background: var(--atlas-surface);
   border: 1px dashed var(--atlas-stroke);
   color: var(--atlas-muted);

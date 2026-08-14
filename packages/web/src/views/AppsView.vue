@@ -397,7 +397,7 @@ function isPluginSelected(pluginType: string) {
   gap: 6px;
   margin-bottom: 10px;
   padding: 8px 12px;
-  border-radius: 8px;
+  border-radius: var(--atlas-r-s);
   background: var(--atlas-accent-weak);
   border: 1px solid var(--atlas-accent-line);
   color: var(--atlas-muted);
@@ -421,7 +421,7 @@ function isPluginSelected(pluginType: string) {
   align-items: stretch;
   min-height: 84px;
   border: 1px solid var(--atlas-stroke);
-  border-radius: 10px;
+  border-radius: var(--atlas-r-m);
   background: var(--atlas-surface);
   cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
@@ -476,7 +476,7 @@ function isPluginSelected(pluginType: string) {
 .card-icon-box {
   width: 36px;
   height: 36px;
-  border-radius: 8px;
+  border-radius: var(--atlas-r-s);
   background: var(--atlas-bg);
   border: 1px solid var(--atlas-stroke);
   display: flex;
@@ -492,7 +492,7 @@ function isPluginSelected(pluginType: string) {
 .card-icon {
   width: 24px;
   height: 24px;
-  border-radius: 4px;
+  border-radius: var(--atlas-r-s);
 }
 
 .card-text {
@@ -548,7 +548,7 @@ function isPluginSelected(pluginType: string) {
   color: var(--atlas-muted);
   font-size: 13px;
   border: 1px dashed var(--atlas-stroke);
-  border-radius: 10px;
+  border-radius: var(--atlas-r-m);
 }
 
 .create-form {
