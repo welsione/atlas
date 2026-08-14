@@ -1,6 +1,6 @@
 #!/bin/bash
-# 服务器部署脚本：构建镜像并启动 Atlas。
-# 用法（服务器 /root/atlas 下执行）：bash deploy.sh
+# 服务器部署脚本：构建镜像并启动 Atlas（docker 部署文件统一在 deploy/）。
+# 用法（服务器 /root/atlas 下执行）：bash deploy/deploy.sh
 set -euo pipefail
 
 cd "$(dirname "$0")"

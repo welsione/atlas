@@ -17,10 +17,8 @@ coverage
 docs
 .github
 LICENSE
-deploy.sh
-docker-compose.yml
-Dockerfile
-.dockerignore
+# docker 部署相关文件统一在 deploy/（Dockerfile 由 -f/file 单独读取，不进上下文）
+deploy
 # 仅排除各类运行时数据目录（保留 plugins/*/data 插件参考数据）
 packages/core/data
 packages/core/dist

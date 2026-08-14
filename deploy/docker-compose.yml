@@ -1,8 +1,11 @@
 # Atlas：AI 服务基础组件（供应商配置 + 提示词管理）
-# 服务器部署：docker compose build && docker compose up -d
+# 服务器部署（仓库根执行）：docker compose -f deploy/docker-compose.yml build && docker compose -f deploy/docker-compose.yml up -d
 services:
   atlas:
-    build: .
+    build:
+      # 构建上下文为仓库根（Dockerfile 需要 monorepo 全量源码与 package-lock）
+      context: ..
+      dockerfile: deploy/Dockerfile
     image: atlas:latest
     container_name: atlas
     restart: unless-stopped
