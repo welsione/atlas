@@ -150,9 +150,7 @@ export class PluginLoader implements OnApplicationBootstrap {
       }
       // cache-busting：URL 带目录 hash query —— Node import 缓存按 URL 键，热替换后强制加载新模块
       const entryUrl = `${pathToFileURL(entryFile).href}?v=${hash}`
-      const mod = (await import(/* @vite-ignore */ entryUrl)) as {
-        default?: AtlasPlugin
-      }
+      const mod = await this.importEntry(entryUrl)
       const plugin = mod.default
       if (!plugin?.type) {
         this.logger.warn(`插件入口未导出 AtlasPlugin，跳过: ${artifact}`)
@@ -181,6 +179,11 @@ export class PluginLoader implements OnApplicationBootstrap {
       this.logger.error(`插件加载失败（隔离，不影响平台）: ${artifact}，${(e as Error).message}`)
       return null
     }
+  }
+
+  /** 动态 import 插件入口模块（独立接缝：测试中可替换，避免 Jest 环境加载 .ts fixture）。 */
+  protected async importEntry(entryUrl: string): Promise<{ default?: AtlasPlugin }> {
+    return (await import(/* @vite-ignore */ entryUrl)) as { default?: AtlasPlugin }
   }
 }
 
