@@ -53,7 +53,7 @@ list(@Query('page') page?: string, @Query('size') size?: string) {
 - 统一 `{ code, message, data }`，`code === 0` 成功；用 `ok()` / `error()` 工具，**不手写对象字面量**。
 - 业务错误**抛** `ValidationError`(400) / `NotFoundError`(404) / `DuplicateError`(409)，交给 `AppExceptionFilter`。
 - 需要透传 HTTP 状态时抛 `HttpException`；**其余异常一律不 catch 后改头换面重抛**，让 filter 兜底。
-- 数据面 controller 的错误文案必须脱敏（见 README §7）。
+- 数据面（`/api/v1`）controller 的**错误文案必须脱敏**：不暴露路径/SQL/密钥/内部细节（插件分发已统一 500 脱敏处理，见 core-backend §5 与 plugins.md §2.2）。
 
 ```ts
 // ✅
