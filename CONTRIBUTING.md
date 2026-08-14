@@ -39,11 +39,11 @@ npm run typecheck
 
 ## 开发流程
 
-1. **Fork 仓库**并在本地建功能分支：`git checkout -b feat/xxx` 或 `fix/xxx`。
+1. **Fork 仓库**并在本地建功能分支：`git checkout -b feat/xxx` 或 `fix/xxx`（基于 `develop` 分支切出）。
 2. **小步提交**：每个提交只做一件事，便于评审与回溯。
 3. **写测试**：改动后端逻辑必须补 `*.spec.ts`；改动前端纯逻辑补前端测试。
 4. **跑本地检查**：`npm run lint:md && npm run typecheck && npm test`，前端改动需 `npm run sync:static`。
-5. **提交 PR**：填写 PR 模板，说明动机、改动、验证方式；关联相关 issue。PR 打开后 opencode 会自动 AI 审查。
+5. **提交 PR 合入 `develop`**：填写 PR 模板，说明动机、改动、验证方式；关联相关 issue。PR 打开后 opencode 会自动 AI 审查。功能分支 PR 默认合入 `develop`（未验证开发代码汇聚地），验证通过后由维护者合入 `master`。
 
 ### 分支命名
 

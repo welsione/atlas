@@ -15,20 +15,24 @@
 
 | 分支 | 定位 | 发布行为 |
 |------|------|----------|
-| `master` | **默认分支 / 日常开发主线**：所有功能分支 PR 合并到这里 | 仅跑 CI，**不发布** |
+| `develop` | **开发分支：未验证开发代码的汇聚地**。功能分支 PR 默认合入这里，在此完成集成/人工验证，验证通过后再进 `master`；**未验证的代码不得直接合入 `master`/`pre-release`/`release`** | 仅跑 CI，**不发布** |
+| `master` | **稳定主线 / 已验证开发代码**：`develop` 验证通过后合并到这里 | 仅跑 CI，**不发布** |
 | `pre-release` | 测试发布分支：预发布验证、灰度环境 | 仅跑 CI，不触发发布 |
 | `release` | **产品发布分支**：唯一触发发布的分支 | 推送 → release-please 评估版本 → release PR → 合并后 tag + GitHub Release + 镜像 |
-| 功能分支 | 日常开发（`feat/` `fix/` `docs/` 等） | 仅跑 CI |
+| 功能分支 | 日常开发（`feat/` `fix/` `docs/` 等），**PR 默认合入 `develop`** | 仅跑 CI |
 
-### 2.2 发布流程
+### 2.2 开发与发布流程
 
 ```text
-功能分支 → 合入 master（日常开发，不发布）
+功能分支 → 合入 develop（未验证开发代码，先在此集成验证）
+        → 验证通过后合入 master（稳定主线，不发布）
         → 合入 pre-release 测试验证（可选）
         → 合入 release 正式发布（git push origin master:release 或 PR 合入）
 ```
 
-- **只有 `release` 分支上的代码变动才提升版本号、构建镜像、发 release**；`master`/`pre-release` 上的提交不影响版本。
+- **`develop` 是开发分支**：保存未验证的开发代码，合并前不强制要求完整验证，但必须过 CI 质量门禁；开发者在 `develop` 上完成集成验证（测试 + 手动冒烟）后再合入 `master`。
+- **`master` 只收已验证代码**：合入 `master` 的提交应已在 `develop` 上验证通过；紧急热修可例外走 PR 直达并注明原因。
+- **只有 `release` 分支上的代码变动才提升版本号、构建镜像、发 release**；`master`/`develop`/`pre-release` 上的提交不影响版本。
 - 版本由 Conventional Commits 语义自动推断：`feat`→minor、`fix`/`perf`→patch、`feat!`/`BREAKING CHANGE`→major、`docs`/`chore`/`ci`/`test` 等→无版本变化。
 - 发布链路：release 推送 → release-please 开 release PR（bump 4 处 package.json + package-lock + CHANGELOG）→ 人工合并 → 自动 tag + GitHub Release → GHCR 镜像 → opencode AI 润色 Release Notes。
 - 完整机制与故障排查见 [docs/repository-ops.md](docs/repository-ops.md)。

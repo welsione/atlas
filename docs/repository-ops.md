@@ -9,13 +9,15 @@
 
 | 分支 | 定位 | 发布行为 |
 |------|------|----------|
-| `master` | **默认分支 / 日常开发主线**：所有 PR 合并到这里 | 仅跑 CI，**不发布**（不触发 release-please、不构建镜像） |
+| `develop` | **开发分支：未验证开发代码的汇聚地**。功能分支 PR 默认合入这里，在此完成集成/人工验证后再进 `master`；**未验证的代码不得直接合入 `master`/`pre-release`/`release`** | 仅跑 CI，**不发布**（不触发 release-please、不构建镜像） |
+| `master` | **稳定主线 / 已验证开发代码**：`develop` 验证通过后合并到这里 | 仅跑 CI，**不发布**（不触发 release-please、不构建镜像） |
 | `pre-release` | **测试发布分支**：预发布验证、灰度测试环境使用 | 仅跑 CI，不触发发布 |
 | `release` | **产品发布分支**：版本号提升、构建镜像、GitHub Release 全部由这里触发 | release-please 监听：合并 release PR → tag + GitHub Release → GHCR 镜像 |
-| 功能分支 | 日常开发（`feat/` `fix/` `docs/` 等） | 仅跑 CI |
+| 功能分支 | 日常开发（`feat/` `fix/` `docs/` 等），**PR 默认合入 `develop`** | 仅跑 CI |
 
-> **发布流程**：功能分支 → 合入 `master`（日常开发，不发布）→ 合入 `pre-release` 测试验证（可选）→ 合入 `release` 正式发布。
-> 只有当 `release` 分支上有新提交时，版本号才会提升并触发构建/发布；`master` 上的提交不会影响版本。
+> **开发与发布流程**：功能分支 → 合入 `develop`（未验证开发代码，先在此集成验证）→ 验证通过后合入 `master`（稳定主线，不发布）→ 合入 `pre-release` 测试验证（可选）→ 合入 `release` 正式发布。
+> **`develop` 是开发分支，只收未验证的开发代码**：合并前不强制完整验证，但必须过 CI 质量门禁；`master` 只收已在 `develop` 验证通过的代码（紧急热修可例外走 PR 直达并注明原因）。
+> 只有当 `release` 分支上有新提交时，版本号才会提升并触发构建/发布；`master`/`develop`/`pre-release` 上的提交不会影响版本。
 
 ### 套件总览
 
