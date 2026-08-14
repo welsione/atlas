@@ -220,6 +220,27 @@ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI',
 
 - 统一 `<el-pagination layout="total, sizes, prev, pager, next">`，右下对齐 `.pager`；`page-sizes` 用 `[10,20,50]`。
 
+### 4.8 应用详情看板（Board Tab）
+
+> 应用详情页（`AppSpaceView.vue`）以**看板 Tab 为默认落地页**，承载应用身份、凭证、资源指标与危险操作，把原本挤在页顶的信息条收纳进一个专门的看板里。参考 `docs/ui-demo-appdetail-board.html`。
+
+- **看板是应用详情的默认落地 Tab 与操作入口**：进入应用详情首先落在看板，从这里把握应用全貌；具体实例/数据操作仍在各自 Tab。
+- **看板 Tab 只显示图标，不显示文字**：`el-tab-pane` 的 label 只放一个 4 宫格图标（如 `Grid`），选中态品牌蓝；其余 Tab（插件实例/数据集/接口监控）保留文字的常规样式。tabs 容器用 `border-bottom:1px var(--atlas-stroke)`，选中项 `2px` 品牌蓝下划线。
+- 看板按以下板块自上而下组织：
+
+1. **英雄面板（身份）**：`border-radius:14px`；左侧 62px 渐变圆角图标块（`--atlas-accent-soft`→浅青蓝），中间应用名 22px/800 + 状态 tag，下方行内展示 App ID（`.mono` + 复制）与创建时间；右侧「刷新」次要 +「启用插件」主按钮。
+2. **凭证贯通条**：面板底部横贯通栏（`--atlas-layer` 底 + 顶部 `--atlas-stroke` 分线），左侧 App Secret 遮罩（`.mono`）+「仅创建/轮换时展示完整」说明，右侧「轮换凭证」（主）/「复制」（次要）。
+3. **指标卡×3**（`repeat(3,1fr)`，窄屏降 2/1 列）：每张卡左上有 28px `--atlas-accent-soft` 图标章，右上角晕染 `--atlas-accent-soft` 圆做层次；数字 30px/800/tabular；fixeline 用 `--atlas-good` 强调正向增量。
+4. **危险操作区**：板块标题 `.ttl-row`（「危险操作」+ hint）后接独立危险卡片——顶部 `--atlas-danger-soft` 浅红 header（警示 icon + 标题），主体左右分区：左说明、右「吊销应用」（实心红）/「删除应用」（描边红）。
+
+- 看板**不使用快捷入口卡**（不放置跨 Tab 跳转卡片），保持信息型总览的克制。
+
+### 4.9 危险操作分区（Danger Zone）
+
+- 凡页面同时存在常规操作与破坏性操作（吊销/删除/轮换），**破坏性操作必须与常规操作物理分层/分卡**，不得混排在同一工具条。
+- 危险卡统一形态：红头（`--atlas-danger-soft` 底 + `--atlas-danger` 标题文字与警示 icon）+ 主体（说明 `--atlas-muted` + 右侧实心 `--atlas-danger` 与描边 `--atlas-danger` 双按钮）。
+- 「吊销 / 删除」均属破坏性，必须 `ElMessageBox.confirm`（`type:'error'`）二次确认。
+
 ---
 
 ## 5. 图标规范

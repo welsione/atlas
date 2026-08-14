@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>应用详情 · 看板（精修版 v2）</title>
+<style>
+  :root{
+    --atlas-bg:#ffffff;--atlas-surface:#ffffff;--atlas-layer:#fafbfe;
+    --atlas-stroke:#e9ecf3;--atlas-stroke-strong:#dde2ec;
+    --atlas-text:#161a2b;--atlas-muted:#5f6a85;--atlas-faint:#9aa3b8;
+    --atlas-accent:#4f6ef7;--atlas-accent-strong:#3d5de8;--atlas-accent-soft:#eef1ff;
+    --atlas-danger:#e4573d;--atlas-danger-soft:#fde2dd;--atlas-good:#10b981;--atlas-good-soft:#ecfdf5;--atlas-warning:#f5a623;
+    --shadow-card:0 1px 2px rgba(20,28,60,.04),0 1px 3px rgba(20,28,60,.05);
+    --shadow-hover:0 4px 10px rgba(20,28,60,.07),0 10px 24px rgba(20,28,60,.08);
+    --r-s:8px;--r-m:10px;--r-l:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--atlas-bg);color:var(--atlas-text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;line-height:1.55;-webkit-font-smoothing:antialiased}
+  .layout{display:flex;min-height:100vh;background:var(--atlas-bg)}
+  .sidebar{position:sticky;top:0;height:100vh;width:232px;flex-shrink:0;padding:14px 12px 16px;border-right:1px solid var(--atlas-stroke);background:#fff;display:flex;flex-direction:column}
+  .side-top{display:flex;align-items:center;margin-bottom:18px}
+  .brand-logo img{display:block;height:40px;width:auto}
+  .mi{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:9px;font-size:13px;color:#4a5470;margin-bottom:2px}
+  .mi .ic{width:18px;height:18px;min-width:18px;opacity:.75}
+  .mi.on{background:var(--atlas-accent-soft);color:var(--atlas-accent);font-weight:700}
+  .mi.on .ic{opacity:1}
+  .sfoot{margin-top:auto;padding:9px 12px;border-radius:9px;font-size:12px;color:var(--atlas-muted)}
+  .sfoot:hover{background:var(--atlas-danger-soft);color:var(--atlas-danger)}
+
+  .main{flex:1;min-width:0;padding:22px 30px 44px;background:var(--atlas-bg)}
+  .crumb{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--atlas-muted);margin-bottom:14px}
+  .crumb a{color:var(--atlas-muted);text-decoration:none;cursor:pointer}
+  .crumb a:hover{color:var(--atlas-accent)}
+  .crumb .sep{color:var(--atlas-stroke-strong)}
+  .crumb .cur{color:var(--atlas-text);font-weight:600}
+
+  /* ===== Tab 导航：看板为首，默认选中 ===== */
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--atlas-stroke);margin-bottom:24px}
+  .tabs .tab{padding:11px 18px;font-size:14px;color:var(--atlas-muted);cursor:pointer;border-bottom:2px solid transparent;display:flex;align-items:center;gap:8px;transition:color .14s,border-color .14s;position:relative;top:1px}
+  .tabs .tab .ti{width:16px;height:16px;opacity:.7}
+  .tabs .tab:hover{color:var(--atlas-text)}
+  .tabs .tab.on{color:var(--atlas-accent);border-bottom-color:var(--atlas-accent);font-weight:700}
+  .tabs .tab.on .ti{opacity:1}
+
+  .tag{font-size:11px;padding:2px 10px;border-radius:20px;font-weight:600}
+  .tag.on{background:var(--atlas-good-soft);color:var(--atlas-good)}
+  .tag.pause{background:#fdf3e3;color:var(--atlas-warning)}
+
+  .btn{display:inline-flex;align-items:center;gap:6px;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid transparent;transition:background .14s,transform .08s,box-shadow .14s}
+  .btn.primary{background:var(--atlas-accent);color:#fff;box-shadow:0 4px 12px rgba(79,110,247,.2)}
+  .btn.primary:hover{background:var(--atlas-accent-strong)}
+  .btn.ghost{background:#fff;border-color:var(--atlas-stroke);color:var(--atlas-text)}
+  .btn.ghost:hover{border-color:var(--atlas-stroke-strong);background:var(--atlas-layer)}
+  .btn.txt{background:transparent;color:var(--atlas-accent);padding:6px 10px}
+  .btn.txt:hover{background:var(--atlas-accent-soft)}
+  .btn.danger-fill{background:var(--atlas-danger);color:#fff}
+  .btn.danger-fill:hover{opacity:.9}
+  .btn.danger-ghost{background:#fff;border:1px solid var(--atlas-danger);color:var(--atlas-danger)}
+  .btn.danger-ghost:hover{background:var(--atlas-danger-soft)}
+
+  /* ===== 顶部面板：欢迎行 + 身份 ===== */
+  .hero{background:#fff;border:1px solid var(--atlas-stroke);border-radius:var(--r-l);box-shadow:var(--shadow-card);overflow:hidden;margin-bottom:16px}
+  .hero-main{display:flex;align-items:center;gap:18px;padding:22px 26px}
+  .hero .av{width:62px;height:62px;border-radius:16px;background:linear-gradient(135deg,var(--atlas-accent-soft),#e3eafd);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:26px;font-weight:800;color:var(--atlas-accent)}
+  .hero .hm{flex:1;min-width:0}
+  .hero h1{font-size:22px;font-weight:800;letter-spacing:-.4px;margin:0;display:flex;align-items:center;gap:12px}
+  .hero .ha{display:flex;gap:16px;margin-top:10px;flex-wrap:wrap}
+  .hero .ha .hf{font-size:12px;color:var(--atlas-muted);display:flex;align-items:center;gap:6px}
+  .hero .ha .hf b{font-weight:700;color:var(--atlas-text);font-family:ui-monospace,Menlo,monospace;font-size:12px}
+  .hero .ha .copy{cursor:pointer;color:var(--atlas-faint)}
+  .hero .ha .copy:hover{color:var(--atlas-accent)}
+  .hero .acts{display:flex;align-items:center;gap:10px;flex-shrink:0}
+
+  /* ===== 看板网格 ===== */
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+
+  /* 指标卡：带品牌 icon 章 */
+  .metric{background:#fff;border:1px solid var(--atlas-stroke);border-radius:var(--r-m);box-shadow:var(--shadow-card);padding:18px;position:relative;overflow:hidden;transition:box-shadow .16s,transform .16s,border-color .16s}
+  .metric::after{content:"";position:absolute;right:-30px;top:-30px;width:90px;height:90px;border-radius:50%;background:var(--atlas-accent-soft);opacity:.6}
+  .metric .mrow{display:flex;align-items:center;justify-content:space-between;position:relative;z-index:1}
+  .metric .kicker{font-size:12px;color:var(--atlas-muted);display:flex;align-items:center;gap:7px}
+  .metric .kicker .ch{width:28px;height:28px;border-radius:8px;background:var(--atlas-accent-soft);display:flex;align-items:center;justify-content:center;color:var(--atlas-accent)}
+  .metric .ch svg{width:15px;height:15px}
+  .metric .num{font-size:30px;font-weight:800;letter-spacing:-1px;font-variant-numeric:tabular-nums;line-height:1;margin-top:12px;position:relative;z-index:1}
+  .metric .fixeline{font-size:11px;color:var(--atlas-muted);margin-top:7px;position:relative;z-index:1;display:flex;align-items:center;gap:6px}
+  .metric .fixeline.up{color:var(--atlas-good)}
+  .metric .fixeline .split{color:var(--atlas-faint)}
+
+  /* 快捷入口卡（看板作为操作入口的主体） */
+  .quick{background:#fff;border:1px solid var(--atlas-stroke);border-radius:var(--r-m);box-shadow:var(--shadow-card);padding:15px 16px;display:flex;align-items:center;gap:13px;cursor:pointer;transition:box-shadow .16s,transform .16s,border-color .16s}
+  .quick:hover{box-shadow:var(--shadow-hover);transform:translateY(-1px);border-color:var(--atlas-accent)}
+  .quick .qc{width:40px;height:40px;border-radius:11px;background:var(--atlas-layer);display:flex;align-items:center;justify-content:center;color:var(--atlas-muted);transition:background .16s,color .16s;flex-shrink:0}
+  .quick:hover .qc{background:var(--atlas-accent-soft);color:var(--atlas-accent)}
+  .quick .qc svg{width:19px;height:19px}
+  .quick .qt{flex:1;min-width:0}
+  .quick .qt b{font-size:14px;font-weight:700;display:block}
+  .quick .qt span{font-size:11px;color:var(--atlas-muted)}
+  .quick .arr{color:var(--atlas-faint);font-size:16px;transition:transform .16s,color .16s}
+  .quick:hover .arr{color:var(--atlas-accent);transform:translateX(2px)}
+
+  /* 板块标题 */
+  .ttl{display:flex;align-items:center;gap:10px;margin:24px 0 12px}
+  .ttl:first-of-type{margin-top:4px}
+  .ttl::before{content:"";width:4px;height:15px;border-radius:2px;background:var(--atlas-accent);flex-shrink:0}
+  .ttl h2{font-size:15px;font-weight:700;margin:0;color:var(--atlas-text)}
+  .ttl .hint{font-size:12px;color:var(--atlas-faint);margin-left:2px}
+
+  /* 危险操作：更精致的卡片式 */
+  .danger-card{border:1px solid var(--atlas-danger)!important;background:linear-gradient(180deg,#fff,#fffdfd)}
+  .danger-card .d-head{display:flex;align-items:center;gap:9px;padding:14px 20px;border-bottom:1px solid var(--atlas-danger-soft);background:var(--atlas-danger-soft)}
+  .danger-card .d-head .di{width:18px;height:18px;color:var(--atlas-danger);flex-shrink:0}
+  .danger-card .d-head b{font-size:13px;color:var(--atlas-danger)}
+  .danger-card .d-body{padding:16px 20px;display:flex;align-items:center;gap:16px}
+  .danger-card .d-body p{flex:1;margin:0;font-size:12px;color:var(--atlas-muted);line-height:1.6}
+  .danger-card .d-ops{display:flex;gap:10px;flex-shrink:0}
+
+  @media(max-width:960px){.grid{grid-template-columns:repeat(2,1fr)}.hero .acts{display:none}}
+  @media(max-width:640px){.grid{grid-template-columns:1fr}.hero .av{display:none}}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="side-top"><a class="brand-logo" href="#"><img src="../packages/web/public/icons/atlas-banner.svg" alt="Atlas"/></a></div>
+    <div class="mi" title="控制台"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>控制台</div>
+    <div class="mi on" title="应用管理"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 8h18"/></svg>应用管理</div>
+    <div class="mi" title="插件注册表"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>插件注册表</div>
+    <div class="mi" title="运维台"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.2 4.2l2.9 2.9M16.9 16.9l2.9 2.9M1 12h4M19 12h4M4.2 19.8l2.9-2.9M16.9 7.1l2.9-2.9"/></svg>运维台</div>
+    <div class="mi" title="安全设置"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>安全设置</div>
+    <div class="sfoot" style="display:flex;align-items:center;gap:9px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4M16 17l5-5-5-5M21 12H9"/></svg>退出登录</div>
+  </aside>
+
+  <div class="main">
+    <nav class="crumb"><a href="#">首页</a><span class="sep">›</span><a href="#">应用管理</a><span class="sep">›</span><span class="cur">回归验证应用</span></nav>
+
+    <div class="tabs">
+      <div class="tab on"><svg class="ti" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></div>
+      <div class="tab"><svg class="ti" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 8h18"/></svg>插件实例</div>
+      <div class="tab"><svg class="ti" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg>数据集</div>
+      <div class="tab"><svg class="ti" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>接口监控</div>
+    </div>
+
+    <!-- 顶部英雄面板：身份 + 高频动作 -->
+    <div class="hero">
+      <div class="hero-main">
+        <div class="av">回</div>
+        <div class="hm">
+          <h1>回归验证应用 <span class="tag on">正常</span></h1>
+          <div class="ha">
+            <span class="hf">App ID <b>app_1b9f2c7a8d4e</b><span class="copy" title="复制">⧉</span></span>
+            <span class="hf">创建于 <b>2026-08-12</b></span>
+          </div>
+        </div>
+        <div class="acts">
+          <button class="btn ghost">↻ 刷新</button>
+          <button class="btn primary">+ 启用插件</button>
+        </div>
+      </div>
+      <!-- 凭证条：与英雄一体，横贯通栏 -->
+      <div style="border-top:1px solid var(--atlas-stroke);padding:13px 26px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;background:var(--atlas-layer)">
+        <span style="font-size:12px;color:var(--atlas-muted)">App Secret</span>
+        <span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;color:var(--atlas-text)">•••• •••• •••• a8c4</span>
+        <span style="font-size:11px;color:var(--atlas-faint)">仅创建/轮换时展示完整</span>
+        <span style="flex:1"></span>
+        <button class="btn txt">轮换凭证</button>
+        <button class="btn ghost">复制</button>
+      </div>
+    </div>
+
+    <!-- 指标 + 快捷入口 -->
+    <div class="grid">
+      <div class="metric">
+        <div class="mrow"><span class="kicker"><span class="ch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 8h18"/></svg></span>启用插件</span></div>
+        <div class="num">3</div>
+        <div class="fixeline up">↗ 2 个全局共享<span class="split">·</span>1 应用独立</div>
+      </div>
+      <div class="metric">
+        <div class="mrow"><span class="kicker"><span class="ch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8l9 5 9-5z"/><path d="M21 12l-9 5-9-5"/></svg></span>数据范围</span></div>
+        <div class="num">2</div>
+        <div class="fixeline">应用独立 <span class="split">·</span> 共享 1</div>
+      </div>
+      <div class="metric">
+        <div class="mrow"><span class="kicker"><span class="ch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1"/></svg></span>运行状态</span></div>
+        <div class="num">正常</div>
+        <div class="fixeline">3 已加载 · 0 告警</div>
+      </div>
+    </div>
+
+    <!-- 危险操作 -->
+    <div class="ttl"><h2>危险操作</h2><span class="hint">操作后不可恢复</span></div>
+    <div class="danger-card" style="background:#fff;border:1px solid var(--atlas-danger);border-radius:var(--r-m);box-shadow:var(--shadow-card);overflow:hidden">
+      <div class="d-head"><svg class="di" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg><b>危险操作</b><span style="font-size:12px;color:var(--atlas-muted)">吊销 / 删除均不可恢复</span></div>
+      <div class="d-body">
+        <p>吊销会让该应用所有令牌即时失效；删除将级联清理数据，均不可恢复。请谨慎操作。</p>
+        <div class="d-ops">
+          <button class="btn danger-fill">吊销应用</button>
+          <button class="btn danger-ghost">删除应用</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

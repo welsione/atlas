@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Back, Folder, DataLine, Collection, VideoPlay, VideoPause, Delete, Key, SwitchButton, CircleCheck, CopyDocument, Lock, Calendar } from '@element-plus/icons-vue'
+import { Grid, Folder, Key, SwitchButton, CircleCheck, Delete, CopyDocument, Collection, DataLine, Warning, Refresh, VideoPlay, VideoPause } from '@element-plus/icons-vue'
 import { appApi } from '../services/appApi'
 import { pluginApi } from '../services/pluginApi'
 import { setPageHeadAction } from '../pageHead'
@@ -35,7 +35,8 @@ const secretDialog = ref(false)
 const secretText = ref('')
 const rotating = ref(false)
 
-const activeTab = ref(localStorage.getItem('atlas-space-tab') || 'instances')
+// 看板为默认落地 Tab；用户切换后按习惯持久化
+const activeTab = ref(localStorage.getItem('atlas-space-tab') || 'board')
 const overview = ref<PluginOverviewRow[]>([])
 const loading = ref(false)
 const page = ref(1)
@@ -51,6 +52,12 @@ function statusTag(status: string) {
 function statusLabel(status: string) {
   return status === 'ACTIVE' ? '正常' : status === 'PAUSED' ? '暂停' : '已吊销'
 }
+
+/* ---------- 看板指标（由实例概览计算） ---------- */
+const enabledCount = computed(() => overview.value.filter((r) => r.instance?.enabled).length)
+const sharedCount = computed(() => overview.value.filter((r) => r.instance?.dataScope === 'GLOBAL_SHARED').length)
+const localCount = computed(() => overview.value.filter((r) => r.instance?.dataScope === 'APP_LOCAL').length)
+const loadedCount = computed(() => overview.value.filter((r) => r.runtimeLoaded).length)
 
 async function copyAppId() {
   await copyText(localApp.value.appId, 'App ID ')
@@ -124,7 +131,7 @@ function switchSize(s: number) {
 
 onMounted(() => {
   fetchOverview()
-  setPageHeadAction({ label: '刷新', primary: false, onClick: () => void fetchOverview() })
+  setPageHeadAction({ label: '刷新', primary: false, icon: Refresh, onClick: () => void fetchOverview() })
 })
 
 function switchTab(tab: string) {
@@ -174,62 +181,96 @@ function scopeLabel(row: PluginOverviewRow): string {
 
 <template>
   <div class="page">
-    <div class="space-bar">
-      <el-tooltip content="返回应用列表" placement="bottom">
-        <el-button :icon="Back" circle @click="emit('back')" />
-      </el-tooltip>
-      <el-tag size="small" :type="statusTag(localApp.status)">{{ statusLabel(localApp.status) }}</el-tag>
-    </div>
-
-    <!-- 应用信息与凭证操作 -->
-    <div class="surface app-info">
-      <div class="info-grid">
-        <div class="info-item">
-          <span class="info-label">App ID</span>
-          <span class="info-value">
-            <code class="mono">{{ localApp.appId }}</code>
-            <el-tooltip content="复制 App ID" placement="top">
-              <el-button size="small" text :icon="CopyDocument" @click="copyAppId" />
-            </el-tooltip>
+    <el-tabs :model-value="activeTab" class="app-space-tabs" @tab-change="switchTab">
+      <!-- 看板：icon-only，默认落地 Tab -->
+      <el-tab-pane :name="'board'" :label="'看板'">
+        <template #label>
+          <span class="tab-label board-tab" title="看板">
+            <el-icon><Grid /></el-icon>
           </span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">App Secret</span>
-          <span class="info-value">
-            <el-icon class="secret-icon"><Lock /></el-icon>
-            <span class="muted">仅创建/轮换时展示一次</span>
+        </template>
+
+        <!-- 英雄面板：身份 + 凭证 -->
+        <div class="hero">
+          <div class="hero-main">
+            <div class="hero-av">{{ localApp.name.charAt(0) }}</div>
+            <div class="hero-meta">
+              <h1 class="hero-title">
+                {{ localApp.name }}
+                <el-tag size="small" :type="statusTag(localApp.status)">{{ statusLabel(localApp.status) }}</el-tag>
+              </h1>
+              <div class="hero-facts">
+                <span class="fact">
+                  App ID <code class="mono fact-val">{{ localApp.appId }}</code>
+                  <el-tooltip content="复制 App ID" placement="top">
+                    <el-button size="small" text :icon="CopyDocument" @click="copyAppId" />
+                  </el-tooltip>
+                </span>
+                <span class="fact">创建于 <b class="fact-val">{{ localApp.createdAt }}</b></span>
+              </div>
+            </div>
+            <div class="hero-acts">
+              <el-button :icon="Refresh" @click="fetchOverview">刷新</el-button>
+              <el-button type="primary" :icon="Key" @click="switchTab('instances')">启用插件</el-button>
+            </div>
+          </div>
+          <div class="cred-strip">
+            <span class="cred-label">App Secret</span>
+            <span class="mono cred-val">•••• •••• •••• {{ localApp.appId.slice(-4) }}</span>
+            <span class="cred-hint">仅创建/轮换时展示完整</span>
+            <span class="cred-sp"></span>
             <el-tooltip :content="localApp.status === 'ACTIVE' ? '轮换后新凭证生效，旧凭证保留可校验' : '应用已吊销，请先恢复'" placement="top">
               <el-button size="small" :icon="Key" :disabled="localApp.status !== 'ACTIVE'" :loading="rotating" @click="handleRotate">轮换凭证</el-button>
             </el-tooltip>
-          </span>
+            <el-button size="small" :icon="CopyDocument" @click="copyAppId">复制</el-button>
+          </div>
         </div>
-        <div class="info-item">
-          <span class="info-label">创建时间</span>
-          <span class="info-value">
-            <el-icon class="secret-icon"><Calendar /></el-icon>
-            <span>{{ localApp.createdAt }}</span>
-          </span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">应用操作</span>
-          <span class="info-value">
-            <template v-if="localApp.status === 'ACTIVE'">
-              <el-tooltip content="吊销后凭证全部失效，令牌即时作废" placement="top">
-                <el-button size="small" type="danger" plain :icon="SwitchButton" @click="handleRevoke">吊销应用</el-button>
-              </el-tooltip>
-            </template>
-            <el-tooltip v-else content="恢复 ACTIVE 状态，需重新配置凭证" placement="top">
-              <el-button size="small" type="success" plain :icon="CircleCheck" @click="handleActivate">恢复应用</el-button>
-            </el-tooltip>
-            <el-tooltip content="删除应用将级联清理其全部数据，不可恢复" placement="top">
-              <el-button size="small" type="danger" :icon="Delete" @click="handleRemove">删除应用</el-button>
-            </el-tooltip>
-          </span>
-        </div>
-      </div>
-    </div>
 
-    <el-tabs :model-value="activeTab" class="space-tabs" @tab-change="switchTab">
+        <!-- 指标卡 -->
+        <div class="board-grid">
+          <div class="metric">
+            <div class="metric-head"><span class="metric-chip"><el-icon><Collection /></el-icon></span>启用插件</div>
+            <div class="metric-num">{{ enabledCount }}</div>
+            <div class="metric-foot">{{ sharedCount }} 全局共享 · {{ localCount }} 应用独立</div>
+          </div>
+          <div class="metric">
+            <div class="metric-head"><span class="metric-chip"><el-icon><DataLine /></el-icon></span>数据范围</div>
+            <div class="metric-num">{{ localCount }}</div>
+            <div class="metric-foot">应用独立 · 共享 {{ sharedCount }}</div>
+          </div>
+          <div class="metric">
+            <div class="metric-head"><span class="metric-chip"><el-icon><CircleCheck /></el-icon></span>运行状态</div>
+            <div class="metric-num">{{ loadedCount }}</div>
+            <div class="metric-foot">已加载 · 共 {{ overview.length }} 项</div>
+          </div>
+        </div>
+
+        <!-- 危险操作区 -->
+        <div class="ttl-row"><h2>危险操作</h2><span class="hint">操作后不可恢复</span></div>
+        <div class="danger-card">
+          <div class="danger-head">
+            <el-icon class="danger-ico"><Warning /></el-icon>
+            <span class="danger-title">危险操作</span>
+            <span class="danger-sub">吊销 / 删除均不可恢复</span>
+          </div>
+          <div class="danger-body">
+            <p class="danger-desc">吊销会让该应用所有令牌即时失效；删除将级联清理全部数据，均不可恢复。请谨慎操作。</p>
+            <div class="danger-ops">
+              <template v-if="localApp.status === 'ACTIVE'">
+                <el-tooltip content="吊销后凭证全部失效，令牌即时作废" placement="top">
+                  <el-button type="danger" :icon="SwitchButton" @click="handleRevoke">吊销应用</el-button>
+                </el-tooltip>
+              </template>
+              <el-tooltip v-else content="恢复 ACTIVE 状态，需重新配置凭证" placement="top">
+                <el-button type="success" :icon="CircleCheck" @click="handleActivate">恢复应用</el-button>
+              </el-tooltip>
+              <el-button type="danger" plain :icon="Delete" @click="handleRemove">删除应用</el-button>
+            </div>
+          </div>
+        </div>
+      </el-tab-pane>
+
+      <!-- 插件实例 -->
       <el-tab-pane name="instances">
         <template #label>
           <span class="tab-label">
@@ -344,53 +385,241 @@ function scopeLabel(row: PluginOverviewRow): string {
 </template>
 
 <style scoped>
-.space-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
-}
-
-.app-info {
-  margin-bottom: 14px;
-  padding: 12px 18px;
-}
-.info-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 10px 28px;
-}
-.info-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  font-size: 13px;
-}
-.info-label {
-  font-size: 12px;
-  color: var(--atlas-muted);
-  flex-shrink: 0;
-  width: 76px;
-}
-.info-value {
-  display: flex;
+/* ===== 看板 Tab：icon-only，默认落地 ===== */
+.tab-label {
+  display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+.board-tab {
+  min-width: 26px;
+  justify-content: center;
+}
+.board-tab .el-icon {
+  font-size: 17px;
+}
+
+.core-tab-icon,
+.tab-label .el-icon {
+  color: var(--atlas-accent);
+}
+
+.app-space-tabs {
+  padding: 0 2px;
+}
+
+/* ===== 英雄面板 ===== */
+.hero {
+  border-radius: var(--atlas-r-l);
+  overflow: hidden;
+  margin-bottom: 18px;
+  background: var(--atlas-surface);
+  border: 1px solid var(--atlas-stroke);
+  box-shadow: var(--atlas-shadow-card);
+}
+.hero-main {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 22px 26px;
+}
+.hero-av {
+  width: 58px;
+  height: 58px;
+  border-radius: 15px;
+  background: var(--atlas-accent-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 25px;
+  font-weight: 800;
+  color: var(--atlas-accent);
+}
+.hero-meta {
+  flex: 1;
   min-width: 0;
-  overflow: hidden;
 }
-.info-value code {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.hero-title {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  margin: 0;
+  color: var(--atlas-text);
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
-.secret-icon {
+.hero-facts {
+  display: flex;
+  gap: 18px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.fact {
+  font-size: 12px;
   color: var(--atlas-muted);
-  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.fact .fact-val {
+  font-weight: 700;
+  color: var(--atlas-text);
+}
+.hero-acts {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   flex-shrink: 0;
 }
 
+/* 凭证贯通条 */
+.cred-strip {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 13px 26px;
+  background: var(--atlas-layer);
+  border-top: 1px solid var(--atlas-stroke);
+}
+.cred-label {
+  font-size: 12px;
+  color: var(--atlas-muted);
+}
+.cred-val {
+  font-size: 13px;
+  color: var(--atlas-text);
+}
+.cred-hint {
+  font-size: 11px;
+  color: var(--atlas-faint);
+}
+.cred-sp {
+  flex: 1;
+}
+
+/* ===== 指标卡 ===== */
+.board-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.metric {
+  background: var(--atlas-surface);
+  border: 1px solid var(--atlas-stroke);
+  border-radius: var(--atlas-r-m);
+  box-shadow: var(--atlas-shadow-card);
+  padding: 18px;
+  position: relative;
+  overflow: hidden;
+  transition: box-shadow 0.16s, transform 0.16s, border-color 0.16s;
+}
+.metric::after {
+  content: "";
+  position: absolute;
+  right: -30px;
+  top: -30px;
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  background: var(--atlas-accent-soft);
+  opacity: 0.6;
+}
+.metric-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--atlas-muted);
+  position: relative;
+  z-index: 1;
+}
+.metric-chip {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--atlas-accent-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--atlas-accent);
+  font-size: 15px;
+}
+.metric-num {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  margin-top: 13px;
+  color: var(--atlas-text);
+  position: relative;
+  z-index: 1;
+}
+.metric-foot {
+  font-size: 11px;
+  color: var(--atlas-muted);
+  margin-top: 7px;
+  position: relative;
+  z-index: 1;
+}
+
+/* ===== 危险操作区 ===== */
+.danger-card {
+  background: var(--atlas-surface);
+  border: 1px solid var(--atlas-danger);
+  border-radius: var(--atlas-r-m);
+  box-shadow: var(--atlas-shadow-card);
+  overflow: hidden;
+}
+.danger-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--atlas-danger-line);
+  background: var(--atlas-danger-soft);
+}
+.danger-ico {
+  font-size: 18px;
+  color: var(--atlas-danger);
+  flex-shrink: 0;
+}
+.danger-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--atlas-danger);
+}
+.danger-sub {
+  font-size: 12px;
+  color: var(--atlas-muted);
+}
+.danger-body {
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.danger-desc {
+  flex: 1;
+  margin: 0;
+  font-size: 12px;
+  color: var(--atlas-muted);
+  line-height: 1.6;
+}
+.danger-ops {
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* 通用 */
 .plugin-cell {
   display: flex;
   align-items: center;
@@ -404,22 +633,10 @@ function scopeLabel(row: PluginOverviewRow): string {
   flex-shrink: 0;
 }
 
-.tab-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .tab-icon {
   width: 16px;
   height: 16px;
   border-radius: 3px;
-}
-
-.tab-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
 }
 
 .tab-label .el-icon,
@@ -431,13 +648,26 @@ function scopeLabel(row: PluginOverviewRow): string {
   font-weight: 600;
 }
 
-.space-tabs {
-  padding: 0 4px;
-}
-
 .pager {
   display: flex;
   justify-content: flex-end;
   padding-top: 14px;
+}
+
+@media (max-width: 960px) {
+  .board-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .hero-acts {
+    display: none;
+  }
+}
+@media (max-width: 640px) {
+  .board-grid {
+    grid-template-columns: 1fr;
+  }
+  .hero-av {
+    display: none;
+  }
 }
 </style>
