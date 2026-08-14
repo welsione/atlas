@@ -7,7 +7,7 @@ import { EndpointRuleRepository } from './endpoint-rule.repository.js'
 import { PluginService } from '../plugins/plugin.service.js'
 import { PluginRegistry } from '../plugins/plugin.registry.js'
 
-/** monitor 内置插件聚合端点（应用空间）。 */
+/** monitor 接口监控聚合端点（应用空间，框架内置能力）。 */
 @Controller('/api/apps')
 export class MonitorController {
   constructor(

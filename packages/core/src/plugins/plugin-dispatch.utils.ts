@@ -142,7 +142,7 @@ export interface EndpointGuardCtx {
  *
  * 鉴权、端点启停规则、审计作为策略回调注入：
  * - `guard`：命中端点后调用；返回非 null 表示拦截（写入响应后停止）。
- * - `onAccess`：端点调用完成（成功 200 或异常 500）后审计回调（数据面写 api_access_logs，管理面省略）。
+ * - `onAccess`：端点调用完成（成功 200 或异常 500）后审计回调（数据面写 api_access_logs，管理面写 ops_logs）。
  */
 export interface PluginDispatchOptions {
   loaded: LoadedPlugin

@@ -5,7 +5,10 @@ import type { PluginEnvironment } from '@atlas/types'
 import { dispatchPluginEndpoint } from './plugin-dispatch.utils.js'
 import type { LoadedPlugin } from './types.js'
 import { PluginDataController } from './plugin-data.controller.js'
+import { PluginDispatchController } from './plugin.dispatch.controller.js'
 import type { AppTokenService } from '../auth/app-token.service.js'
+import type { EndpointRuleRepository } from '../monitor/endpoint-rule.repository.js'
+import type { OpsLogService } from './ops-log.service.js'
 
 const logger = { error: jest.fn() } as unknown as Logger
 
@@ -146,5 +149,91 @@ describe('PluginDataController 数据面', () => {
     const res = makeRes()
     await controller.dispatch('1', 'demo', makeReq('GET', '/api/v1/app/1/plugins/demo/ep/x'), res)
     expect(res.status).toHaveBeenCalledWith(401)
+  })
+})
+
+describe('PluginDispatchController 管理面（review M2：规则拦截 + ops 审计）', () => {
+  function makeManagementController(opts: {
+    loaded: LoadedPlugin | null
+    env: PluginEnvironment | null
+    rules: { isAllowed: jest.Mock }
+  }) {
+    const registry = { byType: () => opts.loaded } as never
+    const service = { environmentOrNull: () => opts.env } as never
+    const opsWrite = jest.fn()
+    const ops = { write: opsWrite } as unknown as OpsLogService
+    const rules = opts.rules as unknown as EndpointRuleRepository
+    const controller = new PluginDispatchController(registry, service, rules, ops)
+    return { controller, opsWrite }
+  }
+
+  it('appId 非整数返回 400', async () => {
+    const { controller } = makeManagementController({
+      loaded: null, env: null, rules: { isAllowed: jest.fn(() => true) },
+    })
+    const res = makeRes()
+    await controller.dispatch('abc', 'demo', makeReq('GET', '/api/apps/abc/plugins/demo/ep/x'), res)
+    expect(res.status).toHaveBeenCalledWith(400)
+  })
+
+  it('插件未注册 → 404', async () => {
+    const { controller } = makeManagementController({
+      loaded: null, env: null, rules: { isAllowed: jest.fn(() => true) },
+    })
+    const res = makeRes()
+    await controller.dispatch('1', 'missing', makeReq('GET', '/api/apps/1/plugins/missing/ep/x'), res)
+    expect(res.status).toHaveBeenCalledWith(404)
+  })
+
+  it('实例不可用 → 404', async () => {
+    const { controller } = makeManagementController({
+      loaded: makeLoaded([]), env: null, rules: { isAllowed: jest.fn(() => true) },
+    })
+    const res = makeRes()
+    await controller.dispatch('1', 'demo', makeReq('GET', '/api/apps/1/plugins/demo/ep/x'), res)
+    expect(res.status).toHaveBeenCalledWith(404)
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 404 }))
+  })
+
+  it('端点规则停用 → 403 明示原因，不写审计（guard 拦截在 onAccess 之前）', async () => {
+    const loaded = makeLoaded([{ method: 'GET', path: 'stopped', handle: async () => ({ ok: true }) }])
+    const { controller, opsWrite } = makeManagementController({
+      loaded, env, rules: { isAllowed: jest.fn(() => false) },
+    })
+    const res = makeRes()
+    await controller.dispatch('1', 'demo', makeReq('GET', '/api/apps/1/plugins/demo/ep/stopped'), res)
+    expect(res.status).toHaveBeenCalledWith(403)
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 403, message: '插件端点已停用: GET stopped' }),
+    )
+    expect(opsWrite).not.toHaveBeenCalled()
+  })
+
+  it('规则放行 + 调用成功 → ops_logs 审计 INFO（status/bytes/端点）', async () => {
+    const loaded = makeLoaded([{ method: 'GET', path: 'hello', handle: async () => ({ a: 1 }) }])
+    const isAllowed = jest.fn(() => true)
+    const { controller, opsWrite } = makeManagementController({ loaded, env, rules: { isAllowed } })
+    const res = makeRes()
+    await controller.dispatch('1', 'demo', makeReq('GET', '/api/apps/1/plugins/demo/ep/hello'), res)
+    expect(isAllowed).toHaveBeenCalledWith(1, 'demo', 'GET', 'hello')
+    expect(res.json).toHaveBeenCalledWith({ code: 0, message: 'ok', data: { a: 1 } })
+    expect(opsWrite).toHaveBeenCalledWith(
+      1, 'demo', 'INFO', '管理面调用插件端点 GET hello',
+      { httpStatus: 200, bytes: JSON.stringify({ a: 1 }).length },
+    )
+  })
+
+  it('handler 异常 → ops_logs 审计 ERROR', async () => {
+    const loaded = makeLoaded([{ method: 'GET', path: 'boom', handle: async () => { throw new Error('x') } }])
+    const { controller, opsWrite } = makeManagementController({
+      loaded, env, rules: { isAllowed: jest.fn(() => true) },
+    })
+    const res = makeRes()
+    await controller.dispatch('1', 'demo', makeReq('GET', '/api/apps/1/plugins/demo/ep/boom'), res)
+    expect(res.status).toHaveBeenCalledWith(500)
+    expect(opsWrite).toHaveBeenCalledWith(
+      1, 'demo', 'ERROR', '管理面调用插件端点 GET boom',
+      { httpStatus: 500, bytes: 0 },
+    )
   })
 })

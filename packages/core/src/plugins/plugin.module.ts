@@ -21,7 +21,7 @@ import { MonitorModule } from '../monitor/monitor.module.js'
 @Module({
   // SpiModule 提供 PlatformEventEmitter / ExtensionRegistry / 门面 / PluginSpiRegistry，
   // PluginService 构造期依赖它们；显式 import 建立依赖边，确保 SpiModule 先于 PluginModule 实例化。
-  // MonitorModule 提供 EndpointRuleRepository（数据面端点启停拦截 + PLUGIN_EP 访问日志）。
+  // MonitorModule 提供 EndpointRuleRepository（管理面/数据面统一端点启停拦截 + PLUGIN_EP 访问日志）。
   imports: [SpiModule, MonitorModule, forwardRef(() => DatasetModule)],
   controllers: [
     PluginController,
