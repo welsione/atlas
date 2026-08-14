@@ -381,7 +381,7 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
 
 .stat-card {
   padding: 16px;
-  border-radius: 12px;
+  border-radius: var(--atlas-r-m);
 }
 
 .stat-icon {
@@ -391,7 +391,7 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
 }
 
 .stat-icon.is-error {
-  color: #f56c6c;
+  color: var(--atlas-danger);
 }
 
 .stat-num {
@@ -400,7 +400,7 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
 }
 
 .stat-num.is-error {
-  color: #f56c6c;
+  color: var(--atlas-danger);
 }
 
 .stat-label {
@@ -473,7 +473,7 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
 }
 
 .plugin-card {
-  border-radius: 12px;
+  border-radius: var(--atlas-r-m);
   margin-bottom: 12px;
   padding: 12px 16px;
 }
@@ -494,8 +494,8 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
 
 .disabled-badge {
   font-size: 11px;
-  color: #f56c6c;
-  background: rgba(245, 108, 108, 0.12);
+  color: var(--atlas-danger);
+  background: var(--atlas-danger-weak);
   border-radius: 8px;
   padding: 1px 8px;
 }
@@ -514,17 +514,17 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
   align-items: center;
   gap: 10px;
   padding: 7px 4px;
-  border-radius: 8px;
+  border-radius: var(--atlas-r-s);
   font-size: 13px;
 }
 
 .ep-row:hover {
-  background: rgba(127, 127, 127, 0.06);
+  background: var(--atlas-layer);
 }
 
 .ep-row.is-disabled {
   opacity: 0.55;
-  background: rgba(245, 108, 108, 0.06);
+  background: var(--atlas-danger-weak);
 }
 
 .ep-path {
@@ -546,8 +546,8 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
 
 .ep-disabled-tag {
   font-size: 11px;
-  color: #f56c6c;
-  border: 1px solid rgba(245, 108, 108, 0.5);
+  color: var(--atlas-danger);
+  border: 1px solid var(--atlas-danger-line);
   border-radius: 4px;
   padding: 0 6px;
   flex-shrink: 0;
@@ -558,6 +558,6 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
 }
 
 .is-error {
-  color: #f56c6c;
+  color: var(--atlas-danger);
 }
 </style>

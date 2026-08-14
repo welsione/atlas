@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Refresh, VideoPlay, FolderOpened, InfoFilled } from '@element-plus/icons-vue'
+import { VideoPlay, FolderOpened, InfoFilled } from '@element-plus/icons-vue'
 import { pluginApi, type DefRow } from '../services/pluginApi'
 import { iconOf, pluginIconUrl } from '../plugin-host/slotRegistry'
+import { setPageHeadAction } from '../pageHead'
 
 const rows = ref<DefRow[]>([])
 const loading = ref(false)
@@ -33,7 +34,10 @@ function switchSize(s: number) {
   fetchAll()
 }
 
-onMounted(fetchAll)
+onMounted(() => {
+  fetchAll()
+  setPageHeadAction({ label: '刷新', primary: false, onClick: () => void fetchAll() })
+})
 
 async function handleUnload(row: DefRow) {
   try {
@@ -49,16 +53,6 @@ async function handleUnload(row: DefRow) {
 
 <template>
   <div class="page">
-    <div class="page-header">
-      <div>
-        <h1 class="page-title">插件注册表</h1>
-        <p class="page-desc">平台级插件清单：内置保留字 + 外部目录插件（plugins/ 热加载，约 10 秒生效）</p>
-      </div>
-      <el-tooltip content="刷新" placement="bottom">
-        <el-button :icon="Refresh" circle :loading="loading" @click="fetchAll" />
-      </el-tooltip>
-    </div>
-
     <div class="surface">
       <el-table v-loading="loading" :data="rows" empty-text="暂无插件">
         <el-table-column label="插件" min-width="220">

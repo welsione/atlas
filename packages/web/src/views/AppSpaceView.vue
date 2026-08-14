@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Back, Refresh, Folder, DataLine, Collection, VideoPlay, VideoPause, Delete, Key, SwitchButton, CircleCheck, CopyDocument, Lock, Calendar } from '@element-plus/icons-vue'
+import { Back, Folder, DataLine, Collection, VideoPlay, VideoPause, Delete, Key, SwitchButton, CircleCheck, CopyDocument, Lock, Calendar } from '@element-plus/icons-vue'
 import { appApi } from '../services/appApi'
 import { pluginApi } from '../services/pluginApi'
+import { setPageHeadAction } from '../pageHead'
 import type { App, PluginOverviewRow } from '../types'
 import PluginMount from '../plugin-host/PluginMount.vue'
 import { registerCoreUi, useSlotsOf, toMountEntry, iconOf, pluginIconUrl } from '../plugin-host/slotRegistry'
@@ -121,7 +122,10 @@ function switchSize(s: number) {
   fetchOverview()
 }
 
-onMounted(fetchOverview)
+onMounted(() => {
+  fetchOverview()
+  setPageHeadAction({ label: '刷新', primary: false, onClick: () => void fetchOverview() })
+})
 
 function switchTab(tab: string) {
   activeTab.value = tab
@@ -170,22 +174,11 @@ function scopeLabel(row: PluginOverviewRow): string {
 
 <template>
   <div class="page">
-    <div class="page-header">
-      <div class="space-header">
-        <el-tooltip content="返回应用列表" placement="bottom">
-          <el-button :icon="Back" circle @click="emit('back')" />
-        </el-tooltip>
-        <div>
-          <h1 class="page-title">
-            {{ localApp.name }}
-            <el-tag size="small" :type="statusTag(localApp.status)">{{ statusLabel(localApp.status) }}</el-tag>
-          </h1>
-          <p class="page-desc">{{ localApp.description || '应用空间：插件实例、插件数据、数据集发布与敏感凭证' }}</p>
-        </div>
-      </div>
-      <el-tooltip content="刷新" placement="bottom">
-        <el-button :icon="Refresh" circle :loading="loading" @click="fetchOverview" />
+    <div class="space-bar">
+      <el-tooltip content="返回应用列表" placement="bottom">
+        <el-button :icon="Back" circle @click="emit('back')" />
       </el-tooltip>
+      <el-tag size="small" :type="statusTag(localApp.status)">{{ statusLabel(localApp.status) }}</el-tag>
     </div>
 
     <!-- 应用信息与凭证操作 -->
@@ -351,10 +344,11 @@ function scopeLabel(row: PluginOverviewRow): string {
 </template>
 
 <style scoped>
-.space-header {
+.space-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  margin-bottom: 14px;
 }
 
 .app-info {

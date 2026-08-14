@@ -91,7 +91,8 @@ async function doLogin() {
   padding: 36px 32px;
   background: var(--atlas-surface);
   border: 1px solid var(--atlas-stroke);
-  border-radius: 12px;
+  border-radius: var(--atlas-r-l);
+  box-shadow: var(--atlas-shadow-card);
   display: flex;
   flex-direction: column;
   gap: 16px;

@@ -21,13 +21,6 @@ async function copyVar(name: string) {
 
 <template>
   <div class="page">
-    <div class="page-header">
-      <div>
-        <h1 class="page-title">安全设置</h1>
-        <p class="page-desc">管理认证与平台安全配置（环境变量驱动，修改需重启服务生效）</p>
-      </div>
-    </div>
-
     <div class="surface">
       <el-descriptions :column="1" border>
         <el-descriptions-item label="管理认证">
@@ -120,10 +113,10 @@ async function copyVar(name: string) {
   gap: 8px;
   margin-top: 12px;
   padding: 12px 16px;
-  border-radius: 10px;
-  background: #fffbe6;
-  border: 1px solid #ffe58f;
-  color: #8c6d1f;
+  border-radius: var(--atlas-r-m);
+  background: var(--atlas-warn-bg);
+  border: 1px solid var(--atlas-warn-line);
+  color: var(--atlas-warn-text);
   font-size: 13px;
 }
 

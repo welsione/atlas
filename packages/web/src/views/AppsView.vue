@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, ArrowRight, Lock, Check, InfoFilled, Calendar } from '@element-plus/icons-vue'
+import { ArrowRight, Lock, Check, InfoFilled, Calendar } from '@element-plus/icons-vue'
 import { appApi } from '../services/appApi'
 import { pluginApi } from '../services/pluginApi'
 import { iconOf, pluginIconUrl } from '../plugin-host/slotRegistry'
+import { setPageHeadAction } from '../pageHead'
 import { copyText } from '../clipboard'
 import type { App, PluginDef } from '../types'
 
@@ -47,7 +48,14 @@ function switchSize(s: number) {
   fetchAll()
 }
 
-onMounted(fetchAll)
+onMounted(() => {
+  fetchAll()
+  const cleanup = setPageHeadAction({
+    label: '创建应用',
+    onClick: () => void openCreate(),
+  })
+  onBeforeUnmount(cleanup)
+})
 
 async function openCreate() {
   createVisible.value = true
@@ -113,14 +121,6 @@ function isPluginSelected(pluginType: string) {
 
 <template>
   <div class="page">
-    <div class="page-header">
-      <div>
-        <h1 class="page-title">应用管理</h1>
-        <p class="page-desc">应用为平台一级实体：一切数据、插件实例与数据集挂靠其上；点击卡片进入应用空间</p>
-      </div>
-      <el-button type="primary" :icon="Plus" @click="createVisible = true">创建应用</el-button>
-    </div>
-
     <div v-loading="loading" class="app-grid">
       <div
         v-for="app in apps"
@@ -281,7 +281,7 @@ function isPluginSelected(pluginType: string) {
 }
 .app-card {
   border: 1px solid var(--atlas-stroke);
-  border-radius: 12px;
+  border-radius: var(--atlas-r-m);
   padding: 16px 18px;
   display: flex;
   flex-direction: column;
@@ -293,7 +293,7 @@ function isPluginSelected(pluginType: string) {
 }
 .app-card:hover {
   border-color: var(--atlas-accent);
-  box-shadow: 0 6px 20px rgba(79, 110, 247, 0.14);
+  box-shadow: var(--atlas-shadow-hover);
   transform: translateY(-2px);
 }
 .app-card:active {
@@ -310,7 +310,7 @@ function isPluginSelected(pluginType: string) {
   min-width: 0;
 }
 .app-name {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -398,8 +398,8 @@ function isPluginSelected(pluginType: string) {
   margin-bottom: 10px;
   padding: 8px 12px;
   border-radius: 8px;
-  background: rgba(79, 110, 247, 0.05);
-  border: 1px solid rgba(79, 110, 247, 0.18);
+  background: var(--atlas-accent-weak);
+  border: 1px solid var(--atlas-accent-line);
   color: var(--atlas-muted);
   font-size: 12px;
 }
@@ -429,8 +429,8 @@ function isPluginSelected(pluginType: string) {
 }
 
 .plugin-card:hover {
-  border-color: rgba(79, 110, 247, 0.45);
-  box-shadow: 0 2px 8px rgba(79, 110, 247, 0.08);
+  border-color: var(--atlas-accent);
+  box-shadow: var(--atlas-shadow-hover);
 }
 
 .plugin-card:focus-visible {
@@ -440,7 +440,7 @@ function isPluginSelected(pluginType: string) {
 
 .plugin-card.is-selected {
   border-color: var(--atlas-accent);
-  background: rgba(79, 110, 247, 0.05);
+  background: var(--atlas-accent-weak);
   box-shadow: 0 0 0 1px var(--atlas-accent) inset;
 }
 
@@ -452,7 +452,7 @@ function isPluginSelected(pluginType: string) {
   height: 18px;
   border-radius: 50%;
   background: var(--atlas-accent);
-  color: #fff;
+  color: var(--atlas-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -486,7 +486,7 @@ function isPluginSelected(pluginType: string) {
 }
 
 .plugin-card.is-selected .card-icon-box {
-  border-color: rgba(79, 110, 247, 0.4);
+  border-color: var(--atlas-accent-line);
 }
 
 .card-icon {
@@ -570,7 +570,7 @@ function isPluginSelected(pluginType: string) {
   font-size: 12px;
   font-weight: 600;
   color: var(--atlas-accent);
-  background: rgba(79, 110, 247, 0.07);
+  background: var(--atlas-accent-soft);
   border-radius: 999px;
   padding: 3px 10px;
   white-space: nowrap;

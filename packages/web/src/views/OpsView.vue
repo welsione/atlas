@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { Refresh, Search, RefreshLeft } from '@element-plus/icons-vue'
+import { Search, RefreshLeft } from '@element-plus/icons-vue'
 import { appApi } from '../services/appApi'
 import { opsApi, type OpsLogRow, type OpsOverview } from '../services/opsApi'
+import { setPageHeadAction } from '../pageHead'
 import type { App } from '../types'
 
 const apps = ref<App[]>([])
@@ -51,6 +52,7 @@ onMounted(async () => {
     // 未登录
   }
   await Promise.all([fetchLogs(), fetchOverview()])
+  setPageHeadAction({ label: '刷新', primary: false, onClick: () => void search() })
 })
 
 function search() {
@@ -83,16 +85,6 @@ const totalErrors = () => overview.value.byPlugin.reduce((s, p) => s + Number(p.
 
 <template>
   <div class="page">
-    <div class="page-header">
-      <div>
-        <h1 class="page-title">运维台</h1>
-        <p class="page-desc">跨应用工作日志：插件通过 env.ops() 写入，平台统一查看</p>
-      </div>
-      <el-tooltip content="刷新" placement="bottom">
-        <el-button :icon="Refresh" circle :loading="loading" @click="search" />
-      </el-tooltip>
-    </div>
-
     <!-- 概览 -->
     <div class="overview-grid">
       <div class="overview-card surface">
@@ -191,7 +183,7 @@ const totalErrors = () => overview.value.byPlugin.reduce((s, p) => s + Number(p.
 
 .overview-card {
   padding: 16px;
-  border-radius: 12px;
+  border-radius: var(--atlas-r-m);
 }
 
 .overview-title {
@@ -219,9 +211,17 @@ const totalErrors = () => overview.value.byPlugin.reduce((s, p) => s + Number(p.
   display: inline-block;
 }
 
-.level-dot.info { background: #909399; }
-.level-dot.warning { background: #e6a23c; }
-.level-dot.danger { background: #f56c6c; }
+.level-dot.info {
+  background: var(--atlas-info);
+}
+
+.level-dot.warning {
+  background: var(--atlas-warning);
+}
+
+.level-dot.danger {
+  background: var(--atlas-danger);
+}
 
 .trend {
   display: flex;
@@ -249,7 +249,7 @@ const totalErrors = () => overview.value.byPlugin.reduce((s, p) => s + Number(p.
 }
 
 .trend-bar.is-error {
-  background: #f56c6c;
+  background: var(--atlas-danger);
 }
 
 .trend-label {
@@ -279,7 +279,7 @@ const totalErrors = () => overview.value.byPlugin.reduce((s, p) => s + Number(p.
   gap: 12px;
   align-items: center;
   padding: 14px 16px;
-  border-radius: 12px;
+  border-radius: var(--atlas-r-m);
   margin-bottom: 16px;
 }
 

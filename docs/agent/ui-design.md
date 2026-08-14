@@ -3,15 +3,19 @@
 适用范围：`packages/web` 主应用 UI 与所有插件 UI 面板（插件面板复用同一套设计系统）。
 
 > 本文档是 UI 的**唯一事实来源**：改样式先看这里；新增视觉元素必须落到 token，禁止硬编码颜色/字号/圆角。
+>
+> **当前默认主题：白色现代（White Modern）**。视觉选型与可缩放参考见 `docs/ui-demo-white-preview.html`，其底部「设计标准」面板记录了本规范的 token 档位。UI 主题可按「主题插件」机制扩展（见 §10）。
 
 ---
 
 ## 1. 设计原则
 
-1. **简洁克制**：浅灰背景 + 白色内容卡片 + 单一品牌色，装饰性元素最小化（Apple 式界面语言）。
-2. **内容优先**：层级靠字号/字重/颜色而非边框堆叠；能用一个 `muted` 说明的，不加第二个标签。
-3. **反馈一致**：所有可点击元素有 hover/active/focus 三态，动效统一 0.15–0.2s。
-4. **可访问**：可交互元素必须有 `:focus-visible` 焦点环；状态不只靠颜色表达（配图标或文字）。
+1. **整页纯白一体**：侧栏与主内容区共用**同一 `#ffffff` 背景**，无分割线拼贴；靠卡片浮层、菜单高亮与内容本身的层次表达结构。
+2. **扁平克制**：默认态几乎无阴影，卡片靠 **浅边框 + 轻阴影** 从纯白底上浮出；hover 时阴影加深、轻微上浮（`translateY(-1px)`），不"一直凸着"。
+3. **内容优先**：层级靠字号/字重/颜色而非边框堆叠；能用一个 `muted` 说明的，不加第二个标签。
+4. **品牌强调克制**：单一品牌靛蓝 `#4f6ef7` 只用于主按钮、选中、链接、关键图标；成功 `#10b981`、危险 `#e4573d` 表达状态，靠**双通道**（Tag + 文字/图标）保证可读。
+5. **动效统一**：0.14–0.2s，只做位移/阴影/颜色/边框四类。
+6. **可访问**：交互元素必须有 `:focus-visible` 焦点环；`--atlas-muted` 在纯白上 ≥ 6.5:1。
 
 ---
 
@@ -21,33 +25,35 @@
 
 ### 2.1 颜色
 
-#### 现有核心 token（已定义，直接使用）
+> 全部颜色定义在 `src/style.css` 的 `:root`。**新增颜色 → 先加 token 再用**；临时色值必须在 MR 注释说明为何不能 token 化。
+
+#### 核心 token（白色现代，已冻结）
 
 | 变量 | 值 | 用途 |
 |------|-----|------|
-| `--atlas-bg` | `#f5f5f7` | 页面背景 |
+| `--atlas-bg` | `#ffffff` | 整页统一纯白背景（侧栏 + 主内容区同色） |
 | `--atlas-surface` | `#ffffff` | 卡片/面板背景 |
-| `--atlas-stroke` | `#e4e4e8` | 边框、分割线 |
-| `--atlas-text` | `#1d1d21` | 主文字 |
-| `--atlas-muted` | `#5f5f6a` | 次级文字、说明 |
-| `--atlas-accent` | `#4f6ef7` | 品牌色、主按钮、选中、链接 |
+| `--atlas-layer` | `#fafbfe` | 浅分层（表头底、悬浮浅底） |
+| `--atlas-stroke` | `#e9ecf3` | 边框、分割线（1px） |
+| `--atlas-stroke-strong` | `#dde2ec` | 更强边框（hover 加深） |
+| `--atlas-text` | `#161a2b` | 主文字（深灰黑） |
+| `--atlas-muted` | `#5f6a85` | 次级文字、说明 |
+| `--atlas-faint` | `#9aa3b8` | 弱化文字（时间戳、占位） |
+| `--atlas-accent` | `#4f6ef7` | 品牌靛蓝：主按钮/选中/链接/关键图标 |
+| `--atlas-accent-strong` | `#3d5de8` | 品牌蓝 hover |
+| `--atlas-accent-soft` | `#eef1ff` | 品牌浅底（选中项、图标底块、标签底） |
+| `--atlas-success` | `#10b981` | 成功态（已启用/正常/新增） |
+| `--atlas-warning` | `#f5a623` | 警告态 |
+| `--atlas-danger` | `#e4573d` | 危险/错误态（含 hover 底 `#fdf0ee`） |
+| `--atlas-info` | `#6b7280` | 中性信息 |
 
-#### 待补全的语义 token（当前散落硬编码，必须收敛）
+#### 阴影 token
 
-> 现状：错误红 `#f56c6c`、警告橙 `#e6a23c`、中性灰 `#909399` 在多个 `.vue` 中硬编码。请补入 `:root` 后统一替换。
-
-| 变量 | 建议值 | 用途 |
-|------|--------|------|
-| `--atlas-success` | `#67c23a` | 成功态（Element Plus 默认） |
-| `--atlas-warning` | `#e6a23c` | 警告态 |
-| `--atlas-danger` | `#f56c6c` | 错误/危险态 |
-| `--atlas-info` | `#909399` | 中性信息 |
-| `--atlas-accent-weak` | `rgba(79,110,247,0.05)` | 品牌色浅底（选中背景） |
-| `--atlas-accent-border` | `rgba(79,110,247,0.18)` | 品牌色浅边框 |
-| `--atlas-shadow-card` | `0 6px 20px rgba(79,110,247,0.14)` | 卡片 hover 阴影 |
-| `--atlas-shadow-soft` | `0 2px 8px rgba(79,110,247,0.08)` | 轻阴影 |
-
-> 规则：**新增一个颜色 → 先加 token 再用**。临时色值必须在 MR 注释里说明为何不能 token 化。
+| 变量 | 值 | 用途 |
+|------|-----|------|
+| `--atlas-shadow-card` | `0 1px 2px rgba(20,28,60,.04), 0 1px 3px rgba(20,28,60,.05)` | 卡片默认（纯白底上的轻浮层） |
+| `--atlas-shadow-hover` | `0 2px 6px rgba(20,28,60,.06), 0 6px 16px rgba(20,28,60,.10)` | 卡片 hover / 上浮 |
+| `--atlas-shadow-button` | `0 4px 12px rgba(79,110,247,.20)` | 主按钮品牌色阴影 |
 
 ### 2.2 字体
 
@@ -56,18 +62,20 @@
 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI',
              'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
 /* 等宽（代码/ID/密钥） */
-.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
 ```
 
 | 层级 | 字号 | 字重 | 用途 |
 |------|------|------|------|
-| 页面标题 | 20px | 600 | `.page-title` |
-| 卡片标题 | 16px | 700 | 应用名、面板名 |
+| 页面标题 | — | — | 由面包屑承载（不再单独大标题，见 §7.1） |
+| 区块标题 | 15px | 700 | `h2` 插件服务/最近应用，前配品牌蓝竖标 |
+| 卡片标题 | 14px | 700 | 应用名、插件名、面板名 |
+| 大数字（统计） | 32px | 800 | 统计卡数值，`font-variant-numeric: tabular-nums`，字距 `-1px` |
 | 正文 | 13px | 400 | 描述、表格 |
-| 辅助 | 12px | 400 | 脚注、提示、元信息 |
+| 辅助 | 11–12px | 400 | 表头、脚注、元信息、kicker |
 | 等宽 | 12px | 400 | appId、token、pluginType |
 
-- 只允许使用上述字号档位，**不得**出现 14px、15px、18px 等中间值（除非设计明确新增档位并同步本表）。
+- 只允许使用上述字号档位，**不得**出现 14px/16px/18px 等中间值（除非设计明确新增并同步本表）。
 
 ### 2.3 间距
 
@@ -75,36 +83,41 @@ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI',
 |-----------|-----|------|
 | xs | 4px | 图标与文字最小间隔 |
 | sm | 8px | 组内元素间隔 |
-| md | 12–14px | 卡片内 gap、栅格 gap |
-| lg | 16px | 卡片 padding、区块间距 |
-| xl | 20–24px | 页面 padding、区块间距 |
+| md | 10–12px | 卡片内 gap、菜单项 |
+| lg | 14px | 卡片栅格 gap、区块内 gap |
+| xl | 16–20px | 卡片 padding、页头与内容间距 |
+| xxl | 26–28px | 区块间距、主内容顶部 |
 
-- 页面统一 `.page { padding: 24px; max-width: 1200px; margin: 0 auto }`。
-- 卡片内 gap 用 10–16px，栅格 gap 用 14–16px，保持节奏一致。
+- 整页 `--atlas-bg:#ffffff`；主内容内边距 `26px 36px 40px`，响应式收窄见 §9。
 
 ### 2.4 圆角
 
 | 值 | 用途 |
 |----|------|
-| 8px | 小元素（提示条、输入框附属） |
-| 10px | 默认卡片（`.surface`、`.plugin-card`） |
-| 12px | 强调卡片（`.app-card`、`.stat-card`） |
-| 50% | 圆形（勾选、头像、图标底） |
+| 6px | 小勾选/迷你 bar 顶 |
+| 8px | 小元素、图标底块、菜单选中项 |
+| 10px | 卡片、表格、按钮、输入框（默认） |
+| 14px | 强调面板（标准面板、登录卡） |
+| 20px+（pill） | Tag、胶囊（已加载、状态标） |
+| 50% | 圆形头像/勾选 |
 
 ### 2.5 阴影与描边
 
-- **默认卡片**：`1px solid var(--atlas-stroke)`，无阴影。
-- **hover**：`border-color: var(--atlas-accent)` + `box-shadow: var(--atlas-shadow-card)`。
-- **选中**：`border-color: var(--atlas-accent)` + 浅底 `var(--atlas-accent-weak)` + 可选 `inset` 环。
-- 阴影只用品牌色系（`rgba(79,110,247,…)`），不用纯黑阴影。
+- **卡片默认**：`1px solid var(--atlas-stroke)` + `box-shadow: var(--atlas-shadow-card)`（纯白底上的轻浮层）。
+- **卡片 hover**：`var(--atlas-shadow-hover)` + `translateY(-1px)`，hover 边框可加深 `--atlas-stroke-strong` 或品牌蓝（可点卡片）。
+- **选中**：品牌浅底 `var(--atlas-accent-soft)` + 品牌蓝文字/边框（如菜单项、勾选卡）。
+- **按钮**：实心品牌蓝 + `var(--atlas-shadow-button)`，hover 品牌蓝深。
+- 阴影尽量用**中性灰系**（`rgba(20,28,60,…)`），品牌蓝阴影只用于主按钮/强调。
 
 ### 2.6 动效
 
 | 场景 | 时长 | 缓动 | 效果 |
 |------|------|------|------|
-| 卡片 hover | 0.15–0.18s | ease | `translateY(-2px)` + 阴影 + 边框色 |
+| 卡片 hover | 0.16s | ease | `translateY(-1px)` + 阴影加深（默认态已是轻浮层，不作大幅位移） |
 | 卡片 active | — | — | `translateY(0)` 回落 |
+| 菜单 hover | 0.14s | ease | 浅底 `--atlas-layer`，选中浅蓝底 |
 | 图标/箭头 | 0.18s | ease | 颜色 + 位移（如 chevron `translateX(2px)`） |
+| 侧栏折叠 | 0.2s | ease | 宽度 `232px ↔ 64px` 过渡 |
 | 抽屉/对话框 | Element Plus 默认 | — | 不自定义 |
 
 - 动效只做**位移 + 阴影 + 边框色 + 颜色**四类，禁止缩放（scale）和大幅位移动画。
@@ -117,54 +130,69 @@ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI',
 
 ```html
 <div class="page">
-  <div class="page-header">
-    <div>
-      <h1 class="page-title">标题</h1>
-      <p class="page-desc">说明</p>
-    </div>
-    <!-- 右侧操作（刷新按钮等） -->
+  <div class="ph">   <!-- 页头：面包屑 + 右侧操作按钮 -->
+    <nav class="crumb">首页 › <span class="cur">当前页</span></nav>
+    <el-button type="primary" :icon="Plus">操作</el-button>
   </div>
   <div class="surface">…内容…</div>
 </div>
 ```
 
-- `.page-header`：`flex; justify-content: space-between; margin-bottom: 20px`。
-- 内容卡片统一 `.surface`（白底、10px 圆角、16px padding）。
+- **页头不使用大标题**：层级由面包屑承载（`首页 › 当前页`），页面标题 = 面包屑最后一项；说明文字可并入区块标题旁（`.ttl-row .hint`）。
+- `.page`：`padding: 26px 36px 40px;`（整页纯白）。
+- `.surface`：白底、10px 圆角、16px padding、`--atlas-shadow-card`。
 
 ### 3.2 栅格
 
-- 卡片网格：`grid-template-columns: repeat(auto-fill, minmax(220px~320px, 1fr)); gap: 14–16px`。
-- 应用卡片 `minmax(320px,1fr)`；控制台统计卡 `minmax(220px,1fr)`。
+- 卡片网格：`grid-template-columns: repeat(auto-fill, minmax(220px~320px, 1fr)); gap: 14px`。
+- 应用卡片 `minmax(320px,1fr)`；控制台统计卡 `repeat(4,1fr)`（窄屏降 2/1 列）。
 - 创建抽屉的插件选择器用两列网格 `repeat(2, minmax(0,1fr))`，超出滚动（`max-height` + `overflow-y:auto`）。
 
 ### 3.3 侧边栏
 
-- 宽 200px，白底 + 右描边；菜单项图标 + 文字；底部固定「退出登录」。
-- 系统级插件菜单项（`system-menu` slot）与内置菜单同视觉形态（图标 16px 圆角 3px）。
+- 宽 232px，**与主内容同底色 `#ffffff`**（无内部分隔色），右边界用 `1px var(--atlas-stroke)` 细线分隔。
+- **可折叠成图标模式**（详见 §7.2）：收起后宽 64px、仅图标居中，悬停出气泡 tooltip。
+- `position: sticky; top:0; height:100vh`，保证「退出登录」始终钉在可视底部。
+- 品牌区：展开显示 `atlas-banner.svg`，收起显示 `atlas.svg`；**收起时点击 Logo 图标可展开**（Logo 自身即折叠开关，右上另有图标按钮）。
+- 系统级插件菜单项（`system-menu` slot）与内置菜单同视觉形态（icons 24 网格线性图标 + 文字）。
 
 ---
 
 ## 4. 组件规范
 
+### 4.0 区块标题（ttl-row）
+
+- 区块标题统一：左侧 `4px` 品牌蓝竖标 + 15px/700 标题 + 灰说明 `.hint`（见 §3.1）。
+- `<h2>` 前用 `.ttl-row::before` 实现竖标（`width:4px;height:15px;background:var(--atlas-accent)`）。
+
 ### 4.1 卡片
 
 | 类型 | 圆角 | 交互 |
 |------|------|------|
-| `.surface`（内容容器） | 10px | 无 hover |
-| `.app-card` / `.plugin-card` / `.stat-card`（可点击） | 12px / 10px / 12px | hover 上浮 + 品牌阴影，`:focus-visible` 焦点环 |
+| `.surface`（内容容器） | 10px | 无 hover，`--atlas-shadow-card` |
+| `.app-card` / `.plugin-card` / `.stat-card`（可点击） | 10px | hover 阴影加深 + `translateY(-1px)` + 边框品牌蓝，`:focus-visible` 焦点环 |
 
-- 可点击卡片必须有 `cursor: pointer`、hover 三态、键盘可达（`tabindex`/原生 button 语义）与 `:focus-visible` 焦点环。
-- 卡片内文字溢出统一 `overflow:hidden; text-overflow:ellipsis`（单行）或 `-webkit-line-clamp`（多行，如 `.app-desc` 两行）。
+- 可点击卡片必须有 `cursor:pointer`、hover 三态、键盘可达与 `:focus-visible` 焦点环。
+- 卡片文字溢出统一 `overflow:hidden; text-overflow:ellipsis`（单行）或 `-webkit-line-clamp`（两行）。
+- **插件图标**：放进 `40px`、`--atlas-accent-soft` 浅蓝圆角底块（`.card .ico`），`24px` SVG。
+
+#### 统计卡（stat-card）
+
+- `padding:18px`；顶部 `kicker`（11px、品牌蓝小点 + muted 文字）→ 大数字 `32px/800/tabular` → `fixeline`（说明或 delta 一行，固定 `min-height` 对齐）→ 底部迷你趋势条。
+- 迷你趋势条：`height:24px`、6 根浅蓝小柱（`--atlas-accent-soft`）；异常卡用浅红柱 `#fde2dd` + 数字红 `var(--atlas-danger)`。
+- delta 成长用 `var(--atlas-success)`，错误用 `var(--atlas-danger)`。
 
 ### 4.2 表格
 
-- 统一 Element Plus `<el-table>`：`v-loading`、空态文案 `empty-text`。
+- 统一 Element Plus `<el-table>`：`v-loading`、空态文案 `empty-text`、`--atlas-shadow-card`、10px 圆角。
+- 表头浅底 `--atlas-layer` + 11px/600 muted + 字母间距；行 hover `--atlas-layer`。
 - 首列（插件/应用名）用 `min-width` + 图标；类型/状态列用窄列（90–150px）；操作列 `fixed="right"`。
-- 状态一律用 `<el-tag>`（见 4.4）+ 图标双通道表达，**不只靠颜色**。
+- App ID 等标识用 `.mono`（12px 等宽）；状态列按 §4.4 双通道。
 
 ### 4.3 按钮
 
-- 主操作 `type="primary"`（品牌色）；危险操作 `type="danger"` + `plain`；次要操作用文字按钮（`text`）或圆形图标按钮（`circle`）。
+- 主操作 `type="primary"`（品牌靛蓝 `#4f6ef7`，实心头非渐变、10px 圆角、`--atlas-shadow-button`，hover 深蓝）。
+- 危险操作 `type="danger"` + `plain`；次要操作用文字按钮（`text`）或圆形图标按钮（`circle`）。
 - 图标按钮必须配 `el-tooltip` 说明（可访问性）。
 
 ### 4.4 Tag 状态色（双通道）
@@ -198,12 +226,14 @@ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI',
 
 | 场景 | 尺寸 | 圆角 | 来源 |
 |------|------|------|------|
-| 插件图标（表格行首/卡片头） | 22px | 5px | 插件 `icons/`（SVG，`pluginIconUrl`） |
-| Tab 图标 | 16px | 3px | 同上 |
-| 侧边菜单插件图标 | 16px | 3px | 同上 |
+| 侧边菜单图标（内置） | 18px | — | `@element-plus/icons-vue` 或线性 SVG（`stroke` 2px、round） |
+| 插件图标（表格行首/卡片头） | 24px | 7px | 插件 `icons/`（SVG，`pluginIconUrl`），置于 `--atlas-accent-soft` 底块 |
+| 插件卡片头图标 | 24px | — | 同上 |
+| 插件图标（菜单行首） | 16px | 4px | 同上 |
 | 核心功能图标 | Element Plus 图标 | — | `@element-plus/icons-vue` |
 
-- **插件图标 SVG 规范**：100×100 viewBox、白底圆角、单色系低多边形风格（与平台品牌一致）；`data:` 内嵌或 `icons/xxx.svg` 相对路径，禁止外链位图。
+- **侧边菜单**：用 18px 线性图标（`stroke` 2px、`stroke-linecap:round`），颜色随菜单态（默认灰、选中品牌蓝）。
+- **插件图标 SVG 规范**：100×100 viewBox、白底圆角、单色系低多边形风格；`data:` 内嵌或 `icons/xxx.svg`，禁止外链位图。
 - 核心功能（数据集、监控等）用 Element Plus 图标组件，**不混用**插件 SVG 与 EP 图标表达同一语义。
 
 ---
@@ -237,6 +267,19 @@ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI',
 - 统一文案语气：动词开头、简洁（「已启用」「已删除」「请先登录」）。
 - 所有删除/轮换/吊销类操作**必须有二次确认**，不得一键执行。
 
+### 7.1 面包屑（页头）
+
+- 页头统一面包屑 `首页 › 当前页`；可回退项用链接（hover 品牌蓝），当前页 `.cur` 深色加粗。
+- 页头无独立大标题；操作按钮（如「创建应用」）置右、`flex-shrink:0`。
+
+### 7.2 侧栏折叠（Sidebar Collapse）
+
+- **图标模式**：收起后侧栏 64px，菜单仅图标居中，悬停图标浮出气泡 tooltip；再点展开。
+- **触发器**：侧栏顶部右上角 32×32 图标按钮 + 收起态点击品牌 Logo（`atlas.svg`）均可展开；按钮用箭头旋转表达状态。
+- **Logo 切换**：展开 `atlas-banner.svg`、收起 `atlas.svg`。
+- **持久化**：收起态存 `localStorage`（如 `atlas-sidebar-collapsed`），刷新保持。
+- 退出登录始终 `position:sticky` 固定可视底部。
+
 ---
 
 ## 8. 可访问性（A11y）
@@ -244,20 +287,65 @@ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI',
 - 可交互元素：原生语义（`<button>`/`<a>` 或加 `tabindex="0"` + 键盘事件）+ `:focus-visible` 焦点环（`outline: 2px solid var(--atlas-accent)`）。
 - 状态不只靠颜色：Tag + 文字、错误 + 图标双通道。
 - 图标按钮必须有 `el-tooltip` 文本说明。
-- 对比度：正文 `--atlas-text`(#1d1d21) on `--atlas-surface`(#fff) ≈ 15:1；`--atlas-muted`(#5f5f6a) on white ≈ 6.5:1，均满足 WCAG AA。
+- 对比度：正文 `--atlas-text`(#161a2b) on `--atlas-surface`(#fff) ≈ 14.5:1；`--atlas-muted`(#5f6a85) on white ≈ 6.5:1，均满足 WCAG AA。
 
 ---
 
-## 9. 反模式（Code Review 拦截项）
+## 9. UI 主题插件（Theme as Plugin）— 设计稿
+
+> 目标：UI 主题按**插件**注册，可安装多套、运行时切换并持久化，与现有 slot 插件机制一致。
+
+### 9.1 形态（选型：复用 slot / PluginMount 机制）
+
+- 主题插件声明一个保留的插件类型（如 `type: 'theme'`），并为**主壳布局**（`App.vue` 的侧栏/页头/内容 chrome）提供可替换 UI。
+- 类比现有 slot（`app-space`/`console`/`system-menu`）：新增一个 `shell` slot，主题插件在此挂载「整壳布局」入口，替换或增强默认 chrome，而非仅单一面板。
+
+### 9.2 主题清单（manifest 扩展）
+
+```jsonc
+// plugins/<theme-dir>/manifest.json
+{
+  "pluginType": "theme-default",   // 保留字前缀 theme-
+  "name": "白色现代",
+  "icon": "icons/theme.svg",
+  "default": true,                 // 平台默认主题，至少存在一个
+  "theme": {
+    "entry": "ui/shell.ts",        // 主壳布局加载入口（PluginMount 同类契约）
+    "tokens": { "--atlas-bg": "#ffffff", "...": "..." }  // 覆盖 token 的 CSS 变量
+  }
+}
+```
+
+### 9.3 运行时加载与切换
+
+- 启动：加载 `default:true` 主题作为兜底，应用其 token 与 shell。
+- 切换：持久化当前主题名到 `localStorage`，重建 shell/重载 token；加载失败回落默认主题。
+- 插件热加载/卸载：主题卸载时自动回落默认主题。
+- 主题 token 以 `--atlas-*` CSS 变量注入 `:root`（或 `[data-theme]` 作用域），组件零改动即重皮肤。
+
+### 9.4 约束（红线）
+
+- 主题**不得**改变业务数据结构与路由，只换视觉层（token + chrome）。
+- 必须提供 `default:true` 主题兜底，保证卸载/加载失败不白屏。
+- 字体/圆角/间距的**档位**沿用 §2.2–2.4，主题在此档位内改 token 值。
+- 插件面板复用 `--atlas-*` token，随主题自动换肤，不自造配色。
+
+> 完整接口与加载流待实现（§9 为设计稿，落地前需评审）。
+
+---
+
+## 10. 反模式（Code Review 拦截项）
 
 | ❌ 反模式 | ✅ 正确做法 |
 |-----------|-------------|
-| 组件内硬编码颜色（`#f56c6c` 等） | 用 `--atlas-*` token（先补 token 再用） |
-| 新增 14px/15px 等中间字号 | 用 12/13/16/20px 档位 |
-| 卡片 hover 用缩放（scale） | 位移 `translateY(-2px)` + 阴影 |
+| 组件内硬编码颜色（`#e4573d` 等） | 用 `--atlas-*` token（先补 token 再用） |
+| 新增 14/16/18px 等中间字号 | 用规范档位（13/15/32px 等，见 §2.2） |
+| 卡片 hover 用缩放（scale） | 位移 `translateY(-1px)` + 阴影加深 |
 | 图标按钮无 tooltip | 配 `el-tooltip` |
 | 状态只靠颜色（无文字/图标） | Tag + 文字双通道 |
 | 插件面板自造配色/CSS 框架 | 复用 `--atlas-*` token + Element Plus |
 | 删除/轮换无二次确认 | `ElMessageBox.confirm` |
 | 手写图标 URL 拼接 | `pluginIconUrl` / `iconOf` |
-| 纯黑阴影 `rgba(0,0,0,…)` | 品牌色阴影 `rgba(79,110,247,…)` |
+| 整页大标题 + 副标题堆叠（已有面包屑） | 用面包屑承载层级（见 §7.1） |
+| 主题插件未提供 `default:true` 兜底 | 必须有一默认主题兜底（见 §9） |
+| 纯黑阴影 `rgba(0,0,0,…)` | 中性灰阴影 `rgba(20,28,60,…)`（主按钮才用品牌蓝阴影） |

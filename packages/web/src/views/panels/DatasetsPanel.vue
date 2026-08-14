@@ -577,8 +577,8 @@ function sensTag(s: string) {
 
 .access-curl pre {
   margin: 0;
-  background: #0f172a;
-  color: #e2e8f0;
+  background: var(--atlas-code-bg);
+  color: var(--atlas-code-text);
   border-radius: 6px;
   padding: 12px;
   font-size: 12px;
