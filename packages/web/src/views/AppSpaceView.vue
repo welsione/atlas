@@ -289,7 +289,6 @@ function scopeLabel(row: PluginOverviewRow): string {
                     alt=""
                   />
                   <span class="plugin-name">{{ row.plugin.name }}</span>
-                  <el-tag size="small" type="warning">外部</el-tag>
                 </div>
               </template>
             </el-table-column>
@@ -627,9 +626,9 @@ function scopeLabel(row: PluginOverviewRow): string {
 }
 
 .plugin-icon {
-  width: 22px;
-  height: 22px;
-  border-radius: 5px;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
   flex-shrink: 0;
 }
 

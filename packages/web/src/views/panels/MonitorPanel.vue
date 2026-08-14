@@ -247,7 +247,7 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
 
         <!-- 趋势 -->
         <div class="surface section">
-          <div class="section-title">调用趋势（按小时）</div>
+          <div class="ttl-row"><h2>调用趋势（按小时）</h2></div>
           <div class="trend">
             <div v-for="(s, i) in series" :key="i" class="trend-col" :title="`${s.bucket}：${s.count} 次`">
               <div class="trend-bar" :style="{ height: `${(Number(s.count) / maxSeries()) * 100}%` }" />
@@ -260,7 +260,7 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
         <div class="grid-2">
           <!-- 端点分布 -->
           <div class="surface section">
-            <div class="section-title">端点分布</div>
+            <div class="ttl-row"><h2>端点分布</h2></div>
             <el-table :data="endpoints" size="small" empty-text="暂无">
               <el-table-column prop="endpoint" label="端点" show-overflow-tooltip />
               <el-table-column prop="count" label="调用" width="70" />
@@ -276,7 +276,7 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
 
           <!-- Top 资源 -->
           <div class="surface section">
-            <div class="section-title">Top 资源</div>
+            <div class="ttl-row"><h2>Top 资源</h2></div>
             <el-table :data="topResources" size="small" empty-text="暂无">
               <el-table-column label="资源" min-width="120" show-overflow-tooltip>
                 <template #default="{ row }">{{ row.name || `${row.resource_type}#${row.resource_id}` }}</template>
@@ -295,7 +295,7 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
         <div class="grid-2">
           <!-- Top IP -->
           <div class="surface section">
-            <div class="section-title">Top IP</div>
+            <div class="ttl-row"><h2>Top IP</h2></div>
             <el-table :data="topIps" size="small" empty-text="暂无">
               <el-table-column prop="ip" label="IP" show-overflow-tooltip />
               <el-table-column prop="count" label="调用" width="80" />
@@ -310,7 +310,7 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
 
           <!-- Top 消费应用 -->
           <div class="surface section">
-            <div class="section-title">Top 消费应用</div>
+            <div class="ttl-row"><h2>Top 消费应用</h2></div>
             <el-table :data="topApps" size="small" empty-text="暂无">
               <el-table-column label="消费方" min-width="120">
                 <template #default="{ row }">{{ Number(row.app_id) === 0 ? '匿名 token' : `应用 #${row.app_id}` }}</template>
@@ -328,7 +328,7 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
 
         <!-- 最近调用 -->
         <div class="surface section">
-          <div class="section-title">最近调用</div>
+          <div class="ttl-row"><h2>最近调用</h2></div>
           <el-table :data="recent" size="small" empty-text="暂无">
             <el-table-column prop="accessed_at" label="时间" width="170" />
             <el-table-column prop="endpoint" label="端点" width="100" />
@@ -395,8 +395,12 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
 }
 
 .stat-num {
-  font-size: 20px;
-  font-weight: 700;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--atlas-text);
 }
 
 .stat-num.is-error {
@@ -411,12 +415,6 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
 
 .section {
   margin-bottom: 16px;
-}
-
-.section-title {
-  font-weight: 600;
-  font-size: 13px;
-  margin-bottom: 12px;
 }
 
 .grid-2 {

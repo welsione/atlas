@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { Refresh, Setting, Upload } from '@element-plus/icons-vue'
+import { Refresh, Setting, Upload, Warning, Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { datasetApi } from '../../services/datasetApi'
 import { copyText as copyShared } from '../../clipboard'
@@ -437,8 +437,21 @@ function sensTag(s: string) {
         </div>
 
         <div class="detail-actions">
-          <el-button size="small" @click="handleRefresh">刷新</el-button>
-          <el-button v-if="!isPlugin(detailRow)" size="small" type="danger" plain @click="handleRemove">删除数据集</el-button>
+          <el-button size="small" :icon="Refresh" @click="handleRefresh">刷新</el-button>
+        </div>
+
+        <div class="danger-card">
+          <div class="danger-head">
+            <el-icon class="danger-ico"><Warning /></el-icon>
+            <span class="danger-title">危险操作</span>
+            <span class="danger-sub">删除即不可恢复</span>
+          </div>
+          <div class="danger-body">
+            <p class="danger-desc">删除数据集将清除其全部内容与文件资产，不可恢复。</p>
+            <div class="danger-ops">
+              <el-button v-if="!isPlugin(detailRow)" size="small" type="danger" plain :icon="Delete" @click="handleRemove">删除数据集</el-button>
+            </div>
+          </div>
         </div>
       </template>
     </el-drawer>
@@ -474,20 +487,20 @@ function sensTag(s: string) {
 .detail-key {
   display: inline-block;
   margin-top: 6px;
-  color: var(--el-text-color-secondary);
+  color: var(--atlas-muted);
   font-size: 12px;
 }
 
 .detail-section {
   margin-top: 18px;
   padding-top: 14px;
-  border-top: 1px solid var(--el-border-color-lighter);
+  border-top: 1px solid var(--atlas-stroke);
 }
 
 .section-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--atlas-text);
   margin-bottom: 10px;
 }
 
@@ -506,7 +519,7 @@ function sensTag(s: string) {
 }
 
 .info-label {
-  color: var(--el-text-color-secondary);
+  color: var(--atlas-muted);
 }
 
 .sens-row {
@@ -525,7 +538,7 @@ function sensTag(s: string) {
 .detail-actions {
   margin-top: 20px;
   padding-top: 14px;
-  border-top: 1px solid var(--el-border-color-lighter);
+  border-top: 1px solid var(--atlas-stroke);
   display: flex;
   gap: 8px;
 }
@@ -547,7 +560,7 @@ function sensTag(s: string) {
 .access-label {
   width: 56px;
   flex-shrink: 0;
-  color: var(--el-text-color-secondary);
+  color: var(--atlas-muted);
   font-size: 13px;
 }
 
@@ -556,9 +569,9 @@ function sensTag(s: string) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  background: var(--el-fill-color-light);
+  background: var(--atlas-layer);
   padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 12px;
 }
 
@@ -572,7 +585,7 @@ function sensTag(s: string) {
   align-items: center;
   margin-bottom: 6px;
   font-size: 13px;
-  color: var(--el-text-color-secondary);
+  color: var(--atlas-muted);
 }
 
 .access-curl pre {
@@ -592,17 +605,78 @@ function sensTag(s: string) {
 }
 
 .asset-meta {
-  color: var(--el-text-color-secondary);
+  color: var(--atlas-muted);
 }
 
 .sens-tip {
   margin: 0 0 10px;
-  color: var(--el-text-color-secondary);
+  color: var(--atlas-muted);
   font-size: 13px;
   line-height: 1.6;
 }
 
 .dim {
-  color: var(--el-text-color-placeholder);
+  color: var(--atlas-faint);
+}
+
+/* 危险操作分区（ui-design.md §4.9） */
+.danger-card {
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--atlas-stroke);
+}
+
+.danger-card .danger-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 14px;
+  border: 1px solid var(--atlas-danger-line);
+  border-bottom: 0;
+  border-radius: var(--atlas-r-m) var(--atlas-r-m) 0 0;
+  background: var(--atlas-danger-soft);
+}
+
+.danger-ico {
+  font-size: 18px;
+  color: var(--atlas-danger);
+  flex-shrink: 0;
+}
+
+.danger-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--atlas-danger);
+}
+
+.danger-sub {
+  font-size: 12px;
+  color: var(--atlas-muted);
+}
+
+.danger-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px;
+  border: 1px solid var(--atlas-danger-line);
+  border-radius: 0 0 var(--atlas-r-m) var(--atlas-r-m);
+}
+
+.danger-desc {
+  flex: 1;
+  min-width: 200px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--atlas-muted);
+  line-height: 1.6;
+}
+
+.danger-ops {
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
 }
 </style>
