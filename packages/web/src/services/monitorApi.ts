@@ -19,12 +19,15 @@ export type MonitorInterfaceRow = {
   key: string
   appId: number
   pluginType: string
+  pluginName: string
   name: string
   method: string
   path: string
   summary: string
   sensitivity: 'PUBLIC' | 'INTERNAL' | 'SECRET'
   token: string
+  /** 完整数据面访问地址（含 token） */
+  accessPath: string
   enabled: boolean
   count: number
   failures: number

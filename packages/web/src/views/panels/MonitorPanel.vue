@@ -202,9 +202,16 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
               >
                 <el-tag v-if="ep.method" size="small" :type="methodTag(ep.method)">{{ ep.method }}</el-tag>
                 <el-tag v-else size="small" type="info">{{ ep.kind === 'DATASET' ? 'DS' : 'FILE' }}</el-tag>
-                <code v-if="ep.path" class="mono ep-path">{{ ep.path }}</code>
-                <code v-else class="mono ep-path">{{ ep.name }}</code>
-                <span class="muted ep-summary" :title="ep.summary">{{ ep.summary }}</span>
+                <div class="ep-main">
+                  <div class="ep-line1">
+                    <span v-if="ep.pluginName" class="ep-plugin">{{ ep.pluginName }}</span>
+                    <code v-if="ep.pluginType" class="mono muted">{{ ep.pluginType }}</code>
+                    <span v-if="ep.path" class="ep-path-label">/{{ ep.path }}</span>
+                    <span v-else class="ep-path-label">{{ ep.name }}</span>
+                    <span v-if="ep.summary" class="muted ep-summary" :title="ep.summary">{{ ep.summary }}</span>
+                  </div>
+                  <code v-if="ep.accessPath" class="mono ep-access" :title="ep.accessPath">{{ ep.accessPath }}</code>
+                </div>
                 <el-tag size="small" :type="ep.sensitivity === 'SECRET' ? 'danger' : ep.sensitivity === 'INTERNAL' ? 'warning' : 'success'">
                   {{ ep.sensitivity }}
                 </el-tag>
@@ -538,12 +545,50 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
   font-size: 12px;
 }
 
-.ep-summary {
+.ep-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ep-line1 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ep-plugin {
+  font-weight: 600;
   font-size: 12px;
-  max-width: 260px;
+  white-space: nowrap;
+}
+
+.ep-path-label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--atlas-text);
+  white-space: nowrap;
+}
+
+.ep-access {
+  font-size: 11px;
+  color: var(--atlas-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ep-summary {
+  font-size: 12px;
+  color: var(--atlas-muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-left: 4px;
 }
 
 .ep-stats {

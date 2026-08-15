@@ -93,6 +93,7 @@ export class MonitorController {
     )
     const extEnabled = (kind: ExternalInterfaceKind, key: string): boolean =>
       this.externRules.isAllowed(appId, kind, key)
+    const pluginNameOf = (t: string): string => this.registry.byType(t)?.plugin.name ?? t
 
     // 1) 数据集对外接口（已发布）
     for (const d of this.datasetService.list(appId)) {
@@ -103,12 +104,14 @@ export class MonitorController {
         key,
         appId,
         pluginType: d.pluginType || '',
+        pluginName: d.pluginType ? pluginNameOf(d.pluginType) : '',
         name: d.name,
         method: '',
         path: '',
         summary: d.description,
         sensitivity: d.sensitivity,
         token: d.token,
+        accessPath: `/api/v1/datasets/${d.token}/data`,
         enabled: extEnabled('DATASET', key),
         count: Number(stat?.count ?? 0),
         failures: Number(stat?.failures ?? 0),
@@ -139,12 +142,14 @@ export class MonitorController {
           key,
           appId,
           pluginType: row.plugin.pluginType,
+          pluginName: row.plugin.name,
           name: row.plugin.name,
           method: ep.method,
           path: ep.path,
           summary: ep.summary,
           sensitivity: tokenRow.sensitivity,
           token: tokenRow.token,
+          accessPath: `/api/v1/app/${appId}/plugins/${row.plugin.pluginType}/${tokenRow.token}/ep/${ep.path}`,
           enabled: extEnabled('PLUGIN_EP', key),
           count: Number(stat?.count ?? 0),
           failures: Number(stat?.failures ?? 0),
@@ -162,12 +167,14 @@ export class MonitorController {
         key: f.token,
         appId,
         pluginType: f.plugin_type,
+        pluginName: pluginNameOf(f.plugin_type),
         name: f.name || f.rel_path,
         method: '',
         path: '',
         summary: `公开文件下载（${f.rel_path}）`,
         sensitivity: 'PUBLIC',
         token: f.token,
+        accessPath: `/api/files/${f.token}/download`,
         enabled: extEnabled('PUBLIC_FILE', f.token),
         count: Number(stat?.count ?? 0),
         failures: Number(stat?.failures ?? 0),
