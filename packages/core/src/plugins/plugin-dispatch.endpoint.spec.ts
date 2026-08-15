@@ -172,6 +172,22 @@ describe('PluginDataController 数据面（token 寻址 + 仅开放 public）', 
     expect(matchToken).not.toHaveBeenCalled()
   })
 
+  it('公开 token 仅授权到自身端点：用 config 的 token 调另一公开端点也 404', async () => {
+    const loaded = makeLoaded([
+      { method: 'GET', path: 'config', public: true, handle: async () => ({ api: 1 }) },
+      { method: 'GET', path: 'meta', public: true, handle: async () => ({ m: 1 }) },
+    ])
+    // token 仅匹配 config，不匹配 meta
+    const matchToken = jest.fn((_a, _p, _m, path) => path === 'config')
+    const controller = makeDataController({
+      loaded, epTokens: { matchToken }, rules: { isAllowed: jest.fn(() => true) },
+    })
+    const res = makeRes()
+    await controller.dispatch('1', 'demo', 'tok', makeReq('GET', '/api/v1/app/1/plugins/demo/tok/ep/meta'), res)
+    expect(res.status).toHaveBeenCalledWith(404)
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 404 }))
+  })
+
   it('公开端点 token 命中 + 规则放行 → 调用成功并按 PLUGIN_EP 审计', async () => {
     const loaded = makeLoaded([{ method: 'GET', path: 'cfg', public: true, handle: async () => ({ ok: true }) }])
     const matchToken = jest.fn(() => true)

@@ -54,8 +54,8 @@ export class PluginDataController {
     }
 
     const loaded = this.registry.byType(pluginType)
-    const endpoint = loaded ? this.resolvePublicEndpoint(loaded.plugin, apiToken, targetAppId, pluginType) : null
-    if (!loaded || !endpoint) {
+    const publicTarget = loaded ? this.resolvePublicEndpoint(loaded.plugin, apiToken, targetAppId, pluginType) : null
+    if (!loaded || !publicTarget) {
       return res.status(404).json(error(404, `插件端点不存在: ${req.method} ${pluginType}/${apiToken}`))
     }
     const env = this.service.environmentOrNull(targetAppId, pluginType)
@@ -71,8 +71,12 @@ export class PluginDataController {
       req,
       res,
       logger: this.logger,
-      // 数据面仅对外开放（public）接口：token 寻址已限缩到具体公开端点，内部端点/未启用一律 404。
+      // 数据面仅对外开放（public）接口，且 token 仅授权到具体公开端点（method+path）：
+      // 内部端点（非 public）/ 同名 token 未授权端点一律 404（防探测）。
       guard: ({ endpoint, method, suffix }) => {
+        if (endpoint.method !== publicTarget.method || endpoint.path !== publicTarget.path) {
+          return { status: 404, message: `插件端点不存在: ${method} ${suffix}` }
+        }
         // 统一启停：external_interface_rules 停用 → 404 防探测
         if (!this.rules.isAllowed(targetAppId, 'PLUGIN_EP', `${endpoint.method} ${endpoint.path}`)) {
           return { status: 404, message: `插件端点不存在: ${method} ${suffix}` }

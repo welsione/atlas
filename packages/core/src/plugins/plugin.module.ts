@@ -44,6 +44,6 @@ import { MonitorModule } from '../monitor/monitor.module.js'
     PluginFileRegistry,
     PluginEpTokenRepository,
   ],
-  exports: [PluginService, PluginRegistry, OpsLogService],
+  exports: [PluginService, PluginRegistry, OpsLogService, PluginEpTokenRepository, PluginFileRegistry],
 })
 export class PluginModule {}

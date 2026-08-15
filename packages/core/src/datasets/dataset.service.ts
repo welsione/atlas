@@ -6,6 +6,7 @@ import type { Dataset, DatasetSensitivity, Page, Secret } from '@atlas/types'
 import { DatasetRepository } from './dataset.repository.js'
 import { EnvelopeCrypto } from './envelope-crypto.js'
 import { PluginService } from '../plugins/plugin.service.js'
+import { ExternalInterfaceRuleRepository } from '../monitor/external-interface-rule.repository.js'
 import { NotFoundError, ValidationError } from '../common/response.js'
 import { createRateLimiter, now } from '../common/utils.js'
 import { CONFIG, type AtlasConfig } from '../config.js'
@@ -48,6 +49,7 @@ export class DatasetService {
     @Inject(EnvelopeCrypto) private readonly crypto: EnvelopeCrypto,
     @Inject(forwardRef(() => PluginService)) private readonly pluginService: PluginService,
     @Inject(PlatformEventEmitter) private readonly eventBus: PlatformEventEmitter,
+    @Inject(ExternalInterfaceRuleRepository) private readonly externRules: ExternalInterfaceRuleRepository,
   ) {}
 
   static hash(content: string): string {
@@ -427,6 +429,7 @@ export class DatasetService {
 
   meta(token: string): MetaResult {
     const d = this.requireByToken(token)
+    this.requireExternalEnabled(d)
     return {
       token: d.token,
       name: d.name,
@@ -439,6 +442,13 @@ export class DatasetService {
     }
   }
 
+  /** 数据面向外接口启停：数据集被对外接口治理停用时，消费一律 404（防探测）。 */
+  private requireExternalEnabled(d: Dataset): void {
+    if (!this.externRules.isAllowed(d.appId, 'DATASET', String(d.id))) {
+      throw new NotFoundError('数据集不存在')
+    }
+  }
+
   recordMetaAccess(token: string, consumerAppId: number | null, ip: string, ua: string): void {
     const d = this.requireByToken(token)
     this.repository.insertAccessLog(d.appId, consumerAppId, 'DATASET', d.id, d.token, 'meta', 200, 0, ip, ua)
@@ -447,6 +457,7 @@ export class DatasetService {
   /** 内容消费：304 条件请求 + 限流 + 审计。 */
   data(token: string, ifNoneMatch: string | undefined, consumerAppId: number | null, ip: string, ua: string): ContentResult {
     const d = this.requireByToken(token)
+    this.requireExternalEnabled(d)
     // 鉴权与限流必须先于 304 短路，否则持有分发 token 的匿名调用者可绕过密级鉴权与限流刷审计日志
     if (!this.checkConsumeAllowed(d, consumerAppId)) {
       this.repository.insertAccessLog(d.appId, consumerAppId, 'DATASET', d.id, d.token, 'data', 400, 0, ip, ua)
@@ -476,6 +487,7 @@ export class DatasetService {
     notModified: boolean
   }> {
     const d = this.requireByToken(token)
+    this.requireExternalEnabled(d)
     if (!this.checkConsumeAllowed(d, consumerAppId)) {
       this.repository.insertAccessLog(d.appId, consumerAppId, 'DATASET', d.id, d.token, 'asset', 400, 0, ip, ua)
       throw new ValidationError('未授权访问该数据集')
@@ -514,6 +526,7 @@ export class DatasetService {
   /** SECRET 消费：Bearer 令牌 + 授权 + 每次取用审计。 */
   secrets(token: string, consumerAppId: number | null, ip: string, ua: string): SecretResult {
     const d = this.requireByToken(token)
+    this.requireExternalEnabled(d)
     if (d.sensitivity !== 'SECRET') {
       this.repository.insertAccessLog(d.appId, consumerAppId, 'DATASET', d.id, d.token, 'secrets', 400, 0, ip, ua)
       throw new ValidationError('该数据集非 SECRET 级')
