@@ -54,6 +54,7 @@ list(@Query('page') page?: string, @Query('size') size?: string) {
 - 业务错误**抛** `ValidationError`(400) / `NotFoundError`(404) / `DuplicateError`(409)，交给 `AppExceptionFilter`。
 - 需要透传 HTTP 状态时抛 `HttpException`；**其余异常一律不 catch 后改头换面重抛**，让 filter 兜底。
 - 数据面（`/api/v1`）controller 的**错误文案必须脱敏**：不暴露路径/SQL/密钥/内部细节（插件分发已统一 500 脱敏处理，见 core-backend §5 与 plugins.md §2.2）。
+- **豁免边界（有意设计）**：数据面 / 分发面 controller（`plugin-data.controller`、`plugin.dispatch.controller`、`plugin-file-download.controller`、`consume.controller`）允许手写 `res.status(...).json(error(...))`——这些端点需要**精确控制 401/403/404 状态码**并按「404 防探测」策略泛化错误，不宜并入全局 filter 泛化。管理面 controller 仍禁止。
 
 ```ts
 // ✅

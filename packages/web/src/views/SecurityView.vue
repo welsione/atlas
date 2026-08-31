@@ -33,7 +33,7 @@ async function copyVar(name: string) {
           <el-tooltip content="管理登录密码（Bearer token 签发依据），复制变量名" placement="top">
             <span class="env-chip">
               <code class="mono">ATLAS_ADMIN_PASSWORD</code>
-              <el-button size="small" text :icon="CopyDocument" @click="copyVar('ATLAS_ADMIN_PASSWORD')" />
+              <el-button size="small" text :icon="CopyDocument" aria-label="复制变量名 ATLAS_ADMIN_PASSWORD" @click="copyVar('ATLAS_ADMIN_PASSWORD')" />
             </span>
           </el-tooltip>
         </el-descriptions-item>
@@ -41,7 +41,7 @@ async function copyVar(name: string) {
           <el-tooltip content="固定管理令牌，请求头 X-Atlas-Key，复制变量名" placement="top">
             <span class="env-chip">
               <code class="mono">ATLAS_ADMIN_KEY</code>
-              <el-button size="small" text :icon="CopyDocument" @click="copyVar('ATLAS_ADMIN_KEY')" />
+              <el-button size="small" text :icon="CopyDocument" aria-label="复制变量名 ATLAS_ADMIN_KEY" @click="copyVar('ATLAS_ADMIN_KEY')" />
             </span>
           </el-tooltip>
           <span class="env-note">请求头 <code class="mono">X-Atlas-Key</code></span>
@@ -50,7 +50,7 @@ async function copyVar(name: string) {
           <el-tooltip content="SECRET 级数据集信封加密 KEK；生产环境必须显式配置（默认开发密钥会被拒绝启动）" placement="top">
             <span class="env-chip">
               <code class="mono">ATLAS_ENC_KEY</code>
-              <el-button size="small" text :icon="CopyDocument" @click="copyVar('ATLAS_ENC_KEY')" />
+              <el-button size="small" text :icon="CopyDocument" aria-label="复制变量名 ATLAS_ENC_KEY" @click="copyVar('ATLAS_ENC_KEY')" />
             </span>
           </el-tooltip>
         </el-descriptions-item>
@@ -58,7 +58,7 @@ async function copyVar(name: string) {
           <el-tooltip content="默认 ./data；外部插件目录 data/plugins/（或仓库 plugins/），复制变量名" placement="top">
             <span class="env-chip">
               <code class="mono">ATLAS_DATA_DIR</code>
-              <el-button size="small" text :icon="CopyDocument" @click="copyVar('ATLAS_DATA_DIR')" />
+              <el-button size="small" text :icon="CopyDocument" aria-label="复制变量名 ATLAS_DATA_DIR" @click="copyVar('ATLAS_DATA_DIR')" />
             </span>
           </el-tooltip>
         </el-descriptions-item>
@@ -66,7 +66,7 @@ async function copyVar(name: string) {
           <el-tooltip content="部署在可信反向代理后开启，才解析 X-Forwarded-For 获取客户端 IP（默认关闭防伪造绕过）" placement="top">
             <span class="env-chip">
               <code class="mono">ATLAS_TRUST_PROXY</code>
-              <el-button size="small" text :icon="CopyDocument" @click="copyVar('ATLAS_TRUST_PROXY')" />
+              <el-button size="small" text :icon="CopyDocument" aria-label="复制变量名 ATLAS_TRUST_PROXY" @click="copyVar('ATLAS_TRUST_PROXY')" />
             </span>
           </el-tooltip>
         </el-descriptions-item>
@@ -74,7 +74,7 @@ async function copyVar(name: string) {
     </div>
 
     <div class="security-note">
-      <el-icon class="note-icon"><Lock /></el-icon>
+      <el-icon class="note-icon" aria-hidden="true"><Lock /></el-icon>
       <span>提示：生产部署必须配置 <code class="mono">ATLAS_ENC_KEY</code>；启用认证（配置密码或管理 Token）后，使用默认开发加密密钥将导致服务拒绝启动。</span>
     </div>
   </div>

@@ -2,10 +2,11 @@
 import { computed, onMounted, ref } from 'vue'
 import { Refresh, Connection, DataLine, Select, CircleClose, SetUp, TrendCharts } from '@element-plus/icons-vue'
 import { monitorApi, type MonitorOverview, type MonitorRow, type MonitorRange, type MonitorInterfaceRow } from '../../services/monitorApi'
+import { fmtTime } from '../../format'
 
 const props = defineProps<{ appId: number; mode?: string; refresh?: () => void }>()
 
-const monitorTab = ref(localStorage.getItem('atlas-monitor-tab') || 'manage')
+const monitorTab = ref('manage')
 
 const range = ref<MonitorRange>('24h')
 const overview = ref<MonitorOverview>({
@@ -145,8 +146,8 @@ function switchRange(r: MonitorRange) {
 }
 
 function switchTab(tab: string) {
+  // MonitorPanel 的 Tab 是面板内部状态（不参与全局路由），会话内存态即可，无需持久化
   monitorTab.value = tab
-  localStorage.setItem('atlas-monitor-tab', tab)
 }
 
 onMounted(() => {
@@ -161,7 +162,8 @@ const failureRate = computed(() =>
   overview.value.total > 0 ? Math.round((overview.value.failures / overview.value.total) * 100) : 0,
 )
 const maxSeries = () => Math.max(1, ...series.value.map((s) => Number(s.count ?? 0)))
-const fmtBytes = (b: number) => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : b >= 1024 ? `${(b / 1024).toFixed(1)} KB` : `${b} B`)
+const byteFmt = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 1 })
+const fmtBytes = (b: number) => (b >= 1048576 ? `${byteFmt.format(b / 1048576)} MB` : b >= 1024 ? `${byteFmt.format(b / 1024)} KB` : `${b} B`)
 const statusTag = (s: number) => (s >= 400 ? 'danger' : s === 304 ? 'warning' : 'success')
 const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'primary' : m === 'PUT' ? 'warning' : 'danger')
 </script>
@@ -175,7 +177,7 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
         <el-radio-button value="all">全部</el-radio-button>
       </el-radio-group>
       <el-tooltip content="刷新" placement="bottom">
-        <el-button :icon="Refresh" circle :loading="loading" @click="fetchAll" />
+        <el-button :icon="Refresh" circle aria-label="刷新监控数据" :loading="loading" @click="fetchAll" />
       </el-tooltip>
     </div>
 
@@ -183,7 +185,7 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
       <!-- ==================== 接口管理 ==================== -->
       <el-tab-pane name="manage">
         <template #label>
-          <span class="tab-label"><el-icon><SetUp /></el-icon>接口管理</span>
+          <span class="tab-label"><el-icon aria-hidden="true"><SetUp /></el-icon>接口管理</span>
         </template>
         <div v-loading="interfaceLoading" class="if-list">
           <div v-for="group in interfaceGroups" :key="group.kind" class="plugin-card surface">
@@ -225,6 +227,7 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
                   :model-value="ep.enabled"
                   :loading="interfaceLoading"
                   inline-prompt
+                  :aria-label="`启用或停用 ${ep.name || ep.path || '接口'}`"
                   style="--el-switch-on-color: var(--atlas-accent)"
                   @change="(v: string | number | boolean) => toggleInterface(ep, !!v)"
                 />
@@ -242,22 +245,22 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
       <!-- ==================== 流量分析 ==================== -->
       <el-tab-pane name="analytics">
         <template #label>
-          <span class="tab-label"><el-icon><TrendCharts /></el-icon>流量分析</span>
+          <span class="tab-label"><el-icon aria-hidden="true"><TrendCharts /></el-icon>流量分析</span>
         </template>
 
         <!-- 统计卡片 -->
         <div class="stat-grid">
           <el-tooltip content="数据面消费总调用次数" placement="top">
-            <div class="stat-card surface"><el-icon class="stat-icon"><Connection /></el-icon><div class="stat-num">{{ overview.total }}</div><div class="stat-label">总调用</div></div>
+            <div class="stat-card surface"><el-icon class="stat-icon" aria-hidden="true"><Connection /></el-icon><div class="stat-num">{{ overview.total }}</div><div class="stat-label">总调用</div></div>
           </el-tooltip>
           <el-tooltip content="响应体累计流量（不含 304）" placement="top">
-            <div class="stat-card surface"><el-icon class="stat-icon"><DataLine /></el-icon><div class="stat-num">{{ fmtBytes(overview.totalBytes) }}</div><div class="stat-label">流量</div></div>
+            <div class="stat-card surface"><el-icon class="stat-icon" aria-hidden="true"><DataLine /></el-icon><div class="stat-num">{{ fmtBytes(overview.totalBytes) }}</div><div class="stat-label">流量</div></div>
           </el-tooltip>
           <el-tooltip content="条件请求命中（304）占比，越高缓存越有效" placement="top">
-            <div class="stat-card surface"><el-icon class="stat-icon"><Select /></el-icon><div class="stat-num">{{ overview.notModified }}（{{ notModifiedRate }}%）</div><div class="stat-label">304 命中</div></div>
+            <div class="stat-card surface"><el-icon class="stat-icon" aria-hidden="true"><Select /></el-icon><div class="stat-num">{{ overview.notModified }}（{{ notModifiedRate }}%）</div><div class="stat-label">304 命中</div></div>
           </el-tooltip>
           <el-tooltip content="4xx/5xx 失败请求数与占比" placement="top">
-            <div class="stat-card surface"><el-icon class="stat-icon" :class="{ 'is-error': overview.failures > 0 }"><CircleClose /></el-icon><div class="stat-num" :class="{ 'is-error': overview.failures > 0 }">{{ overview.failures }}（{{ failureRate }}%）</div><div class="stat-label">失败</div></div>
+            <div class="stat-card surface"><el-icon class="stat-icon" :class="{ 'is-error': overview.failures > 0 }" aria-hidden="true"><CircleClose /></el-icon><div class="stat-num" :class="{ 'is-error': overview.failures > 0 }">{{ overview.failures }}（{{ failureRate }}%）</div><div class="stat-label">失败</div></div>
           </el-tooltip>
         </div>
 
@@ -346,7 +349,9 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
         <div class="surface section">
           <div class="ttl-row"><h2>最近调用</h2></div>
           <el-table :data="recent" size="small" empty-text="暂无">
-            <el-table-column prop="accessed_at" label="时间" width="170" />
+            <el-table-column label="时间" width="170">
+              <template #default="{ row }">{{ fmtTime(String(row.accessed_at ?? '')) }}</template>
+            </el-table-column>
             <el-table-column prop="endpoint" label="端点" width="100" />
             <el-table-column label="资源" min-width="120" show-overflow-tooltip>
               <template #default="{ row }">{{ row.name || `${row.resource_type}#${row.resource_id}` }}</template>

@@ -4,6 +4,7 @@ import { Refresh, Setting, Upload, Warning, Delete } from '@element-plus/icons-v
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { datasetApi } from '../../services/datasetApi'
 import { copyText as copyShared } from '../../clipboard'
+import { fmtTime } from '../../format'
 import type { Dataset, DatasetSensitivity } from '../../types'
 
 const props = defineProps<{ appId: number; mode?: string; refresh?: () => void }>()
@@ -262,7 +263,7 @@ function sensTag(s: string) {
   <div class="surface">
     <div class="panel-header">
       <el-button type="primary" size="small" @click="openCreate">新建数据集</el-button>
-      <el-button :icon="Refresh" size="small" circle :loading="loading" @click="fetchAll" />
+      <el-button :icon="Refresh" size="small" circle aria-label="刷新列表" :loading="loading" @click="fetchAll" />
     </div>
     <el-table v-loading="loading" :data="rows" empty-text="暂无数据集">
       <el-table-column prop="name" label="名称" min-width="140">
@@ -313,10 +314,10 @@ function sensTag(s: string) {
     <el-drawer v-model="drawerVisible" title="新建数据集" direction="rtl" size="560px">
       <el-form label-width="80px">
         <el-form-item label="名称" required>
-          <el-input v-model="form.name" placeholder="数据集名称" />
+          <el-input v-model="form.name" name="dataset-name" autocomplete="off" placeholder="例如：产品知识库" />
         </el-form-item>
         <el-form-item label="描述">
-          <el-input v-model="form.description" placeholder="可选" />
+          <el-input v-model="form.description" name="dataset-desc" autocomplete="off" placeholder="选填" />
         </el-form-item>
         <el-form-item label="敏感度">
           <el-select v-model="form.sensitivity">
@@ -349,7 +350,7 @@ function sensTag(s: string) {
           <div class="section-title">基本信息</div>
           <div class="info-grid">
             <div class="info-item"><span class="info-label">Token</span><code class="mono">{{ detailRow.token.slice(0, 20) }}…</code></div>
-            <div class="info-item"><span class="info-label">创建时间</span><span>{{ detailRow.createdAt }}</span></div>
+            <div class="info-item"><span class="info-label">创建时间</span><span>{{ fmtTime(detailRow.createdAt) }}</span></div>
             <div class="info-item"><span class="info-label">刷新模式</span><span>{{ detailRow.refreshMode === 'SCHEDULED' ? '定时' : '手动' }}</span></div>
             <div class="info-item"><span class="info-label">资产数</span><span>{{ detailRow.assets?.length ?? 0 }}</span></div>
           </div>
@@ -406,10 +407,10 @@ function sensTag(s: string) {
           <div class="section-title">内容</div>
           <el-form label-width="56px" label-position="top">
             <el-form-item label="名称" required>
-              <el-input v-model="editForm.name" placeholder="数据集名称" />
+              <el-input v-model="editForm.name" name="dataset-edit-name" autocomplete="off" placeholder="例如：产品知识库" />
             </el-form-item>
             <el-form-item label="描述">
-              <el-input v-model="editForm.description" placeholder="可选" />
+              <el-input v-model="editForm.description" name="dataset-edit-desc" autocomplete="off" placeholder="选填" />
             </el-form-item>
             <el-form-item label="内容 JSON">
               <el-input v-model="editForm.contentJson" type="textarea" :rows="4" placeholder='{"key": "value"}' />
@@ -422,7 +423,7 @@ function sensTag(s: string) {
           <div class="section-title">文件资产（{{ detailRow.assets?.length ?? 0 }}）</div>
           <template v-if="!isPlugin(detailRow)">
             <div class="upload-row">
-              <input type="file" multiple @change="(e: Event) => onFileSelected((e.target as HTMLInputElement).files)" />
+              <input type="file" multiple aria-label="选择要上传的文件（可多选，单文件不超过 64MB）" @change="(e: Event) => onFileSelected((e.target as HTMLInputElement).files)" />
               <el-button type="primary" size="small" :icon="Upload" :loading="uploading" :disabled="detailFiles.length === 0" @click="handleUpload">上传</el-button>
             </div>
             <p v-if="detailFiles.length" class="sens-tip">已选择 {{ detailFiles.length }} 个文件，单文件 ≤ 64MB</p>
@@ -442,7 +443,7 @@ function sensTag(s: string) {
 
         <div class="danger-card">
           <div class="danger-head">
-            <el-icon class="danger-ico"><Warning /></el-icon>
+            <el-icon class="danger-ico" aria-hidden="true"><Warning /></el-icon>
             <span class="danger-title">危险操作</span>
             <span class="danger-sub">删除即不可恢复</span>
           </div>

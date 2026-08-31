@@ -152,8 +152,13 @@ async function handleRestore(v) {
   }
 }
 
+/** 后端 UTC 时间 → 本地时区「YYYY/MM/DD HH:mm」。 */
+const timeFmt = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
 function fmtTime(ts) {
-  return ts ? ts.replace('T', ' ').slice(0, 16) : ''
+  if (!ts) return ''
+  const iso = ts.includes('T') ? ts : `${ts.replace(' ', 'T')}Z`
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? ts : timeFmt.format(d)
 }
 </script>
 
@@ -164,9 +169,9 @@ function fmtTime(ts) {
         <el-radio-button v-for="c in categories" :key="c" :value="c">{{ c }}</el-radio-button>
       </el-radio-group>
       <div class="spacer" />
-      <el-input v-model="keyword" class="search" :prefix-icon="Search" placeholder="搜索名称 / 内容" clearable />
+      <el-input v-model="keyword" class="search" :prefix-icon="Search" placeholder="搜索名称 / 内容…" clearable />
       <el-button type="primary" size="small" :icon="Plus" @click="openCreate">新增提示词</el-button>
-      <el-button :icon="Refresh" size="small" circle :loading="loading" @click="fetchAll" />
+      <el-button :icon="Refresh" size="small" circle aria-label="刷新列表" :loading="loading" @click="fetchAll" />
     </div>
 
     <el-table v-loading="loading" :data="filtered" empty-text="暂无提示词">
@@ -199,7 +204,7 @@ function fmtTime(ts) {
       </el-table-column>
       <el-table-column label="启用" width="80">
         <template #default="{ row }">
-          <el-switch :model-value="row.enabled" @change="handleToggle(row)" />
+          <el-switch :model-value="row.enabled" :aria-label="`${row.enabled ? '停用' : '启用'} ${row.name}`" @change="handleToggle(row)" />
         </template>
       </el-table-column>
       <el-table-column label="操作" width="250" fixed="right">
@@ -214,7 +219,7 @@ function fmtTime(ts) {
 
     <el-dialog v-model="dialogVisible" :title="editing ? '编辑提示词' : '新增提示词'" width="640">
       <el-form label-width="80px">
-        <el-form-item label="名称" required><el-input v-model="form.name" /></el-form-item>
+        <el-form-item label="名称" required><el-input v-model="form.name" name="prompt-name" autocomplete="off" placeholder="例如：文章润色" /></el-form-item>
         <el-form-item label="分类">
           <el-select v-model="form.category" allow-create filterable default-first-option style="width: 240px">
             <el-option v-for="c in categories.filter((c) => c !== '全部')" :key="c" :label="c" :value="c" />
@@ -226,7 +231,7 @@ function fmtTime(ts) {
             <div v-for="(v, i) in varRows" :key="i" class="var-row">
               <el-input v-model="v.name" size="small" placeholder="变量名，如 text" class="var-name" />
               <el-checkbox v-model="v.required" size="small">必填</el-checkbox>
-              <el-button size="small" text type="danger" :icon="Delete" @click="varRows.splice(i, 1)" />
+              <el-button size="small" text type="danger" :icon="Delete" aria-label="删除该变量行" @click="varRows.splice(i, 1)" />
             </div>
             <el-button size="small" plain :icon="Plus" @click="varRows.push({ name: '', required: false })">添加变量</el-button>
           </div>
@@ -250,14 +255,14 @@ function fmtTime(ts) {
           <span class="render-var-name" :class="{ required: declaredRequired.has(name) }">
             {{ name }}<span v-if="declaredRequired.has(name)" class="star">*</span>
           </span>
-          <el-input v-model="renderValues[name]" size="small" :placeholder="`{{${name}}}`" @keyup.enter="doRender" />
+          <el-input v-model="renderValues[name]" size="small" :aria-label="`变量 ${name} 的值`" :placeholder="`{{${name}}}`" @keyup.enter="doRender" />
         </div>
       </div>
       <div v-if="renderResult" class="render-result">
         <div class="render-title">结果</div>
         <pre class="render-content">{{ renderResult.content }}</pre>
         <div v-if="Object.keys(renderResult.missingVariables).length" class="missing">
-          缺失必填变量：{{ Object.keys(renderResult.missingVariables).join(', ') }}
+          缺失必填变量：{{ Object.keys(renderResult.missingVariables).join('、') }}，请填写后重试
         </div>
       </div>
       <template #footer>
@@ -354,17 +359,17 @@ function fmtTime(ts) {
 .render-var-name {
   width: 120px;
   font-size: 13px;
-  font-family: monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   text-align: right;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.render-var-name.required { color: #f56c6c; }
+.render-var-name.required { color: var(--atlas-danger); }
 .star { margin-left: 2px; }
 .render-result {
   background: var(--atlas-bg);
-  border-radius: 8px;
+  border-radius: var(--atlas-r-s);
   padding: 12px;
 }
 .render-title {
@@ -378,7 +383,7 @@ function fmtTime(ts) {
   font-size: 13px;
 }
 .missing {
-  color: #f56c6c;
+  color: var(--atlas-danger);
   font-size: 12px;
   margin-top: 6px;
 }

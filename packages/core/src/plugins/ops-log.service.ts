@@ -71,11 +71,13 @@ export class OpsLogService {
     }
   }
 
-  overview(): { levels: Record<string, number>; byPlugin: Array<Record<string, unknown>>; hourly: Array<Record<string, unknown>> } {
+  overview(): { levels: Record<string, number>; byPlugin: Array<Record<string, unknown>>; hourly: Array<Record<string, unknown>>; instanceCount: number } {
     const levels: Record<string, number> = { INFO: 0, WARN: 0, ERROR: 0, DEBUG: 0 }
     for (const row of this.db.prepare('SELECT level, COUNT(*) c FROM ops_logs GROUP BY level').all() as Array<{ level: string; c: number }>) {
       levels[row.level] = row.c
     }
+    // 全局插件实例总数：控制台统计卡一次取齐，避免前端逐应用 N+1 请求
+    const instanceCount = (this.db.prepare('SELECT COUNT(*) c FROM plugin_instances WHERE enabled = 1').get() as { c: number }).c
     const byPlugin = this.db
       .prepare(
         `SELECT plugin_type, COUNT(*) count, SUM(CASE WHEN level='ERROR' THEN 1 ELSE 0 END) errors
@@ -91,6 +93,6 @@ export class OpsLogService {
          GROUP BY bucket ORDER BY bucket`,
       )
       .all() as Array<Record<string, unknown>>
-    return { levels, byPlugin, hourly }
+    return { levels, byPlugin, hourly, instanceCount }
   }
 }

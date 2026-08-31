@@ -4,6 +4,7 @@ import { Search, RefreshLeft } from '@element-plus/icons-vue'
 import { appApi } from '../services/appApi'
 import { opsApi, type OpsLogRow, type OpsOverview } from '../services/opsApi'
 import { setPageHeadAction } from '../pageHead'
+import { fmtTime } from '../format'
 import type { App } from '../types'
 
 const apps = ref<App[]>([])
@@ -92,7 +93,7 @@ const totalErrors = () => overview.value.byPlugin.reduce((s, p) => s + Number(p.
         <div class="level-row"><span class="level-dot info" />INFO <b>{{ overview.levels.INFO }}</b></div>
         <div class="level-row"><span class="level-dot warning" />WARN <b>{{ overview.levels.WARN }}</b></div>
         <div class="level-row"><span class="level-dot danger" />ERROR <b>{{ overview.levels.ERROR }}</b></div>
-        <div class="level-row"><span class="level-dot info" />DEBUG <b>{{ overview.levels.DEBUG }}</b></div>
+        <div class="level-row"><span class="level-dot faint" />DEBUG <b>{{ overview.levels.DEBUG }}</b></div>
       </div>
       <div class="overview-card surface">
         <div class="ttl-row"><h2>近 24h 趋势（共 {{ overview.hourly.reduce((s, h) => s + h.count, 0) }} 条，错误 {{ totalErrors() }}）</h2></div>
@@ -128,14 +129,14 @@ const totalErrors = () => overview.value.byPlugin.reduce((s, p) => s + Number(p.
       </el-select>
       <el-button type="primary" :icon="Search" @click="search">查询</el-button>
       <el-tooltip content="重置筛选" placement="top">
-        <el-button :icon="RefreshLeft" @click="resetFilters" />
+        <el-button :icon="RefreshLeft" aria-label="重置筛选" @click="resetFilters" />
       </el-tooltip>
     </div>
 
     <div class="surface">
       <el-table v-loading="loading" :data="rows" empty-text="暂无工作日志">
         <el-table-column label="时间" width="170">
-          <template #default="{ row }">{{ row.createdAt }}</template>
+          <template #default="{ row }">{{ fmtTime(row.createdAt) }}</template>
         </el-table-column>
         <el-table-column label="级别" width="90">
           <template #default="{ row }">
@@ -207,6 +208,11 @@ const totalErrors = () => overview.value.byPlugin.reduce((s, p) => s + Number(p.
 
 .level-dot.info {
   background: var(--atlas-info);
+}
+
+/* DEBUG 与 INFO 文字不同，状态点用弱灰阶区分 */
+.level-dot.faint {
+  background: var(--atlas-faint);
 }
 
 .level-dot.warning {

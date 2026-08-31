@@ -22,12 +22,13 @@ const resolvedAppId = ref(null)
 let timer = null
 
 // ---------- 工具 ----------
+const byteFmt = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 })
 const fmtBytes = (b) => {
   if (b == null) return '—'
   const v = Number(b)
-  if (v >= 1073741824) return `${(v / 1073741824).toFixed(2)} GB`
-  if (v >= 1048576) return `${(v / 1048576).toFixed(1)} MB`
-  if (v >= 1024) return `${(v / 1024).toFixed(1)} KB`
+  if (v >= 1073741824) return `${byteFmt.format(v / 1073741824)} GB`
+  if (v >= 1048576) return `${byteFmt.format(v / 1048576)} MB`
+  if (v >= 1024) return `${byteFmt.format(v / 1024)} KB`
   return `${v} B`
 }
 const fmtUptime = (s) => {
@@ -37,7 +38,8 @@ const fmtUptime = (s) => {
   const m = Math.floor((s % 3600) / 60)
   return d > 0 ? `${d}天${h}时` : h > 0 ? `${h}时${m}分` : `${m}分`
 }
-const colorOf = (p) => (p == null ? 'var(--atlas-muted)' : p >= 85 ? '#f56c6c' : p >= 60 ? '#e6a23c' : '#67c23a')
+/** 用量分档色：一律引用 --atlas-* token（内联样式同样生效）。 */
+const colorOf = (p) => (p == null ? 'var(--atlas-muted)' : p >= 85 ? 'var(--atlas-danger)' : p >= 60 ? 'var(--atlas-warning)' : 'var(--atlas-success)')
 const pctText = (p) => (p == null ? '—' : `${p}%`)
 
 /** 北京时间格式化（采样存储为 UTC ISO，展示统一转 Asia/Shanghai）。 */
@@ -150,12 +152,15 @@ const procPage = ref(1)
 const pagedProcesses = computed(() => processes.value.slice((procPage.value - 1) * PROC_PAGE_SIZE, procPage.value * PROC_PAGE_SIZE))
 
 // ---------- 生命周期 ----------
+let tickCount = 0
 onMounted(async () => {
   await refreshAll()
   timer = setInterval(async () => {
+    tickCount += 1
     if (autoRefresh.value && (await resolveApp())) {
       await fetchStatus()
-      if (DETAILED.value && new Date().getSeconds() % 60 === 0) {
+      // 5s tick × 12 ≈ 每分钟刷新一次历史与进程（原 getSeconds()%60 判断几乎永假）
+      if (DETAILED.value && tickCount % 12 === 0) {
         await Promise.all([fetchHistory(), fetchProcesses()])
       }
     }
@@ -202,7 +207,7 @@ onBeforeUnmount(() => {
         <el-switch v-model="autoRefresh" active-text="自动刷新（5s）" size="small" />
         <span v-if="lastUpdated" class="updated muted">最近更新 {{ lastUpdated }}</span>
       </div>
-      <el-button :icon="Refresh" circle :loading="loading" @click="refreshAll" title="刷新" />
+      <el-button :icon="Refresh" circle aria-label="刷新监控数据" :loading="loading" @click="refreshAll" title="刷新" />
     </div>
 
     <div v-if="error" class="error-bar">{{ error }}</div>
@@ -220,27 +225,27 @@ onBeforeUnmount(() => {
     <!-- 核心指标卡片 -->
     <div v-if="sample" class="stat-grid">
       <div class="stat-card surface">
-        <el-icon class="stat-icon"><Cpu /></el-icon>
+        <el-icon class="stat-icon" aria-hidden="true"><Cpu /></el-icon>
         <div class="stat-num" :style="{ color: colorOf(sample.cpu) }">{{ pctText(sample.cpu) }}</div>
         <div class="stat-label">CPU 使用率</div>
       </div>
       <div class="stat-card surface">
-        <el-icon class="stat-icon"><Histogram /></el-icon>
+        <el-icon class="stat-icon" aria-hidden="true"><Histogram /></el-icon>
         <div class="stat-num" :style="{ color: colorOf(sample.memPercent) }">{{ pctText(sample.memPercent) }}</div>
         <div class="stat-label">内存 {{ fmtBytes(sample.memUsed) }} / {{ fmtBytes(sample.memTotal) }}</div>
       </div>
       <div class="stat-card surface">
-        <el-icon class="stat-icon"><Odometer /></el-icon>
+        <el-icon class="stat-icon" aria-hidden="true"><Odometer /></el-icon>
         <div class="stat-num">{{ sample.load1.toFixed(2) }}</div>
         <div class="stat-label">负载 1/5/15：{{ sample.load1.toFixed(2) }} / {{ sample.load5.toFixed(2) }} / {{ sample.load15.toFixed(2) }}</div>
       </div>
       <div class="stat-card surface">
-        <el-icon class="stat-icon"><Monitor /></el-icon>
+        <el-icon class="stat-icon" aria-hidden="true"><Monitor /></el-icon>
         <div class="stat-num" :style="{ color: colorOf(sample.diskPercent) }">{{ pctText(sample.diskPercent) }}</div>
         <div class="stat-label">磁盘 {{ fmtBytes(sample.diskTotal) }} · 剩余 {{ fmtBytes(sample.diskFree) }}</div>
       </div>
       <div class="stat-card surface">
-        <el-icon class="stat-icon"><DataLine /></el-icon>
+        <el-icon class="stat-icon" aria-hidden="true"><DataLine /></el-icon>
         <div class="stat-num">{{ fmtUptime(sample.uptimeSeconds) }}</div>
         <div class="stat-label">运行时长 · 进程 RSS {{ fmtBytes(sample.rss) }}</div>
       </div>
@@ -389,9 +394,9 @@ onBeforeUnmount(() => {
   font-size: 12px;
 }
 .error-bar {
-  background: rgba(245, 108, 108, 0.1);
-  color: #f56c6c;
-  border-radius: 8px;
+  background: var(--atlas-danger-weak);
+  color: var(--atlas-danger);
+  border-radius: var(--atlas-r-s);
   padding: 8px 12px;
   margin-bottom: 12px;
   font-size: 13px;
@@ -429,7 +434,7 @@ onBeforeUnmount(() => {
 }
 .stat-card {
   padding: 16px;
-  border-radius: 12px;
+  border-radius: var(--atlas-r-m);
 }
 .stat-icon {
   font-size: 20px;
@@ -437,8 +442,9 @@ onBeforeUnmount(() => {
   margin-bottom: 10px;
 }
 .stat-num {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 .stat-label {
   font-size: 12px;

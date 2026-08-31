@@ -3,17 +3,16 @@ import { computed, onMounted, ref } from 'vue'
 import { Monitor, Cpu, Warning, List, Box, Grid } from '@element-plus/icons-vue'
 import { appApi } from '../services/appApi'
 import { opsApi } from '../services/opsApi'
-import { pluginApi } from '../services/pluginApi'
 import PluginMount from '../plugin-host/PluginMount.vue'
 import { useSlotsOf } from '../plugin-host/slotRegistry'
 import type { App } from '../types'
 
-const emit = defineEmits<{ (e: 'open-space', app: App): void }>()
+const emit = defineEmits<{ (e: 'go-apps'): void }>()
 
 const apps = ref<App[]>([])
 const appTotal = ref(0)
 const instanceCount = ref(0)
-const overview = ref<{ levels: Record<string, number>; hourly: Array<{ bucket: string; count: number; errors: number }> }>({
+const overview = ref<{ levels: Record<string, number>; hourly: Array<{ bucket: string; count: number; errors: number }>; instanceCount?: number }>({
   levels: { INFO: 0, WARN: 0, ERROR: 0 },
   hourly: [],
 })
@@ -25,13 +24,13 @@ onMounted(async () => {
     const res = await appApi.list(1, 100)
     apps.value = res.rows
     appTotal.value = res.total
-    const counts = await Promise.all(apps.value.map((a) => pluginApi.overview(a.id, 1, 1).catch(() => null)))
-    instanceCount.value = counts.reduce((s, r) => s + (r?.total ?? 0), 0)
   } catch {
     // 未登录
   }
   try {
+    // 实例总数随运维总览一次取齐（后端聚合），避免逐应用 N+1 请求
     overview.value = await opsApi.overview()
+    instanceCount.value = overview.value.instanceCount ?? 0
   } catch {
     // 运维台暂不可用
   }
@@ -51,9 +50,9 @@ const total24h = computed(() => overview.value.hourly.reduce((s, h) => s + h.cou
   <div class="page">
     <!-- 统计卡（kicker + 大数字 + delta/说明 + 迷你趋势条） -->
     <div class="stats">
-      <el-tooltip :content="apps.length ? `点击进入「${apps[0].name}」应用空间` : '暂无应用，先到应用管理创建'" placement="top">
-        <div class="stat" role="button" tabindex="0" @click="apps[0] && emit('open-space', apps[0])" @keydown.enter.space.prevent="apps[0] && emit('open-space', apps[0])">
-          <div class="kicker"><Grid class="kickic" />应用总数</div>
+      <el-tooltip :content="apps.length ? '点击进入应用管理' : '暂无应用，先到应用管理创建'" placement="top">
+        <div class="stat clickable" role="button" tabindex="0" @click="emit('go-apps')" @keydown.enter.space.prevent="emit('go-apps')">
+          <div class="kicker"><Grid class="kickic" aria-hidden="true" />应用总数</div>
           <div class="num">{{ appTotal }}</div>
           <div class="fixeline"><span class="delta">↗ 本月新增</span></div>
           <div class="mini-bar"><span class="bar-seg" v-for="(b, i) in hourlyBars" :key="i" :style="{ height: b.height }" :class="{ 'is-error': b.error }"></span></div>
@@ -61,7 +60,7 @@ const total24h = computed(() => overview.value.hourly.reduce((s, h) => s + h.cou
       </el-tooltip>
 
       <div class="stat">
-        <div class="kicker"><Cpu class="kickic" />插件实例</div>
+        <div class="kicker"><Cpu class="kickic" aria-hidden="true" />插件实例</div>
         <div class="num">{{ instanceCount }}</div>
         <div class="fixeline"><span class="label">全局共享 + 应用独立</span></div>
         <div class="mini-bar"><span class="bar-seg" v-for="(b, i) in hourlyBars" :key="i" :style="{ height: b.height }" :class="{ 'is-error': b.error }"></span></div>
@@ -69,7 +68,7 @@ const total24h = computed(() => overview.value.hourly.reduce((s, h) => s + h.cou
 
       <el-tooltip content="近 7 天 ERROR 级工作日志数量（见运维台）" placement="top">
         <div class="stat">
-          <div class="kicker"><Warning class="kickic" />日志告警</div>
+          <div class="kicker"><Warning class="kickic" aria-hidden="true" />日志告警</div>
           <div class="num" :class="{ danger: overview.levels.ERROR > 0 }">{{ overview.levels.ERROR }}</div>
           <div class="fixeline"><span class="label" :class="{ danger: overview.levels.ERROR > 0 }">近 7 天 ERROR</span></div>
           <div class="mini-bar"><span class="bar-seg" v-for="(b, i) in hourlyBars" :key="i" :style="{ height: b.height }" :class="{ 'is-error': b.error }"></span></div>
@@ -77,7 +76,7 @@ const total24h = computed(() => overview.value.hourly.reduce((s, h) => s + h.cou
       </el-tooltip>
 
       <div class="stat">
-        <div class="kicker"><List class="kickic" />工作日志</div>
+        <div class="kicker"><List class="kickic" aria-hidden="true" />工作日志</div>
         <div class="num">{{ total24h }}</div>
         <div class="fixeline"><span class="label">近 24h 请求·监控</span></div>
         <div class="mini-bar"><span class="bar-seg" v-for="(b, i) in hourlyBars" :key="i" :style="{ height: b.height }" :class="{ 'is-error': b.error }"></span></div>
@@ -91,7 +90,7 @@ const total24h = computed(() => overview.value.hourly.reduce((s, h) => s + h.cou
         <div class="plugin-card-head">
           <span class="ico">
             <img v-if="typeof slot.icon === 'string' && slot.icon" :src="slot.icon" class="plugin-card-icon" alt="" />
-            <el-icon v-else><Box /></el-icon>
+            <el-icon v-else aria-hidden="true"><Box /></el-icon>
           </span>
           <div class="pcm">
             <b>{{ slot.label }}</b>
@@ -105,7 +104,7 @@ const total24h = computed(() => overview.value.hourly.reduce((s, h) => s + h.cou
       </div>
     </div>
     <div v-else class="empty-hint surface">
-      <el-icon class="empty-icon"><Box /></el-icon>
+      <el-icon class="empty-icon" aria-hidden="true"><Box /></el-icon>
       <div>当前没有插件注册控制台卡片。</div>
       <div class="empty-sub">插件在 UI manifest 的 slots 中声明 <code class="mono">slot: console</code> 后生效，与应用空间 Tab 同一机制。</div>
     </div>
@@ -130,10 +129,14 @@ const total24h = computed(() => overview.value.hourly.reduce((s, h) => s + h.cou
   transition: box-shadow 0.16s, transform 0.16s, border-color 0.16s;
   position: relative;
   overflow: hidden;
+}
+
+/* 仅可点击的统计卡提供 hover 上浮/指针（避免误导可供性） */
+.stat.clickable {
   cursor: pointer;
 }
 
-.stat:hover {
+.stat.clickable:hover {
   box-shadow: var(--atlas-shadow-hover);
   transform: translateY(-1px);
   border-color: var(--atlas-stroke-strong);
@@ -208,7 +211,6 @@ const total24h = computed(() => overview.value.hourly.reduce((s, h) => s + h.cou
   flex: 1;
   background: var(--atlas-accent-soft);
   border-radius: 6px 6px 0 0;
-  transition: height 0.2s;
 }
 
 .stat .mini-bar .bar-seg.is-error {

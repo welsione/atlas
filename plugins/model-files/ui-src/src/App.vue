@@ -121,13 +121,19 @@ async function handleCopyLink(row) {
   }
 }
 
+const byteFmt = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 1 })
 function fmtBytes(n) {
   if (n == null) return '—'
-  return n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : n >= 1024 ? `${(n / 1024).toFixed(1)} KB` : `${n} B`
+  return n >= 1048576 ? `${byteFmt.format(n / 1048576)} MB` : n >= 1024 ? `${byteFmt.format(n / 1024)} KB` : `${n} B`
 }
 
+/** 后端 UTC 时间 → 本地时区「YYYY/MM/DD HH:mm」。 */
+const timeFmt = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
 function fmtTime(ts) {
-  return ts ? ts.replace('T', ' ').slice(0, 16) : '—'
+  if (!ts) return '—'
+  const iso = ts.includes('T') ? ts : `${ts.replace(' ', 'T')}Z`
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? ts : timeFmt.format(d)
 }
 </script>
 
@@ -145,8 +151,8 @@ function fmtTime(ts) {
         <div class="el-upload__text">拖拽文件到此处，或<em>点击选择</em>（多选 = 目录形式）</div>
       </el-upload>
       <div class="upload-row">
-        <el-input v-model="category" placeholder="分类（default）" style="width: 160px" />
-        <el-input v-model="description" placeholder="描述（可选）" style="width: 260px" />
+        <el-input v-model="category" name="file-category" autocomplete="off" placeholder="分类（default）" style="width: 160px" />
+        <el-input v-model="description" name="file-desc" autocomplete="off" placeholder="描述（可选）" style="width: 260px" />
         <el-button type="primary" :loading="uploading" @click="handleUpload">{{ updateTarget ? '更新文件' : '上传' }}</el-button>
       </div>
     </div>
@@ -156,16 +162,16 @@ function fmtTime(ts) {
         <el-radio-button v-for="c in categories" :key="c" :value="c">{{ c }}</el-radio-button>
       </el-radio-group>
       <div class="spacer" />
-      <el-input v-model="keyword" class="search" :prefix-icon="Search" placeholder="搜索名称 / 描述" clearable />
-      <el-button :icon="Refresh" size="small" circle :loading="loading" @click="fetchAll" />
+      <el-input v-model="keyword" class="search" :prefix-icon="Search" placeholder="搜索名称 / 描述…" clearable />
+      <el-button :icon="Refresh" size="small" circle aria-label="刷新列表" :loading="loading" @click="fetchAll" />
     </div>
 
     <el-table v-loading="loading" :data="filtered" empty-text="暂无模型文件">
       <el-table-column label="名称" min-width="170">
         <template #default="{ row }">
           <div class="name-cell">
-            <el-icon v-if="row.kind === 'DIRECTORY'" class="dir-icon"><FolderOpened /></el-icon>
-            <el-icon v-else class="file-icon"><Files /></el-icon>
+            <el-icon v-if="row.kind === 'DIRECTORY'" class="dir-icon" aria-hidden="true"><FolderOpened /></el-icon>
+            <el-icon v-else class="file-icon" aria-hidden="true"><Files /></el-icon>
             <span class="main">{{ row.name }}</span>
             <el-tag v-if="row.fileCount > 1" size="small" type="warning" effect="plain">{{ row.fileCount }} 文件</el-tag>
             <el-popover v-if="row.fileCount > 1" placement="right" width="320" trigger="hover">
@@ -224,7 +230,7 @@ function fmtTime(ts) {
   margin-bottom: 14px;
   padding: 14px;
   background: var(--atlas-bg);
-  border-radius: 8px;
+  border-radius: var(--atlas-r-s);
 }
 .update-banner {
   display: flex;
@@ -265,7 +271,7 @@ function fmtTime(ts) {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.dir-icon { color: #e6a23c; }
+.dir-icon { color: var(--atlas-warning); }
 .file-icon { color: var(--atlas-muted); }
 .desc {
   font-size: 12px;
@@ -296,7 +302,7 @@ function fmtTime(ts) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 .f-size { width: 64px; text-align: right; flex-shrink: 0; }
 .f-sha { width: 60px; flex-shrink: 0; }

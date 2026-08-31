@@ -108,7 +108,8 @@ let refTimer = null
 
 const fmtCtx = (n) => {
   if (n == null) return ''
-  return n >= 1048576 ? `${(n / 1048576).toFixed(1)}M` : n >= 1024 ? `${Math.round(n / 1024)}K` : `${n}`
+  const f = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 1 })
+  return n >= 1048576 ? `${f.format(n / 1048576)}M` : n >= 1024 ? `${f.format(n / 1024)}K` : `${n}`
 }
 
 async function searchReference() {
@@ -313,28 +314,28 @@ async function handleTest(row, compat) {
     <!-- 统计条 -->
     <div class="stats-bar">
       <div class="stat-block">
-        <span class="stat-icon accent"><el-icon><Grid /></el-icon></span>
+        <span class="stat-icon accent"><el-icon aria-hidden="true"><Grid /></el-icon></span>
         <div class="stat-text">
           <span class="stat-num accent">{{ stats.total }}</span>
           <span class="stat-label">供应商</span>
         </div>
       </div>
       <div class="stat-block">
-        <span class="stat-icon"><el-icon><Link /></el-icon></span>
+        <span class="stat-icon"><el-icon aria-hidden="true"><Link /></el-icon></span>
         <div class="stat-text">
           <span class="stat-num">{{ stats.withOpenai }}</span>
           <span class="stat-label">已配 OpenAI 兼容</span>
         </div>
       </div>
       <div class="stat-block">
-        <span class="stat-icon"><el-icon><Star /></el-icon></span>
+        <span class="stat-icon"><el-icon aria-hidden="true"><Star /></el-icon></span>
         <div class="stat-text">
           <span class="stat-num">{{ stats.withAnthropic }}</span>
           <span class="stat-label">已配 Anthropic 兼容</span>
         </div>
       </div>
       <div class="stat-block">
-        <span class="stat-icon"><el-icon><Key /></el-icon></span>
+        <span class="stat-icon"><el-icon aria-hidden="true"><Key /></el-icon></span>
         <div class="stat-text">
           <span class="stat-num">{{ stats.modelCount }}</span>
           <span class="stat-label">模型总数</span>
@@ -344,26 +345,34 @@ async function handleTest(row, compat) {
 
     <!-- 筛选与操作 -->
     <div class="toolbar">
-      <el-input v-model="keyword" class="search" :prefix-icon="Search" placeholder="搜索名称 / BaseUrl" clearable />
+      <el-input v-model="keyword" class="search" :prefix-icon="Search" placeholder="搜索名称 / BaseUrl…" clearable />
       <div class="spacer" />
       <el-tooltip content="对外接口设置" placement="top">
-        <el-button :icon="Setting" circle @click="openSettings" />
+        <el-button :icon="Setting" circle aria-label="对外接口设置" @click="openSettings" />
       </el-tooltip>
       <el-tooltip content="刷新列表" placement="top">
-        <el-button :icon="Refresh" circle :loading="loading" @click="fetchAll" />
+        <el-button :icon="Refresh" circle aria-label="刷新列表" :loading="loading" @click="fetchAll" />
       </el-tooltip>
       <el-button type="primary" :icon="Plus" @click="openCreate">新增供应商</el-button>
     </div>
 
     <!-- 供应商卡片网格 -->
     <div v-loading="loading" class="card-grid">
-      <div v-for="row in filtered" :key="row.id" class="provider-card" @click="openDetail(row)">
+      <div
+        v-for="row in filtered"
+        :key="row.id"
+        class="provider-card"
+        role="button"
+        tabindex="0"
+        @click="openDetail(row)"
+        @keydown.enter.space.prevent="openDetail(row)"
+      >
         <div class="card-head">
           <img v-if="row.icon" :src="iconUrl(row.icon)" class="p-icon" :alt="row.name" @error="$event.target.style.display = 'none'" />
           <span v-else class="dot" :style="{ background: row.iconColor || 'var(--atlas-accent)' }" />
           <span class="p-name" :title="row.name">{{ row.name }}</span>
           <div class="spacer" />
-          <el-icon class="chevron"><ArrowRight /></el-icon>
+          <el-icon class="chevron" aria-hidden="true"><ArrowRight /></el-icon>
         </div>
 
         <div v-if="row.openai.baseUrl" class="compat-row" :title="row.openai.baseUrl">
@@ -453,7 +462,7 @@ async function handleTest(row, compat) {
 
         <!-- 模型 -->
         <div class="endpoint-block">
-          <div class="endpoint-title"><el-icon><Key /></el-icon><span>模型（{{ detailRow.models?.length ?? 0 }} 个）</span></div>
+          <div class="endpoint-title"><el-icon aria-hidden="true"><Key /></el-icon><span>模型（{{ detailRow.models?.length ?? 0 }} 个）</span></div>
           <div v-if="detailRow.models?.length" class="drawer-models">
             <el-tooltip v-for="m in detailRow.models" :key="m.modelId" :content="m.contextTokens ? `${m.modelId} · ${m.contextTokens} tokens` : m.modelId" placement="top">
               <span class="model-chip">{{ m.modelId }}</span>
@@ -486,7 +495,7 @@ async function handleTest(row, compat) {
         <div class="settings-section">
           <div class="settings-title">返回 API Key</div>
           <div class="settings-switch">
-            <el-switch v-model="exposeApiKey" />
+            <el-switch v-model="exposeApiKey" aria-label="在对外配置中返回 API Key 明文" />
             <div class="settings-switch-text">
               <div>在对外配置中返回 API Key 明文</div>
               <div class="muted settings-tip">默认关闭；开启后外部应用经凭证认证即可拿到各接口的明文 Key（供实际调用 LLM），请确认调用方可信。</div>
@@ -502,7 +511,7 @@ async function handleTest(row, compat) {
 
     <el-dialog v-model="dialogVisible" :title="editing ? '编辑供应商' : '新增供应商'" width="680">
       <el-form label-width="110px">
-        <el-form-item label="名称" required><el-input v-model="form.name" placeholder="如 DeepSeek" /></el-form-item>
+        <el-form-item label="名称" required><el-input v-model="form.name" name="provider-name" autocomplete="off" placeholder="如 DeepSeek" /></el-form-item>
         <el-form-item label="图标">
           <div class="icon-picker-wrap">
             <div class="icon-tools">
@@ -519,11 +528,17 @@ async function handleTest(row, compat) {
                 class="icon-item"
                 :class="{ active: form.icon === icon.path }"
                 :title="icon.name"
+                role="button"
+                tabindex="0"
+                :aria-label="`选择图标 ${icon.name}`"
                 @click="pickIcon(icon.path)"
+                @keydown.enter.space.prevent="pickIcon(icon.path)"
               >
                 <img :src="iconUrl(icon.path)" :alt="icon.name" loading="lazy" />
-                <el-icon v-if="form.icon === icon.path" class="check"><Check /></el-icon>
-                <span class="icon-remove" @click.stop="handleIconRemove(icon)"><Close /></span>
+                <el-icon v-if="form.icon === icon.path" class="check" aria-hidden="true"><Check /></el-icon>
+                <button type="button" class="icon-remove" :aria-label="`删除图标 ${icon.name}`" title="删除图标" @click.stop="handleIconRemove(icon)">
+                  <el-icon aria-hidden="true"><Close /></el-icon>
+                </button>
               </div>
             </div>
             <div class="icon-group-title">内置</div>
@@ -534,10 +549,14 @@ async function handleTest(row, compat) {
                 class="icon-item"
                 :class="{ active: form.icon === icon.path }"
                 :title="icon.name.replace(/\.svg$/, '')"
+                role="button"
+                tabindex="0"
+                :aria-label="`选择图标 ${icon.name.replace(/\.svg$/, '')}`"
                 @click="pickIcon(icon.path)"
+                @keydown.enter.space.prevent="pickIcon(icon.path)"
               >
                 <img :src="iconUrl(icon.path)" :alt="icon.name" loading="lazy" />
-                <el-icon v-if="form.icon === icon.path" class="check"><Check /></el-icon>
+                <el-icon v-if="form.icon === icon.path" class="check" aria-hidden="true"><Check /></el-icon>
               </div>
               <span v-if="!filteredBuiltin.length" class="muted">无匹配图标</span>
             </div>
@@ -551,22 +570,22 @@ async function handleTest(row, compat) {
 
         <el-divider content-position="left">OpenAI 兼容接口</el-divider>
         <el-form-item label="Base URL">
-          <el-input v-model="form.openai.baseUrl" placeholder="https://api.example.com/v1" clearable />
+          <el-input v-model="form.openai.baseUrl" type="url" name="openai-base-url" autocomplete="off" placeholder="https://api.example.com/v1" clearable />
         </el-form-item>
         <el-form-item label="API Key">
           <div class="key-row">
-            <el-input v-model="form.openai.apiKey" type="password" show-password :placeholder="editing && form.openai.apiKey === '' ? '留空保持不变' : ''" clearable />
+            <el-input v-model="form.openai.apiKey" type="password" name="openai-api-key" autocomplete="new-password" show-password :placeholder="editing && form.openai.apiKey === '' ? '留空保持不变' : ''" clearable />
             <el-button v-if="editing && editing.openai.apiKeySet" size="small" text type="danger" @click="form.openai.apiKey = null">清除密钥</el-button>
           </div>
         </el-form-item>
 
         <el-divider content-position="left">Anthropic 兼容接口</el-divider>
         <el-form-item label="Base URL">
-          <el-input v-model="form.anthropic.baseUrl" placeholder="https://api.example.com" clearable />
+          <el-input v-model="form.anthropic.baseUrl" type="url" name="anthropic-base-url" autocomplete="off" placeholder="https://api.example.com" clearable />
         </el-form-item>
         <el-form-item label="API Key">
           <div class="key-row">
-            <el-input v-model="form.anthropic.apiKey" type="password" show-password :placeholder="editing && form.anthropic.apiKey === '' ? '留空保持不变' : ''" clearable />
+            <el-input v-model="form.anthropic.apiKey" type="password" name="anthropic-api-key" autocomplete="new-password" show-password :placeholder="editing && form.anthropic.apiKey === '' ? '留空保持不变' : ''" clearable />
             <el-button v-if="editing && editing.anthropic.apiKeySet" size="small" text type="danger" @click="form.anthropic.apiKey = null">清除密钥</el-button>
           </div>
         </el-form-item>
@@ -583,10 +602,18 @@ async function handleTest(row, compat) {
               <el-input v-model="refQuery" placeholder="搜索 models.dev 参考库，如 deepseek / claude / gpt-4o，点击结果加入" clearable :prefix-icon="Search" @keyup.enter="searchReference" />
               <div v-if="refSearching" class="ref-hint muted">搜索中…</div>
               <div v-else-if="refResults.length" class="ref-list">
-                <div v-for="m in refResults" :key="m.provider + '/' + m.modelId" class="ref-item" @click="addRefModel(m)">
+                <div
+                  v-for="m in refResults"
+                  :key="m.provider + '/' + m.modelId"
+                  class="ref-item"
+                  role="button"
+                  tabindex="0"
+                  @click="addRefModel(m)"
+                  @keydown.enter.space.prevent="addRefModel(m)"
+                >
                   <span class="mono ref-id">{{ m.provider }}/{{ m.modelId }}</span>
                   <span class="muted ref-ctx">{{ fmtCtx(m.contextTokens) }} ctx</span>
-                  <el-icon class="ref-add"><Plus /></el-icon>
+                  <el-icon class="ref-add" aria-hidden="true"><Plus /></el-icon>
                 </div>
               </div>
               <div v-else-if="refQuery.trim().length >= 2" class="ref-hint muted">无匹配结果，试试其他关键词或切换手动输入</div>
@@ -634,7 +661,7 @@ async function handleTest(row, compat) {
 .stat-icon {
   width: 34px;
   height: 34px;
-  border-radius: 9px;
+  border-radius: var(--atlas-r-s);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -643,7 +670,7 @@ async function handleTest(row, compat) {
   color: var(--atlas-text);
   flex-shrink: 0;
 }
-.stat-icon.accent { background: rgba(79, 110, 247, 0.1); color: var(--atlas-accent); }
+.stat-icon.accent { background: var(--atlas-accent-soft); color: var(--atlas-accent); }
 .stat-text {
   display: flex;
   flex-direction: column;
@@ -651,9 +678,10 @@ async function handleTest(row, compat) {
   min-width: 0;
 }
 .stat-num {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 700;
   line-height: 1.15;
+  font-variant-numeric: tabular-nums;
   color: var(--atlas-text);
 }
 .stat-num.accent { color: var(--atlas-accent); }
@@ -681,23 +709,29 @@ async function handleTest(row, compat) {
 }
 .provider-card {
   border: 1px solid var(--atlas-stroke);
-  border-radius: 12px;
+  border-radius: var(--atlas-r-m);
   padding: 14px 16px;
   display: flex;
   flex-direction: column;
   gap: 8px;
   min-height: 210px;
-  background: #fff;
+  background: var(--atlas-surface);
   cursor: pointer;
   transition: box-shadow 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
 }
 .provider-card:hover {
   border-color: var(--atlas-accent);
-  box-shadow: 0 6px 20px rgba(79, 110, 247, 0.14);
-  transform: translateY(-2px);
+  box-shadow: var(--atlas-shadow-hover);
+  transform: translateY(-1px);
 }
 .provider-card:active {
   transform: translateY(0);
+}
+.provider-card:focus-visible,
+.ref-item:focus-visible,
+.icon-item:focus-visible {
+  outline: 2px solid var(--atlas-accent);
+  outline-offset: 1px;
 }
 .card-head {
   display: flex;
@@ -730,8 +764,8 @@ async function handleTest(row, compat) {
   flex-shrink: 0;
 }
 .p-name {
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -743,7 +777,7 @@ async function handleTest(row, compat) {
   font-size: 12px;
   padding: 5px 9px;
   background: var(--atlas-bg);
-  border-radius: 8px;
+  border-radius: var(--atlas-r-s);
   overflow: hidden;
 }
 .compat-row.empty {
@@ -757,20 +791,6 @@ async function handleTest(row, compat) {
   flex-shrink: 0;
   object-fit: contain;
 }
-.compat-badge {
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
-  font-size: 10px;
-  font-weight: 700;
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.compat-badge.o { background: #10a37f; }
-.compat-badge.a { background: #d97757; }
 .compat-url {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -855,7 +875,7 @@ async function handleTest(row, compat) {
   min-width: 0;
 }
 .drawer-name {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 700;
 }
 .drawer-sub {
@@ -863,7 +883,7 @@ async function handleTest(row, compat) {
 }
 .endpoint-block {
   border: 1px solid var(--atlas-stroke);
-  border-radius: 12px;
+  border-radius: var(--atlas-r-m);
   padding: 12px 14px;
   display: flex;
   flex-direction: column;
@@ -883,17 +903,17 @@ async function handleTest(row, compat) {
   object-fit: contain;
 }
 .endpoint-url {
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--atlas-text);
   background: var(--atlas-bg);
-  border-radius: 8px;
+  border-radius: var(--atlas-r-s);
   padding: 7px 10px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .endpoint-empty {
-  font-size: 12.5px;
+  font-size: 12px;
   font-style: italic;
 }
 .endpoint-meta {
@@ -957,12 +977,12 @@ async function handleTest(row, compat) {
   width: 40px;
   height: 40px;
   border: 1px solid var(--atlas-stroke);
-  border-radius: 8px;
+  border-radius: var(--atlas-r-s);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  background: #fff;
+  background: var(--atlas-surface);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .icon-item:hover {
@@ -970,7 +990,7 @@ async function handleTest(row, compat) {
 }
 .icon-item.active {
   border-color: var(--atlas-accent);
-  box-shadow: 0 0 0 2px rgba(79, 110, 247, 0.2);
+  box-shadow: 0 0 0 2px var(--atlas-accent-line);
 }
 .icon-item img {
   max-width: 26px;
@@ -981,25 +1001,32 @@ async function handleTest(row, compat) {
   right: -4px;
   top: -4px;
   background: var(--atlas-accent);
-  color: #fff;
+  color: var(--atlas-bg);
   border-radius: 50%;
   font-size: 11px;
   padding: 1px;
 }
 .icon-remove {
   position: absolute;
-  left: -4px;
-  top: -4px;
-  background: #f56c6c;
-  color: #fff;
+  left: -6px;
+  top: -6px;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  padding: 0;
+  background: var(--atlas-danger);
+  color: var(--atlas-bg);
   border-radius: 50%;
-  font-size: 9px;
-  padding: 1px;
+  font-size: 10px;
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.15s ease;
 }
-.icon-item:hover .icon-remove {
+.icon-item:hover .icon-remove,
+.icon-remove:focus-visible {
   opacity: 1;
 }
 
@@ -1014,7 +1041,7 @@ async function handleTest(row, compat) {
   max-height: 180px;
   overflow: auto;
   border: 1px solid var(--atlas-stroke);
-  border-radius: 8px;
+  border-radius: var(--atlas-r-s);
 }
 .ref-item {
   display: flex;
@@ -1025,7 +1052,7 @@ async function handleTest(row, compat) {
   cursor: pointer;
 }
 .ref-item:hover {
-  background: rgba(79, 110, 247, 0.06);
+  background: var(--atlas-accent-weak);
 }
 .ref-id {
   flex: 1;
@@ -1058,7 +1085,7 @@ async function handleTest(row, compat) {
 /* ---------- 其他 ---------- */
 .hint { font-size: 12px; margin-left: 10px; color: var(--atlas-muted); }
 .muted { color: var(--atlas-muted); }
-.mono { font-family: monospace; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .key-row {
   display: flex;
   align-items: center;
@@ -1083,9 +1110,9 @@ async function handleTest(row, compat) {
   font-weight: 600;
 }
 .settings-url {
-  font-size: 12.5px;
+  font-size: 12px;
   background: var(--atlas-bg);
-  border-radius: 8px;
+  border-radius: var(--atlas-r-s);
   padding: 8px 10px;
   word-break: break-all;
   user-select: all;

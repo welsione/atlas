@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { HomeFilled, Grid, Cpu, Tools, Lock, SwitchButton, ArrowLeft } from '@element-plus/icons-vue'
 import ConsoleView from './views/ConsoleView.vue'
 import AppsView from './views/AppsView.vue'
@@ -12,19 +12,64 @@ import PluginMount from './plugin-host/PluginMount.vue'
 import { initPluginSlots, useSlotsOf } from './plugin-host/slotRegistry'
 import { usePageHeadAction, setPageHeadAction } from './pageHead'
 import { AUTH_TOKEN_KEY } from './services/http'
+import { appApi } from './services/appApi'
+import { parseHash, toHash, type HashRoute } from './hashRoute'
 import type { App } from './types'
 
 type MenuKey = 'console' | 'apps' | 'plugins' | 'security' | 'ops' | `plugin:${string}`
 
-const current = ref<MenuKey>('console')
-const activeApp = ref<App | null>(null)
+/* ---------- hash 路由（刷新/分享直达 + 前进后退） ---------- */
+function currentRoute(): HashRoute {
+  return parseHash(typeof window !== 'undefined' ? window.location.hash : '')
+}
 
 /** 管理认证门：未通过鉴权时渲染登录页，不展示任何管理数据。 */
 const authed = ref(false)
+
+const initialRoute = currentRoute()
+const current = ref<MenuKey>(initialRoute.pluginType ? `plugin:${initialRoute.pluginType}` : ((initialRoute.menu ?? 'console') as MenuKey))
+const activeApp = ref<App | null>(null)
+
+/** 深链 #/apps/{id}：列表里找回应用实体后进入空间；找不到/未登录静默回落列表。 */
+async function restoreApp(id: number) {
+  try {
+    const app = (await appApi.list(1, 100)).rows.find((a) => a.id === id) ?? null
+    // 请求期间路由可能已再次变化
+    if (current.value !== 'apps' || currentRoute().appId !== id) return
+    if (app) {
+      activeApp.value = app
+    } else {
+      history.replaceState(null, '', toHash({ menu: 'apps' }))
+    }
+  } catch {
+    // 未登录等
+  }
+}
+
+function applyRoute(r: HashRoute) {
+  if (r.pluginType) {
+    current.value = `plugin:${r.pluginType}`
+    activeApp.value = null
+    setPageHeadAction(null)
+    return
+  }
+  current.value = (r.menu ?? 'console') as MenuKey
+  setPageHeadAction(null)
+  if (r.appId != null) {
+    if (activeApp.value?.id === r.appId) return
+    activeApp.value = null
+    void restoreApp(r.appId)
+  } else {
+    activeApp.value = null
+  }
+}
+
 function handleAuthed() {
   authed.value = true
   // 登录前 /api/plugins/ui 会 401 静默失败，登录后必须重拉一次（规范 F-02）
   void initPluginSlots()
+  // 带 hash 直达（如 #/apps/3/instances）：登录后恢复路由目标
+  if (currentRoute().appId != null) applyRoute(currentRoute())
 }
 function logout() {
   localStorage.removeItem(AUTH_TOKEN_KEY)
@@ -32,13 +77,21 @@ function logout() {
   authed.value = false
   current.value = 'console'
   activeApp.value = null
+  history.replaceState(null, '', toHash({ menu: 'console' }))
 }
 
+/* 401（token 失效/被吊销）→ 回落到登录页；卸载时对称清理 */
+const onUnauthorized = () => {
+  authed.value = false
+}
+const onPopState = () => applyRoute(currentRoute())
 onMounted(() => {
-  // 401（token 失效/被吊销）→ 回落到登录页
-  window.addEventListener('atlas:unauthorized', () => {
-    authed.value = false
-  })
+  window.addEventListener('atlas:unauthorized', onUnauthorized)
+  window.addEventListener('popstate', onPopState)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('atlas:unauthorized', onUnauthorized)
+  window.removeEventListener('popstate', onPopState)
 })
 
 /** 系统级插件侧边菜单（全局插件声明 system-menu slot 后出现）。 */
@@ -49,17 +102,20 @@ const activePlugin = computed(() => systemMenuSlots.value.find((s) => s.key === 
 function openSpace(app: App) {
   activeApp.value = app
   setPageHeadAction(null)
+  history.pushState(null, '', toHash({ menu: 'apps', appId: app.id }))
 }
 
 function backToList() {
   activeApp.value = null
   setPageHeadAction(null)
+  history.pushState(null, '', toHash({ menu: 'apps' }))
 }
 
 function switchMenu(key: MenuKey) {
   current.value = key
   activeApp.value = null
   setPageHeadAction(null)
+  history.pushState(null, '', toHash(key.startsWith('plugin:') ? { pluginType: key.slice(7) } : { menu: key }))
 }
 
 /* ---------- 面包屑（§7.1：二进制 `首页 › 当前页`） ---------- */
@@ -108,70 +164,70 @@ const head = usePageHeadAction()
     <!-- 侧栏：整页同白；sticky 固定视口高度，退出登录钉在可视底部；可折叠成图标模式 -->
     <aside class="sidebar" aria-label="主导航">
       <div class="side-top">
-        <a class="brand-logo" :title="collapsed ? '展开侧栏' : '收起侧栏'" @click.prevent="toggleCollapse">
+        <button type="button" class="brand-logo" :title="collapsed ? '展开侧栏' : '收起侧栏'" :aria-label="collapsed ? '展开侧栏' : '收起侧栏'" :aria-expanded="!collapsed" @click="toggleCollapse">
           <img :src="brandImg" class="brand-banner" alt="Atlas" />
-        </a>
+        </button>
         <div class="acts">
-          <button type="button" class="sbar-btn" :title="collapsed ? '展开侧栏' : '收起侧栏'" @click="toggleCollapse">
-            <el-icon :class="{ 'is-flip': collapsed }"><ArrowLeft /></el-icon>
+          <button type="button" class="sbar-btn" :title="collapsed ? '展开侧栏' : '收起侧栏'" :aria-label="collapsed ? '展开侧栏' : '收起侧栏'" :aria-expanded="!collapsed" @click="toggleCollapse">
+            <el-icon :class="{ 'is-flip': collapsed }" aria-hidden="true"><ArrowLeft /></el-icon>
           </button>
         </div>
       </div>
 
-      <div class="menu">
+      <div class="menu" role="navigation" aria-label="主导航">
         <!-- 内置菜单（线性图标 + 文字；系统级插件菜单同形态） -->
-        <a class="mi" :class="{ on: current === 'console' }" title="控制台" @click.prevent="switchMenu('console')">
-          <el-icon class="ic"><HomeFilled /></el-icon>
+        <button type="button" class="mi" :class="{ on: current === 'console' }" :aria-current="current === 'console' ? 'page' : undefined" @click="switchMenu('console')">
+          <el-icon class="ic" aria-hidden="true"><HomeFilled /></el-icon>
           <span class="txt">控制台</span>
-          <span class="tip">控制台</span>
-        </a>
-        <a class="mi" :class="{ on: current === 'apps' }" title="应用管理" @click.prevent="switchMenu('apps')">
-          <el-icon class="ic"><Grid /></el-icon>
+          <span class="tip" aria-hidden="true">控制台</span>
+        </button>
+        <button type="button" class="mi" :class="{ on: current === 'apps' }" :aria-current="current === 'apps' ? 'page' : undefined" @click="switchMenu('apps')">
+          <el-icon class="ic" aria-hidden="true"><Grid /></el-icon>
           <span class="txt">应用管理</span>
-          <span class="tip">应用管理</span>
-        </a>
-        <a v-for="slot in systemMenuSlots" :key="slot.key" class="mi" :class="{ on: current === slot.key }" :title="slot.label" @click.prevent="switchMenu(slot.key as MenuKey)">
+          <span class="tip" aria-hidden="true">应用管理</span>
+        </button>
+        <button v-for="slot in systemMenuSlots" :key="slot.key" type="button" class="mi" :class="{ on: current === slot.key }" :aria-current="current === slot.key ? 'page' : undefined" @click="switchMenu(slot.key as MenuKey)">
           <el-icon v-if="typeof slot.icon === 'string' && slot.icon" class="ic">
             <img :src="slot.icon" alt="" />
           </el-icon>
-          <el-icon v-else class="ic"><Cpu /></el-icon>
+          <el-icon v-else class="ic" aria-hidden="true"><Cpu /></el-icon>
           <span class="txt">{{ slot.label }}</span>
-          <span class="tip">{{ slot.label }}</span>
-        </a>
-        <a class="mi" :class="{ on: current === 'plugins' }" title="插件注册表" @click.prevent="switchMenu('plugins')">
-          <el-icon class="ic"><Cpu /></el-icon>
+          <span class="tip" aria-hidden="true">{{ slot.label }}</span>
+        </button>
+        <button type="button" class="mi" :class="{ on: current === 'plugins' }" :aria-current="current === 'plugins' ? 'page' : undefined" @click="switchMenu('plugins')">
+          <el-icon class="ic" aria-hidden="true"><Cpu /></el-icon>
           <span class="txt">插件注册表</span>
-          <span class="tip">插件注册表</span>
-        </a>
-        <a class="mi" :class="{ on: current === 'ops' }" title="运维台" @click.prevent="switchMenu('ops')">
-          <el-icon class="ic"><Tools /></el-icon>
+          <span class="tip" aria-hidden="true">插件注册表</span>
+        </button>
+        <button type="button" class="mi" :class="{ on: current === 'ops' }" :aria-current="current === 'ops' ? 'page' : undefined" @click="switchMenu('ops')">
+          <el-icon class="ic" aria-hidden="true"><Tools /></el-icon>
           <span class="txt">运维台</span>
-          <span class="tip">运维台</span>
-        </a>
-        <a class="mi" :class="{ on: current === 'security' }" title="安全设置" @click.prevent="switchMenu('security')">
-          <el-icon class="ic"><Lock /></el-icon>
+          <span class="tip" aria-hidden="true">运维台</span>
+        </button>
+        <button type="button" class="mi" :class="{ on: current === 'security' }" :aria-current="current === 'security' ? 'page' : undefined" @click="switchMenu('security')">
+          <el-icon class="ic" aria-hidden="true"><Lock /></el-icon>
           <span class="txt">安全设置</span>
-          <span class="tip">安全设置</span>
-        </a>
+          <span class="tip" aria-hidden="true">安全设置</span>
+        </button>
       </div>
 
       <!-- 侧栏底部：退出登录（钉在可视底部，hover 红） -->
       <div class="sfoot">
         <el-button text class="logout-btn" @click="logout">
-          <el-icon><SwitchButton /></el-icon>
+          <el-icon aria-hidden="true"><SwitchButton /></el-icon>
           <span class="txt">退出登录</span>
         </el-button>
-        <span class="tip">退出登录</span>
+        <span class="tip" aria-hidden="true">退出登录</span>
       </div>
     </aside>
 
     <el-main class="main">
       <div class="ph">
-        <nav class="crumb">
+        <nav class="crumb" aria-label="面包屑">
           <template v-for="(c, i) in crumb" :key="i">
-            <a v-if="c.go && i < crumb.length - 1" @click.prevent="c.go">{{ c.label }}</a>
+            <button v-if="c.go && i < crumb.length - 1" type="button" class="crumb-link" @click="c.go">{{ c.label }}</button>
             <span v-else class="cur">{{ c.label }}</span>
-            <span v-if="i < crumb.length - 1" class="sep">›</span>
+            <span v-if="i < crumb.length - 1" class="sep" aria-hidden="true">›</span>
           </template>
         </nav>
         <el-tooltip v-if="head.action" :content="head.action.tip || head.action.label" placement="bottom">
@@ -193,7 +249,7 @@ const head = usePageHeadAction()
         <PluginMount :load="activePlugin.load" :plugin-type="activePlugin.pluginType" mode="system-menu" :refresh="() => undefined" />
       </div>
       <AppSpaceView v-else-if="activeApp" :app="activeApp" @back="backToList" />
-      <ConsoleView v-else-if="current === 'console'" @open-space="openSpace" />
+      <ConsoleView v-else-if="current === 'console'" @go-apps="switchMenu('apps')" />
       <AppsView v-else-if="current === 'apps'" @open-space="openSpace" />
       <PluginsAdminView v-else-if="current === 'plugins'" />
       <OpsView v-else-if="current === 'ops'" />
@@ -240,12 +296,17 @@ const head = usePageHeadAction()
   align-items: center;
   gap: 11px;
   padding: 9px 12px;
+  border: 0;
+  background: none;
+  font: inherit;
+  width: 100%;
+  text-align: left;
   border-radius: var(--atlas-r-s);
   font-size: 13px;
   color: var(--atlas-menu);
   cursor: pointer;
   text-decoration: none;
-  transition: background 0.14s, color 0.14s;
+  transition: background 0.14s ease, color 0.14s ease;
   white-space: nowrap;
 }
 
@@ -306,7 +367,7 @@ const head = usePageHeadAction()
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
-  transition: 0.12s;
+  transition: opacity 0.12s ease, transform 0.12s ease;
   z-index: 50;
   box-shadow: 0 4px 12px rgba(16, 24, 48, 0.18);
 }
@@ -331,9 +392,12 @@ const head = usePageHeadAction()
   align-items: center;
   flex: 1;
   min-width: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  padding: 3px 2px;
   border-radius: var(--atlas-r-s);
   cursor: pointer;
-  padding: 3px 2px;
 }
 
 .brand-logo:hover {
@@ -345,7 +409,6 @@ const head = usePageHeadAction()
   height: 40px;
   width: auto;
   min-width: 40px;
-  transition: height 0.18s;
 }
 
 .acts {
@@ -365,7 +428,7 @@ const head = usePageHeadAction()
   border-radius: var(--atlas-r-s);
   color: var(--atlas-muted);
   cursor: pointer;
-  transition: background 0.14s, color 0.14s;
+  transition: background 0.14s ease, color 0.14s ease;
 }
 
 .sbar-btn:hover {
@@ -503,14 +566,25 @@ const head = usePageHeadAction()
   color: var(--atlas-muted);
 }
 
-.crumb a {
+.crumb a,
+.crumb .cur,
+.crumb-link {
   color: var(--atlas-muted);
   text-decoration: none;
   cursor: pointer;
 }
 
-.crumb a:hover {
+.crumb a:hover,
+.crumb-link:hover {
   color: var(--atlas-accent);
+}
+
+.crumb-link {
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  padding: 0;
 }
 
 .crumb .sep {

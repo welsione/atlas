@@ -3,6 +3,9 @@
  * 所有样式一律引用 --atlas-* 变量，禁止在组件内硬编码颜色/字号/圆角。
  * ============================================================ */
 :root {
+  /* 明确浅色方案：避免 Windows 深色系统把原生控件/滚动条渲染成深色 */
+  color-scheme: light;
+
   /* 背景 / 层级 */
   --atlas-bg: #ffffff;            /* 整页统一纯白（侧栏 + 主内容同色） */
   --atlas-surface: #ffffff;        /* 卡片 / 面板背景 */
@@ -76,6 +79,34 @@ html,
 body {
   margin: 0;
   padding: 0;
+}
+
+/* 移动端：去除点按高亮（hover/active 已提供反馈）+ 消除双击缩放延迟 */
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  touch-action: manipulation;
+}
+
+/* 键盘焦点环（ui-design.md §8）：全局兜底；Element Plus 自身对 focus-visible
+ * 有更高优先级处理的控件不受影响 */
+:focus-visible {
+  outline: 2px solid var(--atlas-accent);
+  outline-offset: 1px;
+}
+
+/* 减少动态效果：跟随系统无障碍偏好 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 body {

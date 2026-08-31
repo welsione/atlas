@@ -74,8 +74,9 @@ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI',
 | 正文 | 13px | 400 | 描述、表格 |
 | 辅助 | 11–12px | 400 | 表头、脚注、元信息、kicker |
 | 等宽 | 12px | 400 | appId、token、pluginType |
+| 图标字号（el-icon） | 18–20px | — | 卡片图标章、危险区警示图标（配 `--atlas-accent`/`--atlas-danger` 色） |
 
-- 只允许使用上述字号档位，**不得**出现 14px/16px/18px 等中间值（除非设计明确新增并同步本表）。
+- 只允许使用上述字号档位，**不得**出现 14px/16px 等中间值（卡片标题 14px、图标字号 18/20px 已在表中登记，其余新增须同步本表）。
 
 ### 2.3 间距
 

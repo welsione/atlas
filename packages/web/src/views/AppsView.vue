@@ -7,13 +7,16 @@ import { pluginApi } from '../services/pluginApi'
 import { iconOf, pluginIconUrl } from '../plugin-host/slotRegistry'
 import { setPageHeadAction } from '../pageHead'
 import { copyText } from '../clipboard'
+import { fmtTime } from '../format'
+import { parseHash, toHash } from '../hashRoute'
 import type { App, PluginDef } from '../types'
 
 const emit = defineEmits<{ (e: 'open-space', app: App): void }>()
 
 const apps = ref<App[]>([])
 const loading = ref(false)
-const page = ref(1)
+// 初始页码支持 #/apps?p=N 直达
+const page = ref(Math.max(1, parseHash(typeof window !== 'undefined' ? window.location.hash : '').page ?? 1))
 const size = ref(10)
 const total = ref(0)
 const createVisible = ref(false)
@@ -37,14 +40,20 @@ async function fetchAll() {
   }
 }
 
+function syncPageHash() {
+  history.replaceState(null, '', toHash({ menu: 'apps', page: page.value }))
+}
+
 function switchPage(p: number) {
   page.value = p
+  syncPageHash()
   fetchAll()
 }
 
 function switchSize(s: number) {
   size.value = s
   page.value = 1
+  syncPageHash()
   fetchAll()
 }
 
@@ -135,7 +144,7 @@ function isPluginSelected(pluginType: string) {
           <span class="app-name" :title="app.name">{{ app.name }}</span>
           <el-tag size="small" :type="statusTag(app.status)">{{ statusLabel(app.status) }}</el-tag>
           <div class="spacer" />
-          <el-icon class="chevron"><ArrowRight /></el-icon>
+          <el-icon class="chevron" aria-hidden="true"><ArrowRight /></el-icon>
         </div>
 
         <div v-if="app.description" class="app-desc" :title="app.description">{{ app.description }}</div>
@@ -143,8 +152,8 @@ function isPluginSelected(pluginType: string) {
 
         <div class="card-foot">
           <span class="muted foot-item">
-            <el-icon><Calendar /></el-icon>
-            {{ app.createdAt }}
+            <el-icon aria-hidden="true"><Calendar /></el-icon>
+            {{ fmtTime(app.createdAt) }}
           </span>
           <div class="spacer" />
           <span class="muted foot-tip">点击进入空间</span>
@@ -170,10 +179,10 @@ function isPluginSelected(pluginType: string) {
     <el-drawer v-model="createVisible" title="创建应用" direction="rtl" size="560px" @open="openCreate">
       <el-form label-position="top" class="create-form">
         <el-form-item label="名称" required>
-          <el-input v-model="createName" placeholder="应用名称" maxlength="40" />
+          <el-input v-model="createName" name="app-name" autocomplete="off" placeholder="例如：客服助手" maxlength="40" />
         </el-form-item>
         <el-form-item label="描述">
-          <el-input v-model="createDesc" type="textarea" :rows="1" placeholder="可选" />
+          <el-input v-model="createDesc" type="textarea" :rows="1" name="app-desc" autocomplete="off" placeholder="选填" />
         </el-form-item>
         <el-form-item label="实例化插件">
           <div class="plugin-picker">
@@ -185,7 +194,7 @@ function isPluginSelected(pluginType: string) {
             </div>
 
             <div v-if="selectedPlugins.length === 0 && pluginDefs.length" class="picker-empty-warn">
-              <el-icon><InfoFilled /></el-icon><span>未勾选任何插件：应用创建后不预装插件，可在应用空间随时启用</span>
+              <el-icon aria-hidden="true"><InfoFilled /></el-icon><span>未勾选任何插件：应用创建后不预装插件，可在应用空间随时启用</span>
             </div>
 
             <div v-if="pluginDefs.length" class="picker-grid">
@@ -253,9 +262,9 @@ function isPluginSelected(pluginType: string) {
     </el-drawer>
 
     <!-- 凭证展示（仅一次） -->
-    <el-dialog v-model="secretDialog" title="应用凭证（仅展示一次，请立即保存）" width="560">
+    <el-dialog v-model="secretDialog" title="应用凭证（仅展示一次，请立即保存）" width="560" @closed="secretText = ''">
       <el-alert type="warning" :closable="false" title="此凭证仅在创建/轮换时展示一次，关闭后将无法再次查看。" style="margin-bottom: 12px" />
-      <el-input :model-value="secretText" readonly>
+      <el-input :model-value="secretText" readonly aria-label="应用凭证">
         <template #append>
           <el-button @click="copySecret">复制</el-button>
         </template>
@@ -294,7 +303,7 @@ function isPluginSelected(pluginType: string) {
 .app-card:hover {
   border-color: var(--atlas-accent);
   box-shadow: var(--atlas-shadow-hover);
-  transform: translateY(-2px);
+  transform: translateY(-1px);
 }
 .app-card:active {
   transform: translateY(0);

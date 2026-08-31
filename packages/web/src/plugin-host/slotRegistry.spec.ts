@@ -62,6 +62,33 @@ describe('slotRegistry', () => {
     expect(appSlots[0].pluginType).toBe('demo')
   })
 
+  it('initPluginSlots：/api/plugins 分页形状（rows）也能取到图标声明（回归：f0cc663 分页化后图标丢失）', async () => {
+    getMock.mockResolvedValueOnce([
+      { pluginType: 'paged', name: '分页', slots: [{ slot: 'console', title: '概览', entry: 'entry.c.js' }] },
+    ])
+    // 分页对象形状（/api/plugins 当前返回 { rows, total, page, size }）
+    getMock.mockResolvedValueOnce({ rows: [{ plugin: { pluginType: 'paged', icon: 'icons/paged.svg' } }], total: 1, page: 1, size: 10 })
+    await initPluginSlots()
+
+    expect(iconOf('paged')).toBe('icons/paged.svg')
+    const consoleSlots = slotsOf('console').filter((s) => s.key === 'plugin:paged:概览')
+    expect(consoleSlots).toHaveLength(1)
+    expect(consoleSlots[0].icon).toBe('/_pluginui/paged/icons/paged.svg')
+  })
+
+  it('initPluginSlots：图标声明优先取磁盘 manifest（/api/plugins/ui），DB 注册表仅兜底无 UI 插件', async () => {
+    getMock.mockResolvedValueOnce([
+      // UI manifest（磁盘直读）声明的 icon 与注册表不一致时，以磁盘为准
+      { pluginType: 'disk', name: '磁盘', icon: 'icons/from-disk.svg', slots: [{ slot: 'console', title: '卡', entry: 'entry.d.js' }] },
+    ])
+    getMock.mockResolvedValueOnce({ rows: [{ plugin: { pluginType: 'disk', icon: 'icons/from-db.svg' } }, { plugin: { pluginType: 'noui', icon: 'icons/noui.svg' } }] })
+    await initPluginSlots()
+
+    expect(iconOf('disk')).toBe('icons/from-disk.svg')
+    // 无 UI 产物的插件：声明来自注册表兜底
+    expect(iconOf('noui')).toBe('icons/noui.svg')
+  })
+
   it('toMountEntry：mount 返回 unmount 清理函数并传递上下文', () => {
     const el = document.createElement('div')
     const Comp = { render: () => h('div', 'x') }

@@ -1,8 +1,26 @@
 import type { Request } from 'express'
+import { resolve, sep } from 'node:path'
 
 /** 统一时间戳：本地时区 yyyy-MM-dd HH:mm:ss（与 SQLite datetime('now','localtime') 对齐）。 */
 export function now(): string {
   return new Date().toISOString().slice(0, 19).replace('T', ' ')
+}
+
+/** 防穿越第一道：仅允许相对扁平路径（不绝对、不越上级）。 */
+export function isSafePath(path: string): boolean {
+  if (!path || path.startsWith('/') || path.startsWith('..')) return false
+  const normalized = resolve(path)
+  return !normalized.startsWith('..')
+}
+
+/**
+ * 防穿越第二道（containment 断言）：resolve 后必须仍落在 root 内。
+ * 与 isSafePath 配合构成双重校验（规范：isSafePath + resolve().startsWith()）。
+ */
+export function isInsideRoot(root: string, target: string): boolean {
+  const absRoot = resolve(root)
+  const absTarget = resolve(target)
+  return absTarget === absRoot || absTarget.startsWith(absRoot + sep)
 }
 
 /** 分页参数归一：page 从 1 起，size 默认 10 上限 100。 */

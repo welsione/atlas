@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import type { Request, Response } from 'express'
 import { ok, error } from '../common/response.js'
 import { PluginFileRegistry } from '../plugins/plugin-file.registry.js'
+import { ExternalInterfaceRuleRepository } from '../monitor/external-interface-rule.repository.js'
 import { clientIp, createRateLimiter, now } from '../common/utils.js'
 import { textContentType } from './plugin-dispatch.utils.js'
 import { DB } from '../db/database.module.js'
@@ -14,12 +15,13 @@ const downloadLimiter = createRateLimiter(120, 60_000)
 
 /**
  * 插件文件公开下载端点（公开前缀 /api/files/）：
- * 防穷举 token + 304 条件下载 + IP 限流 + api_access_logs 审计（MODEL_FILE 类型）。
+ * 防穷举 token + 对外接口启停规则（PUBLIC_FILE 停用即 404 防探测）+ 304 条件下载 + IP 限流 + api_access_logs 审计。
  */
 @Controller('/api/files')
 export class PluginFileDownloadController {
   constructor(
     @Inject(PluginFileRegistry) private readonly registry: PluginFileRegistry,
+    @Inject(ExternalInterfaceRuleRepository) private readonly rules: ExternalInterfaceRuleRepository,
     @Inject(DB) private readonly db: Database.Database,
     @Inject(CONFIG) private readonly config: AtlasConfig,
   ) {}
@@ -27,7 +29,10 @@ export class PluginFileDownloadController {
   @Get(':token/meta')
   meta(@Req() req: Request, @Res() res: Response) {
     const row = this.registry.findByToken(String(req.params.token))
-    if (!row) return res.status(404).json(error(404, '文件不存在'))
+    // 与数据面同策略：停用的对外接口按"不存在"处理（404 防探测），不透出真实状态
+    if (!row || !this.rules.isAllowed(row.scope_key, 'PUBLIC_FILE', row.token)) {
+      return res.status(404).json(error(404, '文件不存在'))
+    }
     return res.json(
       ok({
         token: row.token,
@@ -45,7 +50,10 @@ export class PluginFileDownloadController {
   download(@Req() req: Request, @Res() res: Response) {
     const row = this.registry.findByToken(String(req.params.token))
     const ip = clientIp(req, this.config.trustProxy)
-    if (!row) return res.status(404).json(error(404, '文件不存在'))
+    // 停用的对外接口按"不存在"处理（404 防探测）；审计行 scope_key 为 0 时不落库归属
+    if (!row || !this.rules.isAllowed(row.scope_key, 'PUBLIC_FILE', row.token)) {
+      return res.status(404).json(error(404, '文件不存在'))
+    }
     if (!downloadLimiter.allow(ip)) {
       this.logAccess(row, 'download', 429, 0, ip, req.header('user-agent') ?? '')
       return res.status(429).json(error(429, '下载过于频繁'))

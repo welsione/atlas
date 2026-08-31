@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common'
 import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { PluginRegistry } from './plugin.registry.js'
+import { isSafePath } from '../common/utils.js'
 import { CONFIG, type AtlasConfig } from '../config.js'
 import type { PluginUiManifest } from '@atlas/types'
 
@@ -18,12 +19,14 @@ export class PluginUiService {
     @Inject(PluginRegistry) private readonly registry: PluginRegistry,
   ) {}
 
-  /** 全量 UI 清单（无 UI 的插件不出现）。 */
+  /** 全量 UI 清单（无 UI 的插件不出现）。icon 声明合并自主 manifest（磁盘扫描所得），UI manifest 无需重复声明。 */
   allManifests(): PluginUiManifest[] {
     const result: PluginUiManifest[] = []
     for (const loaded of this.registry.all()) {
       const manifest = this.manifestOf(loaded.plugin.type)
-      if (manifest) result.push(manifest)
+      if (!manifest) continue
+      if (!manifest.icon && loaded.icon) manifest.icon = loaded.icon
+      result.push(manifest)
     }
     return result
   }
@@ -80,9 +83,5 @@ export class PluginUiService {
   }
 }
 
-/** 防穿越：仅允许相对扁平路径。 */
-export function isSafePath(path: string): boolean {
-  if (!path || path.startsWith('/') || path.startsWith('..')) return false
-  const normalized = resolve(path)
-  return !normalized.startsWith('..')
-}
+/** 防穿越：仅允许相对扁平路径（实现下沉 common/utils，供数据集等模块复用）。 */
+export { isSafePath } from '../common/utils.js'

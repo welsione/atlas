@@ -4,6 +4,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { DB } from '../db/database.module.js'
 import type Database from 'better-sqlite3'
+import { now } from '../common/utils.js'
 import { NotFoundError, ValidationError } from '../common/response.js'
 import { CONFIG, type AtlasConfig } from '../config.js'
 
@@ -45,14 +46,14 @@ export class PluginFileRegistry {
     }
     const data = readFileSync(filePath)
     const hash = createHash('sha256').update(data).digest('hex')
-    const now = new Date().toISOString().slice(0, 19).replace('T', ' ')
+    const nowTs = now()
     const token = randomBytes(32).toString('hex')
     this.db
       .prepare(
         `INSERT INTO plugin_file_tokens (token, scope_key, plugin_type, rel_path, name, content_hash, total_size, file_count, created_at, updated_at)
          VALUES (?,?,?,?,?,?,?,1,?,?)`,
       )
-      .run(token, scopeKey, pluginType, relPath, name, hash, data.length, now, now)
+      .run(token, scopeKey, pluginType, relPath, name, hash, data.length, nowTs, nowTs)
     return { token, relPath }
   }
 
@@ -79,6 +80,6 @@ export class PluginFileRegistry {
   touch(token: string): void {
     this.db
       .prepare('UPDATE plugin_file_tokens SET updated_at = ? WHERE token = ?')
-      .run(new Date().toISOString().slice(0, 19).replace('T', ' '), token)
+      .run(now(), token)
   }
 }

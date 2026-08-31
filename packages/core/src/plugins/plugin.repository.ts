@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common'
 import { DB } from '../db/database.module.js'
 import type Database from 'better-sqlite3'
 import type { DataScope, PluginDef, PluginInstance } from '@atlas/types'
+import { now } from '../common/utils.js'
 
 interface PluginDefRow {
   id: number
@@ -163,7 +164,7 @@ export class PluginRepository {
   updateInstanceConfig(id: number, configJson: string): void {
     this.db
       .prepare('UPDATE plugin_instances SET config_json = ?, updated_at = ? WHERE id = ?')
-      .run(configJson, new Date().toISOString().slice(0, 19).replace('T', ' '), id)
+      .run(configJson, now(), id)
   }
 
   // ---------- plugin_store（通用存储） ----------

@@ -8,7 +8,7 @@ import { EnvelopeCrypto } from './envelope-crypto.js'
 import { PluginService } from '../plugins/plugin.service.js'
 import { ExternalInterfaceRuleRepository } from '../monitor/external-interface-rule.repository.js'
 import { NotFoundError, ValidationError } from '../common/response.js'
-import { createRateLimiter, now } from '../common/utils.js'
+import { createRateLimiter, isInsideRoot, now } from '../common/utils.js'
 import { CONFIG, type AtlasConfig } from '../config.js'
 import { PlatformEventEmitter } from '../spi/platform-event-emitter.js'
 
@@ -196,11 +196,18 @@ export class DatasetService {
     return resolve(this.config.dataDir, 'dataset-files', String(datasetId))
   }
 
-  /** 资产路径安全校验：仅允许相对单段/多段子路径，禁绝对路径与目录穿越。 */
-  private safeAssetPath(raw: string): string {
+  /** 资产路径安全校验（双重）：字符串过滤（禁绝对/`..`/`\0`）+ resolve 后 containment 断言。 */
+  private safeAssetPath(raw: string, datasetId?: number): string {
     const p = (raw ?? '').replace(/\\/g, '/').trim()
     if (!p || p.startsWith('/') || p.includes('..') || p.includes('\0') || p.length > 255) {
       throw new ValidationError('非法资产路径')
+    }
+    // 第二道防线：落盘目标必须仍落在数据集文件根内（规范：isSafePath + resolve().startsWith()）
+    if (datasetId !== undefined) {
+      const abs = resolve(this.datasetFilesRoot(datasetId), p)
+      if (!isInsideRoot(this.datasetFilesRoot(datasetId), abs)) {
+        throw new ValidationError('非法资产路径')
+      }
     }
     return p
   }
@@ -211,7 +218,7 @@ export class DatasetService {
     if (d.pluginType) throw new ValidationError('插件注册数据集由插件管理，不可上传资产')
     if (!buffer || buffer.length === 0) throw new ValidationError('文件内容为空')
     if (buffer.length > 64 * 1024 * 1024) throw new ValidationError('文件超过 64MB 上限')
-    const path = this.safeAssetPath(rawPath || basename('unnamed'))
+    const path = this.safeAssetPath(rawPath || basename('unnamed'), d.id)
     const dir = join(this.datasetFilesRoot(d.id), path.split('/').slice(0, -1).join('/'))
     mkdirSync(dir, { recursive: true })
     writeFileSync(join(this.datasetFilesRoot(d.id), path), buffer)
@@ -226,7 +233,7 @@ export class DatasetService {
   removeAsset(appId: number, datasetId: number, rawPath: string): Dataset {
     const d = this.requireDataset(appId, datasetId)
     if (d.pluginType) throw new ValidationError('插件注册数据集由插件管理，不可删除资产')
-    const path = this.safeAssetPath(rawPath)
+    const path = this.safeAssetPath(rawPath, d.id)
     const exists = d.assets.some((a) => a.path === path)
     if (!exists) throw new NotFoundError(`资产不存在: ${path}`)
     const abs = join(this.datasetFilesRoot(d.id), path)
@@ -496,7 +503,7 @@ export class DatasetService {
       this.repository.insertAccessLog(d.appId, consumerAppId, 'DATASET', d.id, d.token, 'asset', 429, 0, ip, ua)
       throw new ValidationError('下载过于频繁，请稍后再试')
     }
-    const path = this.safeAssetPath(rawPath)
+    const path = this.safeAssetPath(rawPath, d.id)
     const assetMeta = d.assets.find((a) => a.path === path)
     if (!assetMeta) {
       this.repository.insertAccessLog(d.appId, consumerAppId, 'DATASET', d.id, d.token, 'asset', 404, 0, ip, ua)

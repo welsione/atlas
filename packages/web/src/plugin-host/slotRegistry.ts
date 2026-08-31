@@ -80,17 +80,21 @@ export function pluginIconUrl(pluginType: string, icon: string): string | null {
   return `/_pluginui/${pluginType}/icons/${rel.replace(/^icons\//, '')}`
 }
 
-/** 拉取全部已注册插件的 UI manifest（启动时调用一次）。 */
+/** 拉取全部已注册插件的 UI manifest（启动时调用一次 + 登录后补一次）。 */
 export async function initPluginSlots() {
   try {
     const list = await get<PluginUiManifest[]>('/api/plugins/ui')
     pluginManifests.splice(0, pluginManifests.length, ...list)
+    // 图标声明优先取磁盘 manifest（/api/plugins/ui 直读插件目录），不依赖 DB 注册表副本
+    for (const m of list) if (m.icon) pluginIcons[m.pluginType] = m.icon
   } catch {
     // 未登录或后端未就绪：静默（登录后刷新页面重试）
   }
   try {
-    const defs = await get<Array<{ plugin: { pluginType: string; icon: string } }>>('/api/plugins')
-    for (const d of defs) pluginIcons[d.plugin.pluginType] = d.plugin.icon ?? ''
+    // 回退：无 UI 产物的插件图标声明仍来自插件注册表（兼容数组与分页两种返回形状）
+    const defs = await get<Array<{ plugin: { pluginType: string; icon: string } }> | { rows?: Array<{ plugin: { pluginType: string; icon: string } }> }>('/api/plugins')
+    const rows = Array.isArray(defs) ? defs : (defs.rows ?? [])
+    for (const d of rows) if (!(d.plugin.pluginType in pluginIcons)) pluginIcons[d.plugin.pluginType] = d.plugin.icon ?? ''
   } catch {
     // 同上：静默
   }

@@ -115,10 +115,10 @@ async function handleUnload(row: DefRow) {
     </div>
 
     <div class="install-hint">
-      <el-icon class="hint-icon"><FolderOpened /></el-icon>
+      <el-icon class="hint-icon" aria-hidden="true"><FolderOpened /></el-icon>
       <span>新增插件：在 <code class="mono">plugins/</code> 目录放入一个含 <code class="mono">manifest.json</code> 与 <code class="mono">src/index.ts</code> 的目录（参考 <code class="mono">template/</code>），约 10 秒后自动热加载。</span>
       <el-tooltip content="修改插件后按需手动全量重载（POST /api/plugins/reload）" placement="top">
-        <el-icon class="hint-icon"><InfoFilled /></el-icon>
+        <el-icon class="hint-icon" tabindex="0" role="img" aria-label="修改插件后按需手动全量重载（POST /api/plugins/reload）"><InfoFilled /></el-icon>
       </el-tooltip>
     </div>
   </div>

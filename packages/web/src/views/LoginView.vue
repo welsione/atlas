@@ -53,25 +53,28 @@ async function doLogin() {
     <div class="login-card">
       <div class="login-brand">
         <img src="/icons/atlas.svg" class="login-logo" alt="Atlas" />
-        <div class="login-title">Atlas 管理台</div>
+        <h1 class="login-title">Atlas 管理台</h1>
         <div class="login-sub">登录以管理应用、数据集与插件</div>
       </div>
 
-      <div v-if="checking" class="login-checking">
-        <el-icon class="is-loading"><Loading /></el-icon>
+      <div v-if="checking" class="login-checking" role="status" aria-label="正在检查登录状态…">
+        <el-icon class="is-loading" aria-hidden="true"><Loading /></el-icon>
       </div>
 
       <template v-else-if="authEnabled">
         <el-input
           v-model="password"
           type="password"
+          name="password"
+          autocomplete="current-password"
+          aria-label="管理密码"
           placeholder="管理密码"
           show-password
           @keyup.enter="doLogin"
         >
-          <template #prefix><el-icon><Lock /></el-icon></template>
+          <template #prefix><el-icon aria-hidden="true"><Lock /></el-icon></template>
         </el-input>
-        <el-alert v-if="errorMsg" :title="errorMsg" type="error" :closable="false" class="login-error" />
+        <el-alert v-if="errorMsg" :title="errorMsg" type="error" role="alert" :closable="false" class="login-error" />
         <el-button type="primary" class="login-btn" :loading="loading" @click="doLogin">登录</el-button>
       </template>
     </div>

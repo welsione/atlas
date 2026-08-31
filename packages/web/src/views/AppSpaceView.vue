@@ -9,6 +9,8 @@ import type { App, PluginOverviewRow } from '../types'
 import PluginMount from '../plugin-host/PluginMount.vue'
 import { registerCoreUi, useSlotsOf, toMountEntry, iconOf, pluginIconUrl } from '../plugin-host/slotRegistry'
 import { copyText } from '../clipboard'
+import { fmtTime } from '../format'
+import { parseHash, toHash } from '../hashRoute'
 
 // 框架能力面板（数据集）：懒加载 chunk + slot 静态注册，与插件 UI 同一渲染管线
 registerCoreUi({
@@ -35,15 +37,23 @@ const secretDialog = ref(false)
 const secretText = ref('')
 const rotating = ref(false)
 
-// 看板为默认落地 Tab；用户切换后按习惯持久化
-const activeTab = ref(localStorage.getItem('atlas-space-tab') || 'board')
+const appSpaceSlots = useSlotsOf('app-space')
+
+// 初始 Tab：hash 直达（#/apps/{id}/{tab}）优先，其次用户上次习惯，最后看板
+const initialTab = (() => {
+  const r = parseHash(typeof window !== 'undefined' ? window.location.hash : '')
+  return r.appId === props.app.id ? (r.spaceTab ?? '') : ''
+})()
+const isValidTab = (t: string) =>
+  t === 'board' || t === 'instances' || appSpaceSlots.value.some((s) => s.key === t)
+const activeTab = ref(
+  initialTab && isValidTab(initialTab) ? initialTab : 'board',
+)
 const overview = ref<PluginOverviewRow[]>([])
 const loading = ref(false)
 const page = ref(1)
 const size = ref(10)
 const total = ref(0)
-
-const appSpaceSlots = useSlotsOf('app-space')
 
 function statusTag(status: string) {
   return status === 'ACTIVE' ? 'success' : status === 'PAUSED' ? 'warning' : 'danger'
@@ -136,7 +146,8 @@ onMounted(() => {
 
 function switchTab(tab: string) {
   activeTab.value = tab
-  localStorage.setItem('atlas-space-tab', tab)
+  // Tab 状态以 hash 为单一事实来源（replaceState 不产生历史记录，回退直接离开应用空间）
+  history.replaceState(null, '', toHash({ menu: 'apps', appId: props.app.id, spaceTab: tab }))
 }
 
 async function handleEnable(row: PluginOverviewRow, scope?: string) {
@@ -185,8 +196,8 @@ function scopeLabel(row: PluginOverviewRow): string {
       <!-- 看板：icon-only，默认落地 Tab -->
       <el-tab-pane :name="'board'" :label="'看板'">
         <template #label>
-          <span class="tab-label board-tab" title="看板">
-            <el-icon><Grid /></el-icon>
+          <span class="tab-label board-tab" title="看板" aria-label="看板">
+            <el-icon aria-hidden="true"><Grid /></el-icon>
           </span>
         </template>
 
@@ -203,10 +214,10 @@ function scopeLabel(row: PluginOverviewRow): string {
                 <span class="fact">
                   App ID <code class="mono fact-val">{{ localApp.appId }}</code>
                   <el-tooltip content="复制 App ID" placement="top">
-                    <el-button size="small" text :icon="CopyDocument" @click="copyAppId" />
+                    <el-button size="small" text :icon="CopyDocument" aria-label="复制 App ID" @click="copyAppId" />
                   </el-tooltip>
                 </span>
-                <span class="fact">创建于 <b class="fact-val">{{ localApp.createdAt }}</b></span>
+                <span class="fact">创建于 <b class="fact-val">{{ fmtTime(localApp.createdAt) }}</b></span>
               </div>
             </div>
             <div class="hero-acts">
@@ -229,17 +240,17 @@ function scopeLabel(row: PluginOverviewRow): string {
         <!-- 指标卡 -->
         <div class="board-grid">
           <div class="metric">
-            <div class="metric-head"><span class="metric-chip"><el-icon><Collection /></el-icon></span>启用插件</div>
+            <div class="metric-head"><span class="metric-chip"><el-icon aria-hidden="true"><Collection /></el-icon></span>启用插件</div>
             <div class="metric-num">{{ enabledCount }}</div>
             <div class="metric-foot">{{ sharedCount }} 全局共享 · {{ localCount }} 应用独立</div>
           </div>
           <div class="metric">
-            <div class="metric-head"><span class="metric-chip"><el-icon><DataLine /></el-icon></span>数据范围</div>
+            <div class="metric-head"><span class="metric-chip"><el-icon aria-hidden="true"><DataLine /></el-icon></span>数据范围</div>
             <div class="metric-num">{{ localCount }}</div>
             <div class="metric-foot">应用独立 · 共享 {{ sharedCount }}</div>
           </div>
           <div class="metric">
-            <div class="metric-head"><span class="metric-chip"><el-icon><CircleCheck /></el-icon></span>运行状态</div>
+            <div class="metric-head"><span class="metric-chip"><el-icon aria-hidden="true"><CircleCheck /></el-icon></span>运行状态</div>
             <div class="metric-num">{{ loadedCount }}</div>
             <div class="metric-foot">已加载 · 共 {{ overview.length }} 项</div>
           </div>
@@ -249,7 +260,7 @@ function scopeLabel(row: PluginOverviewRow): string {
         <div class="ttl-row"><h2>危险操作</h2><span class="hint">操作后不可恢复</span></div>
         <div class="danger-card">
           <div class="danger-head">
-            <el-icon class="danger-ico"><Warning /></el-icon>
+            <el-icon class="danger-ico" aria-hidden="true"><Warning /></el-icon>
             <span class="danger-title">危险操作</span>
             <span class="danger-sub">吊销 / 删除均不可恢复</span>
           </div>
@@ -349,7 +360,7 @@ function scopeLabel(row: PluginOverviewRow): string {
       <el-tab-pane v-for="slot in appSpaceSlots.filter((s) => s.key.startsWith('core:'))" :key="slot.key" :label="slot.label" :name="slot.key">
         <template #label>
           <span class="tab-label">
-            <el-icon v-if="typeof slot.icon !== 'string' && slot.icon"><component :is="slot.icon" /></el-icon>
+            <el-icon v-if="typeof slot.icon !== 'string' && slot.icon" aria-hidden="true"><component :is="slot.icon" /></el-icon>
             <span>{{ slot.label }}</span>
           </span>
         </template>
@@ -369,9 +380,9 @@ function scopeLabel(row: PluginOverviewRow): string {
     </el-tabs>
 
     <!-- 凭证展示（仅一次） -->
-    <el-dialog v-model="secretDialog" title="应用凭证（仅展示一次，请立即保存）" width="560">
+    <el-dialog v-model="secretDialog" title="应用凭证（仅展示一次，请立即保存）" width="560" @closed="secretText = ''">
       <el-alert type="warning" :closable="false" title="此凭证仅在创建/轮换时展示一次，关闭后将无法再次查看。" style="margin-bottom: 12px" />
-      <el-input :model-value="secretText" readonly>
+      <el-input :model-value="secretText" readonly aria-label="应用凭证">
         <template #append>
           <el-button @click="copySecret">复制</el-button>
         </template>
@@ -426,13 +437,13 @@ function scopeLabel(row: PluginOverviewRow): string {
 .hero-av {
   width: 58px;
   height: 58px;
-  border-radius: 15px;
+  border-radius: var(--atlas-r-l);
   background: var(--atlas-accent-soft);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  font-size: 25px;
+  font-size: 22px;
   font-weight: 800;
   color: var(--atlas-accent);
 }
