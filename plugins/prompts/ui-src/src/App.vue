@@ -8,6 +8,7 @@ const props = defineProps({ appId: { type: Number, required: true } })
 
 const rows = ref([])
 const loading = ref(false)
+const loadError = ref('')
 const dialogVisible = ref(false)
 const editing = ref(null)
 const creating = ref(false)
@@ -19,6 +20,7 @@ const renderLoading = ref(false)
 const versionsVisible = ref(false)
 const versionsTarget = ref(null)
 const versions = ref([])
+const versionsLoading = ref(false)
 const keyword = ref('')
 const categoryFilter = ref('')
 
@@ -38,12 +40,20 @@ const filtered = computed(() => {
 /** 编辑表单中的变量行（name + required）。 */
 const varRows = ref([])
 
+/* 请求序号守卫：切应用复用面板时旧响应晚到不得覆盖新数据 */
+let fetchSeq = 0
 async function fetchAll() {
+  const seq = ++fetchSeq
   loading.value = true
   try {
-    rows.value = await get(base() + '/list')
+    const rows = await get(base() + '/list')
+    if (seq !== fetchSeq) return
+    rows.value = rows
+    loadError.value = ''
+  } catch (e) {
+    if (seq === fetchSeq) loadError.value = e?.message || '加载失败，请刷新重试'
   } finally {
-    loading.value = false
+    if (seq === fetchSeq) loading.value = false
   }
 }
 
@@ -134,12 +144,6 @@ async function doRender() {
   }
 }
 
-async function openVersions(row) {
-  versionsTarget.value = row
-  versions.value = await get(`${base()}/versions/${row.id}`)
-  versionsVisible.value = true
-}
-
 async function handleRestore(v) {
   try {
     await ElMessageBox.confirm(`确认将「${versionsTarget.value.name}」恢复到 v${v.version}？将生成新版本 ${versionsTarget.value.version + 1}。`, '恢复版本', { type: 'warning' })
@@ -149,6 +153,19 @@ async function handleRestore(v) {
     ElMessage.success('已恢复')
   } catch {
     // 取消
+  }
+}
+
+async function openVersions(row) {
+  versionsTarget.value = row
+  versionsVisible.value = true
+  versionsLoading.value = true
+  try {
+    versions.value = await get(`${base()}/versions/${row.id}`)
+  } catch {
+    versions.value = []
+  } finally {
+    versionsLoading.value = false
   }
 }
 
@@ -174,7 +191,7 @@ function fmtTime(ts) {
       <el-button :icon="Refresh" size="small" circle aria-label="刷新列表" :loading="loading" @click="fetchAll" />
     </div>
 
-    <el-table v-loading="loading" :data="filtered" empty-text="暂无提示词">
+    <el-table v-loading="loading" :data="filtered" :empty-text="loadError || '暂无提示词'">
       <el-table-column label="名称" min-width="140">
         <template #default="{ row }">
           <div class="name-cell">
@@ -202,9 +219,17 @@ function fmtTime(ts) {
           <el-tag size="small" type="warning" effect="plain">v{{ row.version }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="启用" width="80">
+      <el-table-column label="启用" width="110">
         <template #default="{ row }">
-          <el-switch :model-value="row.enabled" :aria-label="`${row.enabled ? '停用' : '启用'} ${row.name}`" @change="handleToggle(row)" />
+          <div class="switch-cell">
+            <el-switch
+              :model-value="row.enabled"
+              active-color="var(--atlas-accent)"
+              :aria-label="`${row.enabled ? '停用' : '启用'} ${row.name}`"
+              @change="handleToggle(row)"
+            />
+            <span class="switch-text" :class="row.enabled ? 'on' : 'off'">{{ row.enabled ? '启用' : '停用' }}</span>
+          </div>
         </template>
       </el-table-column>
       <el-table-column label="操作" width="250" fixed="right">
@@ -217,11 +242,11 @@ function fmtTime(ts) {
       </el-table-column>
     </el-table>
 
-    <el-dialog v-model="dialogVisible" :title="editing ? '编辑提示词' : '新增提示词'" width="640">
-      <el-form label-width="80px">
+    <el-drawer v-model="dialogVisible" :title="editing ? '编辑提示词' : '新增提示词'" size="560px" role="dialog" :aria-label="editing ? '编辑提示词' : '新增提示词'">
+      <el-form label-position="top">
         <el-form-item label="名称" required><el-input v-model="form.name" name="prompt-name" autocomplete="off" placeholder="例如：文章润色" /></el-form-item>
         <el-form-item label="分类">
-          <el-select v-model="form.category" allow-create filterable default-first-option style="width: 240px">
+          <el-select v-model="form.category" allow-create filterable default-first-option>
             <el-option v-for="c in categories.filter((c) => c !== '全部')" :key="c" :label="c" :value="c" />
           </el-select>
         </el-form-item>
@@ -247,7 +272,7 @@ function fmtTime(ts) {
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="creating" @click="handleSave">保存</el-button>
       </template>
-    </el-dialog>
+    </el-drawer>
 
     <el-dialog v-model="renderVisible" :title="`渲染测试：${renderTarget?.name ?? ''}`" width="600">
       <div class="render-vars">
@@ -272,7 +297,7 @@ function fmtTime(ts) {
     </el-dialog>
 
     <el-dialog v-model="versionsVisible" :title="`版本历史：${versionsTarget?.name ?? ''}`" width="640">
-      <el-table :data="versions" size="small" empty-text="暂无历史版本">
+      <el-table v-loading="versionsLoading" :data="versions" size="small" empty-text="暂无历史版本">
         <el-table-column label="版本" width="90">
           <template #default="{ row }"><el-tag size="small" type="warning" effect="plain">v{{ row.version }}</el-tag></template>
         </el-table-column>
@@ -333,6 +358,16 @@ function fmtTime(ts) {
   flex-wrap: wrap;
   gap: 4px;
 }
+.switch-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.switch-text {
+  font-size: 12px;
+}
+.switch-text.on { color: var(--atlas-success); }
+.switch-text.off { color: var(--atlas-muted); }
 .var-editor {
   width: 100%;
   display: flex;
@@ -369,6 +404,7 @@ function fmtTime(ts) {
 .star { margin-left: 2px; }
 .render-result {
   background: var(--atlas-bg);
+  border: 1px solid var(--atlas-stroke);
   border-radius: var(--atlas-r-s);
   padding: 12px;
 }
@@ -388,4 +424,32 @@ function fmtTime(ts) {
   margin-top: 6px;
 }
 .muted { color: var(--atlas-muted); }
+
+@media (max-width: 640px) {
+  .search {
+    width: 100%;
+    order: -1;
+  }
+  .spacer {
+    display: none;
+  }
+  .filter-bar {
+    gap: 8px;
+  }
+  /* 变量编辑器行：输入框占满、勾选与删除收次行 */
+  .var-row {
+    flex-wrap: wrap;
+  }
+  .var-name {
+    flex: 1 1 100%;
+  }
+  .render-var-row {
+    flex-wrap: wrap;
+  }
+  .render-var-name {
+    width: auto;
+    text-align: left;
+    flex-basis: 100%;
+  }
+}
 </style>

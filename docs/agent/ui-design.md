@@ -209,7 +209,11 @@ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI',
 
 ### 4.5 抽屉 / 对话框
 
-- 表单类操作用 `<el-drawer>`（创建应用、数据集管理）；确认类操作用 `<el-message-box>`（删除/轮换/吊销）。
+- **表单类操作一律 `<el-drawer>`（`direction="rtl"`），全系统统一**：创建/编辑实体（新增应用、新增/编辑供应商、新增/编辑提示词、数据集管理、启用插件、实例管理）都用右侧抽屉，**不得用 `el-dialog`**。抽屉宽度 `size="520~600px"`（含多字段表单者取上限），必须带 `role="dialog"` + `aria-label`；移动端由全局规则自动全屏覆盖（§7.3），无需单独处理。
+- **所有抽屉必须保留原生 header（含右上角 X 关闭按钮）**：禁止 `with-header="false"` 移除关闭入口；自定义头部内容放 body 首块（参考 providers 详情抽屉）。关闭途径恒为：X 按钮、遮罩点击、Esc。
+- **轻量确认/展示用 `el-dialog`**：渲染测试、版本历史、对外设置开关等**单屏只读或一两控件**的辅助视图可保留居中 `el-dialog`（width 520–640）。判据：需要填写的字段 > 2 个，或内容纵向流式增长（表格/长表单）→ 抽屉；否则 dialog。
+- 破坏性确认用 `<el-message-box>`（删除/轮换/吊销），不得用 drawer/dialog 承载确认语义。
+- **表单布局统一 `label-position="top"`（方案 A，全场景一致）**：标签在控件上方、控件通栏，PC 抽屉与手机全屏抽屉同一形态、零断点分支。全站所有 `el-form` 不得使用 `label-width` 左标签（真实案例：providers 110px 左标签在抽屉内压缩控件宽度）。表单内下拉/选择器不写死 `style="width: NNNpx"`，跟随通栏；相关短字段需要并排时用自适应双列（`display:grid; grid-template-columns: repeat(2, minmax(0,1fr))`，§7.3），标签仍在上方。参考：AppsView 创建应用抽屉（全站基准风格）。
 - 凭证展示对话框：`title` 带「仅展示一次」警告 `el-alert`，输入框 `readonly` + 复制按钮。
 
 ### 4.6 空状态
@@ -241,6 +245,28 @@ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI',
 - 凡页面同时存在常规操作与破坏性操作（吊销/删除/轮换），**破坏性操作必须与常规操作物理分层/分卡**，不得混排在同一工具条。
 - 危险卡统一形态：红头（`--atlas-danger-soft` 底 + `--atlas-danger` 标题文字与警示 icon）+ 主体（说明 `--atlas-muted` + 右侧实心 `--atlas-danger` 与描边 `--atlas-danger` 双按钮）。
 - 「吊销 / 删除」均属破坏性，必须 `ElMessageBox.confirm`（`type:'error'`）二次确认。
+
+### 4.10 双层导航（页面级 Tab + 视图级分段控件）
+
+> 页面内容存在两级切换时（如应用详情的插件 Tab 内再分「接口管理 / 流量分析」），两级**不得使用同一视觉语言**，否则用户无法判断所处层级。
+
+**层级语言约定（红线）**：
+
+| 层级 | 形态 | 选中态 | 使用位置 |
+|------|------|--------|----------|
+| 页面级 | 下划线 Tab（`el-tabs` 默认：图标 + 文字 + 2px 品牌蓝下划线 + 底边线） | 品牌蓝下划线 + 品牌蓝文字 | App 详情页插件 Tab、侧边菜单对应的页面切换 |
+| 视图级 | 胶囊分段控件（`--atlas-layer` 底容器 + `--atlas-stroke` 描边 + `10px` 圆角，`3px` 内边距） | 白底浮层（`--atlas-surface` + `--atlas-shadow-card`）+ 品牌蓝文字，**无下划线** | 同一页面内的视图切换（如接口监控内的接口管理/流量分析） |
+
+- **一句话记忆：下划线 = 页面级，胶囊 = 视图级。**
+- 分段控件规格：高 `28px`、字号 `13px`（比页面级 Tab 的 14px 降一档）、去图标（页面级 Tab 已有图标语境）、激活项 `--atlas-accent` 文字 600 字重、非激活 `--atlas-muted`、hover `--atlas-text`。
+- **实现要点（缺一不可，否则容器被拉满整行）**：结构上复用 `el-tabs`（保留键盘方向键/滚动手势），scoped 样式需同时做四件事——参考 `MonitorPanel.vue` 的 `.monitor-tabs`：
+  1. 隐藏原生下划线与底边线：`.el-tabs__active-bar`、`.el-tabs__nav-wrap::after` 置 `display:none`；
+  2. `.el-tabs__header` 改 `display:flex`（脱离块级拉伸）；
+  3. `.el-tabs__nav-wrap` 必须加 **`flex: none`**（EP 原生 `flex:auto` 会让容器撑满整行，`width: fit-content` 单独加挡不住 flex-grow），再配 `width: fit-content` 收缩贴合内容；
+  4. 相邻 `.el-tabs__item` 间补 `margin-left: 2px` 间距（对应容器 `gap`）。
+- **可达性**：Tab label 保留 `role="tab"` + `:aria-selected`；选中态不只靠颜色（白底浮层 + 字重 + 文字色三通道）。
+- 禁止在页面级 Tab 之下再套第三层下划线 Tab；需要更深层切换时继续降级（胶囊 → 文字链/下拉）。
+- 参考视觉稿：`.dev/demos/monitor-nav-demo.html`（方案 A）。
 
 ---
 
@@ -301,6 +327,67 @@ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI',
 - **Logo 切换**：展开 `atlas-banner.svg`、收起 `atlas.svg`。
 - **持久化**：收起态存 `localStorage`（如 `atlas-sidebar-collapsed`），刷新保持。
 - 退出登录始终 `position:sticky` 固定可视底部。
+
+### 7.3 移动端适配（≤768px）
+
+> 桌面优先设计，移动端为降级目标。参考实现：`App.vue`（全局骨架）、`MonitorPanel.vue`（面板内表格）、`AppSpaceView.vue`（看板堆叠）。
+
+**全局骨架（App.vue 已实现，勿重复造）**：
+
+- **断点**：`≤768px` 为移动端（`window.matchMedia('(max-width: 768px')` 响应式判定）。
+- **侧栏 → 覆盖式抽屉**：侧栏 `position:fixed + translateX(-100%)` 隐藏，汉堡按钮（面包屑左侧 34×34）开合，遮罩（`rgba(20,28,60,.4)`，z-index 1990/2000）点击关闭；**点菜单项必须自动关闭抽屉**（`switchMenuMobile`）。
+- **折叠语义在移动端失效**：抽屉没有「图标模式」——Logo 一律横幅版（与 localStorage 折叠态解耦），点 Logo 仅关闭抽屉；折叠箭头按钮不渲染。菜单图标固定 24px 图标+文字形态。
+- **内容区 padding** 36px → 16px。
+- **EP 弹层全局规则**（style.css 兜底，勿在各处手写）：`.el-dialog/.el-message-box` → `calc(100vw - 32px)` 限宽居中；`.el-drawer` → **100vw 完全覆盖视口**（移动端抽屉不留边缘缝隙，靠 X/遮罩关闭）。
+
+**页面/面板自行降级（写自己的视图时必须做）**：
+
+- **多列网格 → 单列**：`grid-template-columns: repeat(n, 1fr)` 或 `Npx 1fr Mpx` 类布局，≤768px 必须 `1fr`（概览卡、双列表格区、统计行）。
+- **表格是最常见的溢出源**：`el-table` 固定列宽合计（每列 70–120px × 列数）很容易超过 375px 容器。两种解法：① 行式列表替代表格（接口行三行布局，见 MonitorPanel）；② 表格留在卡内横滚——**外层卡片必须 `min-width:0; overflow:hidden`**，否则子项最小宽度会撑破 grid 轨道（真实案例：machine-monitor 表格 460px 撑破单列 grid 到 494px）。
+- **`1fr` 轨道含宽内容必须 `minmax(0, 1fr)`（桌面同样适用）**：`1fr` 默认 `min-width:auto`，轨道最小宽度跟随内容而非容器——卡内表格/代码块/长 URL 会把轨道撑破容器。写法：`repeat(2, minmax(0, 1fr))`；「固定侧列 + 自适应主列」的概览布局优先 `repeat(auto-fit, minmax(Npx, 1fr))` 自适应列数，不要写死 `Npx 1fr Mpx`（真实案例：OpsView 260px/300px 固定列在中窄屏把中间列挤成一字一行；machine-monitor 双列表格各 460px 撑出容器裁掉右卡）。
+- **工具栏换行**：搜索框 `order:-1; width:100%` 占满首行，spacer 隐藏，按钮组换行。
+- **Tab 栏横滚**：页面级 Tab 允许横向滑动（隐藏滚动条），隐藏 EP 滚动箭头；分段控件（§4.10）同理。
+- **信息行拆行**：横向多元素的信息行（Tag+名称+类型+状态+操作）窄屏改为 `flex-wrap: wrap` + `order` 确定性分行，摘要文字允许 `white-space:normal` 自然换行，不得靠 `flex-shrink` 硬压（会叠字）。
+- **深链就绪校准**：`core:`/`plugin:` 前缀的 Tab 深链在 slot 清单异步加载完成前会误判非法——必须在 slot 就绪后按 hash 补一次校准（AppSpaceView 的 `watch` 模式）；系统插件深链 key 是前缀关系（`plugin:{type}` vs `plugin:{type}:{title}`），匹配用 `startsWith` 而非全等。
+- **媒体查询块放样式表末尾**：同优先级规则后者覆盖前者，移动端覆盖块必须在原始规则**之后**（真实案例：插在中部被同文件后面的 `.ep-main` 覆盖失效）。
+
+**验证要求**：涉及布局的改动，需在 `≤375px` 视口下自测以下断言（浏览器 DevTools 或自动化）；涉及交互/可访问性的改动，走对应条目的自测项。全部通过才算完成：
+
+#### 布局（≤375px 视口）
+
+1. `document.documentElement.scrollWidth <= window.innerWidth`（无横向溢出）；
+2. 双列/三列容器 `getComputedStyle().gridTemplateColumns` 只有一个轨道值；
+3. 深链硬刷新后落在目标 Tab/面板，而非默认页；
+4. 抽屉/对话框完整可见：dialog 宽度 ≤ 视口−32px；**移动端抽屉 100vw 完全覆盖、无边缘缝隙**；
+5. 汉堡开抽屉 → 点菜单项 → 抽屉自动关闭且路由切换；遮罩点击关闭；
+6. 信息行（Tag+名称+状态+操作混排）无文字叠压：逐行读 `getBoundingClientRect` 检查元素间无重叠；
+7. 卡内表格不撑破容器：卡片 `getBoundingClientRect().width` 与其父容器一致（此前 el-table 460px 撑破 grid 的回归项）；
+8. 面板内分段控件（§4.10）胶囊容器收缩贴合内容（`flex:none` 生效），未被拉满整行；
+9. **桌面三档回归**：`1900 / 1280 / 1024px` 下概览/双列区域均无溢出、无单字竖排标题（`1fr` 轨道未被内容撑破——OpsView/机器监控回归项）；
+10. 「固定侧列 + 1fr」概览布局在窗口变窄时列数自动减少（auto-fit 生效），而非中间列被挤压。
+
+#### 交互与生命周期（桌面 + 移动各测一遍）
+
+1. 定时器/事件监听卸载即清理（`onBeforeUnmount`）；轮询类开关关闭后不再发请求；
+2. 列表/详情同步：列表刷新后已打开的详情/抽屉引用同步或关闭，不残留已删数据；
+3. 上传类组件（el-upload）不使用内部 file-list 渲染（`show-file-list=false` + 自渲染已选列表），一次选择不产生重复/空名条目；
+4. 删除/吊销/轮换/恢复版本等破坏性操作均有 `ElMessageBox.confirm` 二次确认，取消路径无副作用。
+5. 创建/编辑实体入口打开的是右侧抽屉（el-drawer，非 el-dialog），带 `role="dialog"` + aria-label，**右上角有 X 关闭按钮**（未设 with-header=false），表单完整可见、footer 保存/取消可用（§4.5）；
+5a. 抽屉/对话框内表单为 `label-position="top"` 顶部标签，无 `label-width` 左标签残留；表单内下拉无固定 px 宽度（§4.5）；
+6. 抽屉内表单在 375px 视口不溢出（全局限宽生效），label 与控件排版正常。
+
+#### 可访问性
+
+1. 纯图标按钮均有 `el-tooltip`（或 aria-label）；开关类控件有 aria-label 或伴随状态文字（双通道）；
+2. 图表/进度环等纯视觉元素带 `role="img"` + aria-label 文本替代，最新值有文字行；
+3. 空表 `empty-text` 为具体语义（「暂无采样记录」而非「暂无」）；
+4. 加载态：列表 v-loading、对话框异步取数有 loading、失败有空态/错误条。
+
+#### 品牌与 token
+
+1. 图标库统一（主应用导航 Lucide 线性系，stroke-width 全局一致）；菜单图标颜色 `currentColor` 随文字态，无单独透明度折扣；
+2. 样式无硬编码颜色/字号/圆角（§2 token 档位）；业务默认值色（如供应商标识色）除外；
+3. 抽屉/对话框有 `role="dialog"` + aria-label（`with-header=false` 的必须补）。
 
 ---
 
@@ -371,3 +458,13 @@ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI',
 | 整页大标题 + 副标题堆叠（已有面包屑） | 用面包屑承载层级（见 §7.1） |
 | 主题插件未提供 `default:true` 兜底 | 必须有一默认主题兜底（见 §9） |
 | 纯黑阴影 `rgba(0,0,0,…)` | 中性灰阴影 `rgba(20,28,60,…)`（主按钮才用品牌蓝阴影） |
+| 双层导航用同一形态（页面内又套下划线 Tab） | 下划线=页面级、胶囊分段控件=视图级（见 §4.10） |
+| 创建/编辑实体的表单用居中 el-dialog | 表单类操作一律右侧 el-drawer（§4.5），dialog 仅留给轻量确认/展示 |
+| 抽屉 `with-header="false"` 移除 X 关闭按钮 | 所有抽屉保留原生 header 与 X（§4.5）；自定义标题放 body 首块 |
+| 表单用 `label-width` 左标签（抽屉内挤压控件） | 全站 `label-position="top"` 顶部标签，控件通栏（§4.5） |
+| 表单内下拉写死 `style="width: NNNpx"` | 控件通栏跟随容器；并排需求用自适应双列 grid |
+| ≤768px 出现横向溢出（`scrollWidth > innerWidth`） | 多列网格降单列；表格卡内 `min-width:0 + overflow` 收敛（见 §7.3） |
+| 弹层固定 px 宽度在手机上溢出 | 全局限宽已兜底（style.css），新增弹层不得再写死 `size="560px"` 类宽度不检查 |
+| 移动端媒体查询块插在样式表中部 | 覆盖块放样式表**末尾**，否则被后面同优先级规则覆盖（见 §7.3） |
+| 信息行窄屏靠 `flex-shrink` 硬压（文字叠压） | `flex-wrap + order` 确定性分行，摘要允许自然换行（见 §7.3） |
+| Tab 深链用 key 全等匹配 `plugin:{type}` | slot key 带标题后缀，用 `startsWith` 前缀匹配 + slot 就绪后校准（见 §7.3） |

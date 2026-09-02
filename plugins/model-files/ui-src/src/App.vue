@@ -8,6 +8,7 @@ const props = defineProps({ appId: { type: Number, required: true } })
 
 const rows = ref([])
 const loading = ref(false)
+const loadError = ref('')
 const category = ref('default')
 const description = ref('')
 const selectedFiles = ref([])
@@ -29,19 +30,38 @@ const filtered = computed(() => {
   })
 })
 
+/* 请求序号守卫：切应用复用面板时旧响应晚到不得覆盖新数据 */
+let fetchSeq = 0
 async function fetchAll() {
+  const seq = ++fetchSeq
   loading.value = true
   try {
-    rows.value = await get(base() + '/list')
+    const rows = await get(base() + '/list')
+    if (seq !== fetchSeq) return
+    rows.value = rows
+    loadError.value = ''
+  } catch (e) {
+    if (seq === fetchSeq) loadError.value = e?.message || '加载失败，请刷新重试'
   } finally {
-    loading.value = false
+    if (seq === fetchSeq) loading.value = false
   }
 }
 
 onMounted(fetchAll)
 
-function onFilesChange(fileList) {
-  selectedFiles.value = fileList
+function onFilesChange(file, uploadFiles) {
+  // 只认 status==='ready' 的文件选择事件；uploadFiles 为 el-upload 本次会话全量，用它整体同步
+  // （过滤掉拖拽经过触发的 start/success 等中间态与空文件）
+  selectedFiles.value = (uploadFiles ?? []).filter((f) => f.status === 'ready' && f.raw)
+}
+
+function removePicked(index) {
+  selectedFiles.value = selectedFiles.value.filter((_, i) => i !== index)
+}
+
+function fmtSize(bytes) {
+  if (bytes == null) return ''
+  return new Intl.NumberFormat('zh-CN', { style: 'unit', unit: 'byte', notation: 'compact', maximumFractionDigits: 1 }).format(bytes)
 }
 
 function enterUpdate(row) {
@@ -146,10 +166,22 @@ function fmtTime(ts) {
         <span class="update-name">正在更新「{{ updateTarget.name }}」（v{{ updateTarget.version }}），上传文件将替换全部内容</span>
         <el-button size="small" text type="info" @click="exitUpdate">取消更新</el-button>
       </div>
-      <el-upload drag multiple :auto-upload="false" :on-change="onFilesChange" :file-list="selectedFiles" class="dropzone">
+      <!-- show-file-list 关闭：el-upload 内部列表对空文件/拖拽经过会追加空名条目（一次选择显示多条），
+           已选文件改由下方 selectedFiles 自渲染（唯一事实来源 = on-change ready 回调同步） -->
+      <el-upload drag multiple :auto-upload="false" :show-file-list="false" :on-change="onFilesChange" class="dropzone">
         <el-icon class="el-icon--upload"><Upload /></el-icon>
         <div class="el-upload__text">拖拽文件到此处，或<em>点击选择</em>（多选 = 目录形式）</div>
       </el-upload>
+      <ul v-if="selectedFiles.length" class="picked-list" aria-label="已选择的上传文件">
+        <li v-for="(f, i) in selectedFiles" :key="`${f.name}-${i}`" class="picked-item">
+          <el-icon class="picked-ico"><Files /></el-icon>
+          <span class="picked-name" :title="f.name">{{ f.name || '(未命名文件)' }}</span>
+          <span class="picked-size muted">{{ fmtSize(f.size) }}</span>
+          <el-tooltip :content="`移除 ${f.name || '未命名文件'}`" placement="top">
+            <el-button size="small" text type="danger" :icon="Delete" :aria-label="`移除 ${f.name || '未命名文件'}`" @click="removePicked(i)" />
+          </el-tooltip>
+        </li>
+      </ul>
       <div class="upload-row">
         <el-input v-model="category" name="file-category" autocomplete="off" placeholder="分类（default）" style="width: 160px" />
         <el-input v-model="description" name="file-desc" autocomplete="off" placeholder="描述（可选）" style="width: 260px" />
@@ -166,7 +198,7 @@ function fmtTime(ts) {
       <el-button :icon="Refresh" size="small" circle aria-label="刷新列表" :loading="loading" @click="fetchAll" />
     </div>
 
-    <el-table v-loading="loading" :data="filtered" empty-text="暂无模型文件">
+    <el-table v-loading="loading" :data="filtered" :empty-text="loadError || '暂无模型文件'">
       <el-table-column label="名称" min-width="170">
         <template #default="{ row }">
           <div class="name-cell">
@@ -206,7 +238,9 @@ function fmtTime(ts) {
         <template #default="{ row }">
           <div v-if="row.token" class="token-cell">
             <code class="mono">{{ row.token.slice(0, 12) }}…</code>
-            <el-button size="small" text type="primary" :icon="CopyDocument" @click="handleCopyLink(row)">复制</el-button>
+            <el-tooltip content="复制公开下载链接" placement="top">
+              <el-button size="small" text type="primary" :icon="CopyDocument" aria-label="复制公开下载链接" @click="handleCopyLink(row)" />
+            </el-tooltip>
           </div>
           <el-tag v-else size="small" type="info" effect="plain">未托管</el-tag>
         </template>
@@ -216,9 +250,15 @@ function fmtTime(ts) {
       </el-table-column>
       <el-table-column label="操作" width="220" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" :icon="Upload" @click="enterUpdate(row)">更新</el-button>
-          <el-button size="small" type="primary" plain :icon="Download" :disabled="row.kind === 'DIRECTORY' && !row.token" @click="handleDownload(row)">下载</el-button>
-          <el-button size="small" type="danger" plain :icon="Delete" @click="handleRemove(row)">删除</el-button>
+          <el-tooltip content="上传新版本替换全部内容" placement="top">
+            <el-button size="small" :icon="Upload" aria-label="更新文件" @click="enterUpdate(row)">更新</el-button>
+          </el-tooltip>
+          <el-tooltip :content="row.kind === 'DIRECTORY' && !row.token ? '目录（多文件）不支持公开下载' : '下载到本地'" placement="top">
+            <el-button size="small" type="primary" plain :icon="Download" aria-label="下载文件" :disabled="row.kind === 'DIRECTORY' && !row.token" @click="handleDownload(row)">下载</el-button>
+          </el-tooltip>
+          <el-tooltip content="删除后公开链接失效，不可恢复" placement="top">
+            <el-button size="small" type="danger" plain :icon="Delete" aria-label="删除文件" @click="handleRemove(row)">删除</el-button>
+          </el-tooltip>
         </template>
       </el-table-column>
     </el-table>
@@ -242,6 +282,38 @@ function fmtTime(ts) {
 .update-name { flex: 1; }
 .dropzone :deep(.el-upload-dragger) {
   padding: 18px;
+}
+.picked-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  border: 1px solid var(--atlas-stroke);
+  border-radius: var(--atlas-r-s);
+  max-height: 220px;
+  overflow: auto;
+}
+.picked-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.picked-item + .picked-item {
+  border-top: 1px solid var(--atlas-stroke);
+}
+.picked-ico {
+  color: var(--atlas-muted);
+  flex-shrink: 0;
+}
+.picked-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.picked-size {
+  flex-shrink: 0;
 }
 .upload-row {
   display: flex;
@@ -307,4 +379,27 @@ function fmtTime(ts) {
 .f-size { width: 64px; text-align: right; flex-shrink: 0; }
 .f-sha { width: 60px; flex-shrink: 0; }
 .muted { color: var(--atlas-muted); }
+
+@media (max-width: 640px) {
+  .search {
+    width: 100%;
+    order: -1;
+  }
+  .spacer {
+    display: none;
+  }
+  .upload-row {
+    gap: 8px;
+  }
+  .upload-row .el-input {
+    flex: 1 1 100%;
+  }
+  .upload-row .el-input[style*='260'],
+  .upload-row .el-input[style*='160'] {
+    width: 100% !important;
+  }
+  .picked-item .el-button {
+    flex-shrink: 0;
+  }
+}
 </style>

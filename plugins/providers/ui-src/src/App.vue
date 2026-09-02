@@ -10,6 +10,7 @@ const rows = ref([])
 const builtinIcons = ref([])
 const customIcons = ref([])
 const loading = ref(false)
+const loadError = ref('')
 const dialogVisible = ref(false)
 const editing = ref(null)
 const creating = ref(false)
@@ -57,13 +58,21 @@ function syncDetail() {
   }
 }
 
+/* 请求序号守卫：切应用复用面板时旧响应晚到不得覆盖新数据 */
+let fetchSeq = 0
 async function fetchAll() {
+  const seq = ++fetchSeq
   loading.value = true
   try {
-    rows.value = await get(base() + '/list')
+    const rows = await get(base() + '/list')
+    if (seq !== fetchSeq) return
+    rows.value = rows
+    loadError.value = ''
     syncDetail()
+  } catch (e) {
+    if (seq === fetchSeq) loadError.value = e?.message || '加载失败，请刷新重试'
   } finally {
-    loading.value = false
+    if (seq === fetchSeq) loading.value = false
   }
 }
 
@@ -212,6 +221,7 @@ const modelMode = ref('quick')
 const emptyForm = () => ({ name: '', icon: '', iconColor: '#4D6BFE', openai: { baseUrl: '', apiKey: '' }, anthropic: { baseUrl: '', apiKey: '' }, models: '' })
 
 function openCreate() {
+  loadError.value = ''
   editing.value = null
   form.value = emptyForm()
   selectedModels.value = []
@@ -402,12 +412,12 @@ async function handleTest(row, compat) {
       </div>
 
       <div v-if="!loading && filtered.length === 0" class="empty-state">
-        <el-empty :description="rows.length === 0 ? '暂无供应商，点击「新增供应商」创建' : '没有匹配的供应商'" :image-size="80" />
+        <el-empty :description="loadError || (rows.length === 0 ? '暂无供应商，点击「新增供应商」创建' : '没有匹配的供应商')" :image-size="80" />
       </div>
     </div>
 
     <!-- 详情抽屉 -->
-    <el-drawer v-model="drawerVisible" :title="detailRow?.name ?? ''" direction="rtl" size="440px" :with-header="false">
+    <el-drawer v-model="drawerVisible" :title="detailRow?.name ?? '供应商详情'" direction="rtl" size="440px" role="dialog" aria-label="供应商详情">
       <div v-if="detailRow" class="drawer-body">
         <div class="drawer-head">
           <img v-if="detailRow.icon" :src="iconUrl(detailRow.icon)" class="drawer-icon" :alt="detailRow.name" @error="$event.target.style.display = 'none'" />
@@ -429,13 +439,16 @@ async function handleTest(row, compat) {
           <div class="endpoint-meta">
             <el-tag v-if="detailRow.openai.apiKeySet" size="small" type="success" effect="plain">API Key 已配置</el-tag>
             <el-tag v-else size="small" type="warning" effect="plain">API Key 未配置</el-tag>
-            <el-button
-              v-if="detailRow.openai.baseUrl"
-              size="small"
-              :icon="Connection"
-              :loading="testing === detailRow.id + ':openai'"
-              @click="handleTest(detailRow, 'openai')"
-            >测试连接</el-button>
+            <el-tooltip content="用已存储的密钥请求供应商 /models 列表；默认 5 秒超时，失败会提示具体原因" placement="top">
+              <el-button
+                v-if="detailRow.openai.baseUrl"
+                size="small"
+                :icon="Connection"
+                :loading="testing === detailRow.id + ':openai'"
+                aria-label="测试 OpenAI 连接"
+                @click="handleTest(detailRow, 'openai')"
+              >测试连接</el-button>
+            </el-tooltip>
           </div>
         </div>
 
@@ -450,13 +463,16 @@ async function handleTest(row, compat) {
           <div class="endpoint-meta">
             <el-tag v-if="detailRow.anthropic.apiKeySet" size="small" type="success" effect="plain">API Key 已配置</el-tag>
             <el-tag v-else size="small" type="warning" effect="plain">API Key 未配置</el-tag>
-            <el-button
-              v-if="detailRow.anthropic.baseUrl"
-              size="small"
-              :icon="Connection"
-              :loading="testing === detailRow.id + ':anthropic'"
-              @click="handleTest(detailRow, 'anthropic')"
-            >测试连接</el-button>
+            <el-tooltip content="用已存储的密钥请求供应商 /models 列表；默认 5 秒超时，失败会提示具体原因" placement="top">
+              <el-button
+                v-if="detailRow.anthropic.baseUrl"
+                size="small"
+                :icon="Connection"
+                :loading="testing === detailRow.id + ':anthropic'"
+                aria-label="测试 Anthropic 连接"
+                @click="handleTest(detailRow, 'anthropic')"
+              >测试连接</el-button>
+            </el-tooltip>
           </div>
         </div>
 
@@ -478,8 +494,10 @@ async function handleTest(row, compat) {
             标识色 {{ detailRow.iconColor || '未设置' }}
           </span>
           <div class="spacer" />
-          <el-button size="small" type="danger" plain :icon="Delete" @click="handleRemove(detailRow)">删除</el-button>
-          <el-button size="small" type="primary" :icon="EditPen" @click="openEdit(detailRow)">编辑</el-button>
+          <el-tooltip content="删除后该供应商配置不可恢复" placement="top">
+            <el-button size="small" type="danger" plain :icon="Delete" aria-label="删除供应商" @click="handleRemove(detailRow)">删除</el-button>
+          </el-tooltip>
+          <el-button size="small" type="primary" :icon="EditPen" aria-label="编辑供应商" @click="openEdit(detailRow)">编辑</el-button>
         </div>
       </div>
     </el-drawer>
@@ -509,8 +527,8 @@ async function handleTest(row, compat) {
       </template>
     </el-dialog>
 
-    <el-dialog v-model="dialogVisible" :title="editing ? '编辑供应商' : '新增供应商'" width="680">
-      <el-form label-width="110px">
+    <el-drawer v-model="dialogVisible" :title="editing ? '编辑供应商' : '新增供应商'" size="600px" role="dialog" :aria-label="editing ? '编辑供应商' : '新增供应商'">
+      <el-form label-position="top">
         <el-form-item label="名称" required><el-input v-model="form.name" name="provider-name" autocomplete="off" placeholder="如 DeepSeek" /></el-form-item>
         <el-form-item label="图标">
           <div class="icon-picker-wrap">
@@ -574,8 +592,10 @@ async function handleTest(row, compat) {
         </el-form-item>
         <el-form-item label="API Key">
           <div class="key-row">
-            <el-input v-model="form.openai.apiKey" type="password" name="openai-api-key" autocomplete="new-password" show-password :placeholder="editing && form.openai.apiKey === '' ? '留空保持不变' : ''" clearable />
-            <el-button v-if="editing && editing.openai.apiKeySet" size="small" text type="danger" @click="form.openai.apiKey = null">清除密钥</el-button>
+            <el-input v-model="form.openai.apiKey" type="password" name="openai-api-key" autocomplete="new-password" show-password :placeholder="editing && form.openai.apiKey === '' ? '留空保持不变' : ''" clearable aria-label="OpenAI API Key" />
+            <el-tooltip v-if="editing && editing.openai.apiKeySet" content="清除已存储的密钥（保存后生效）" placement="top">
+              <el-button size="small" text type="danger" aria-label="清除 OpenAI 密钥" @click="form.openai.apiKey = null">清除密钥</el-button>
+            </el-tooltip>
           </div>
         </el-form-item>
 
@@ -585,8 +605,10 @@ async function handleTest(row, compat) {
         </el-form-item>
         <el-form-item label="API Key">
           <div class="key-row">
-            <el-input v-model="form.anthropic.apiKey" type="password" name="anthropic-api-key" autocomplete="new-password" show-password :placeholder="editing && form.anthropic.apiKey === '' ? '留空保持不变' : ''" clearable />
-            <el-button v-if="editing && editing.anthropic.apiKeySet" size="small" text type="danger" @click="form.anthropic.apiKey = null">清除密钥</el-button>
+            <el-input v-model="form.anthropic.apiKey" type="password" name="anthropic-api-key" autocomplete="new-password" show-password :placeholder="editing && form.anthropic.apiKey === '' ? '留空保持不变' : ''" clearable aria-label="Anthropic API Key" />
+            <el-tooltip v-if="editing && editing.anthropic.apiKeySet" content="清除已存储的密钥（保存后生效）" placement="top">
+              <el-button size="small" text type="danger" aria-label="清除 Anthropic 密钥" @click="form.anthropic.apiKey = null">清除密钥</el-button>
+            </el-tooltip>
           </div>
         </el-form-item>
 
@@ -633,7 +655,7 @@ async function handleTest(row, compat) {
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="creating" @click="handleSave">保存</el-button>
       </template>
-    </el-dialog>
+    </el-drawer>
   </div>
 </template>
 
@@ -703,9 +725,31 @@ async function handleTest(row, compat) {
 /* ---------- 卡片网格 ---------- */
 .card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 14px;
   min-height: 120px;
+}
+@media (max-width: 640px) {
+  .card-grid {
+    grid-template-columns: 1fr;
+  }
+  .toolbar {
+    flex-wrap: wrap;
+  }
+  .search {
+    width: 100%;
+    order: -1;
+  }
+  .spacer {
+    display: none;
+  }
+  .stats-bar {
+    flex-wrap: wrap;
+  }
+  .stat-block {
+    flex: 1 1 40%;
+    padding: 0 10px;
+  }
 }
 .provider-card {
   border: 1px solid var(--atlas-stroke);

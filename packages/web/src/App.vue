@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { HomeFilled, Grid, Cpu, Tools, Lock, SwitchButton, ArrowLeft } from '@element-plus/icons-vue'
+import { SwitchButton, ArrowLeft, Menu } from '@element-plus/icons-vue'
+// 侧边导航统一用 Lucide 线性图标库（stroke 2 统一语言，currentColor 随菜单态）
+import { House, LayoutGrid, Puzzle, Settings, Lock, Cpu, Activity } from 'lucide-vue-next'
 import ConsoleView from './views/ConsoleView.vue'
 import AppsView from './views/AppsView.vue'
 import AppSpaceView from './views/AppSpaceView.vue'
@@ -88,16 +90,25 @@ const onPopState = () => applyRoute(currentRoute())
 onMounted(() => {
   window.addEventListener('atlas:unauthorized', onUnauthorized)
   window.addEventListener('popstate', onPopState)
+  window.addEventListener('resize', syncViewport, { passive: true })
+  syncViewport()
 })
 onBeforeUnmount(() => {
   window.removeEventListener('atlas:unauthorized', onUnauthorized)
   window.removeEventListener('popstate', onPopState)
+  window.removeEventListener('resize', syncViewport)
 })
 
 /** 系统级插件侧边菜单（全局插件声明 system-menu slot 后出现）。 */
 const systemMenuSlots = useSlotsOf('system-menu')
 
-const activePlugin = computed(() => systemMenuSlots.value.find((s) => s.key === current.value))
+/* 深链 current=plugin:{type}，而 slot.key=plugin:{type}:{title}：按前缀匹配；
+   computed 响应式——slot 清单异步就绪后自动命中（此前全等匹配导致深链刷新永远落空） */
+const activePlugin = computed(() => {
+  const c = current.value
+  if (!c.startsWith('plugin:')) return undefined
+  return systemMenuSlots.value.find((s) => s.key === c || s.key.startsWith(c + ':'))
+})
 
 function openSpace(app: App) {
   activeApp.value = app
@@ -151,7 +162,24 @@ function toggleCollapse() {
     // 忽略
   }
 }
-const brandImg = computed(() => `/icons/${collapsed.value ? 'atlas' : 'atlas-banner'}.svg`)
+/* 移动端抽屉始终是「展开」形态，Logo 与桌面折叠状态解耦，一律用横幅版 */
+const brandImg = computed(() => `/icons/${!isMobile.value && collapsed.value ? 'atlas' : 'atlas-banner'}.svg`)
+
+/* ---------- 移动端（≤768px）：侧栏转为覆盖式抽屉，汉堡按钮开合 ---------- */
+const isMobile = ref(false)
+const mobileNavOpen = ref(false)
+function syncViewport() {
+  // jsdom 等环境无 matchMedia：视为桌面（isMobile 默认 false）
+  isMobile.value = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 768px)').matches
+  if (!isMobile.value) mobileNavOpen.value = false
+}
+function toggleMobileNav() {
+  mobileNavOpen.value = !mobileNavOpen.value
+}
+function switchMenuMobile(key: MenuKey) {
+  switchMenu(key)
+  mobileNavOpen.value = false
+}
 
 /* 页头右侧主操作（由各视图经 setPageHeadAction 注入） */
 const head = usePageHeadAction()
@@ -160,14 +188,24 @@ const head = usePageHeadAction()
 <template>
   <LoginView v-if="!authed" @authed="handleAuthed" />
 
-  <el-container v-else class="layout" :class="{ collapsed }">
-    <!-- 侧栏：整页同白；sticky 固定视口高度，退出登录钉在可视底部；可折叠成图标模式 -->
+  <el-container v-else class="layout" :class="{ collapsed, 'is-mobile': isMobile, 'mobile-nav-open': mobileNavOpen }">
+    <!-- 遮罩：移动端抽屉打开时覆盖内容区，点击关闭 -->
+    <div v-if="isMobile" class="mobile-mask" :class="{ show: mobileNavOpen }" aria-hidden="true" @click="mobileNavOpen = false" />
+    <!-- 侧栏：整页同白；sticky 固定视口高度，退出登录钉在可视底部；可折叠成图标模式；移动端覆盖式抽屉 -->
     <aside class="sidebar" aria-label="主导航">
       <div class="side-top">
-        <button type="button" class="brand-logo" :title="collapsed ? '展开侧栏' : '收起侧栏'" :aria-label="collapsed ? '展开侧栏' : '收起侧栏'" :aria-expanded="!collapsed" @click="toggleCollapse">
+        <!-- 移动端抽屉没有「图标模式」语义：Logo 不可点折叠，点击仅关闭抽屉 -->
+        <button
+          type="button"
+          class="brand-logo"
+          :title="isMobile ? undefined : (collapsed ? '展开侧栏' : '收起侧栏')"
+          :aria-label="isMobile ? '关闭导航菜单' : (collapsed ? '展开侧栏' : '收起侧栏')"
+          :aria-expanded="isMobile ? mobileNavOpen : !collapsed"
+          @click="isMobile ? (mobileNavOpen = false) : toggleCollapse()"
+        >
           <img :src="brandImg" class="brand-banner" alt="Atlas" />
         </button>
-        <div class="acts">
+        <div v-if="!isMobile" class="acts">
           <button type="button" class="sbar-btn" :title="collapsed ? '展开侧栏' : '收起侧栏'" :aria-label="collapsed ? '展开侧栏' : '收起侧栏'" :aria-expanded="!collapsed" @click="toggleCollapse">
             <el-icon :class="{ 'is-flip': collapsed }" aria-hidden="true"><ArrowLeft /></el-icon>
           </button>
@@ -175,37 +213,37 @@ const head = usePageHeadAction()
       </div>
 
       <div class="menu" role="navigation" aria-label="主导航">
-        <!-- 内置菜单（线性图标 + 文字；系统级插件菜单同形态） -->
-        <button type="button" class="mi" :class="{ on: current === 'console' }" :aria-current="current === 'console' ? 'page' : undefined" @click="switchMenu('console')">
-          <el-icon class="ic" aria-hidden="true"><HomeFilled /></el-icon>
+        <!-- 内置菜单（统一线性图标 navIcons.ts + 文字；系统级插件菜单同形态） -->
+        <button type="button" class="mi" :class="{ on: current === 'console' }" :aria-current="current === 'console' ? 'page' : undefined" @click="switchMenuMobile('console')">
+          <House class="ic" aria-hidden="true" :stroke-width="1.8" />
           <span class="txt">控制台</span>
           <span class="tip" aria-hidden="true">控制台</span>
         </button>
-        <button type="button" class="mi" :class="{ on: current === 'apps' }" :aria-current="current === 'apps' ? 'page' : undefined" @click="switchMenu('apps')">
-          <el-icon class="ic" aria-hidden="true"><Grid /></el-icon>
+        <button type="button" class="mi" :class="{ on: current === 'apps' }" :aria-current="current === 'apps' ? 'page' : undefined" @click="switchMenuMobile('apps')">
+          <LayoutGrid class="ic" aria-hidden="true" :stroke-width="1.8" />
           <span class="txt">应用管理</span>
           <span class="tip" aria-hidden="true">应用管理</span>
         </button>
-        <button v-for="slot in systemMenuSlots" :key="slot.key" type="button" class="mi" :class="{ on: current === slot.key }" :aria-current="current === slot.key ? 'page' : undefined" @click="switchMenu(slot.key as MenuKey)">
-          <el-icon v-if="typeof slot.icon === 'string' && slot.icon" class="ic">
-            <img :src="slot.icon" alt="" />
-          </el-icon>
-          <el-icon v-else class="ic" aria-hidden="true"><Cpu /></el-icon>
+        <button v-for="slot in systemMenuSlots" :key="slot.key" type="button" class="mi" :class="{ on: current === slot.key }" :aria-current="current === slot.key ? 'page' : undefined" @click="switchMenuMobile(slot.key as MenuKey)">
+          <!-- 菜单图标统一 Lucide 线性风（插件自带的彩色 SVG 与菜单灰/蓝态冲突，img 引入也无法 currentColor）：
+               监控类用 Activity，其他用 Cpu 兜底，颜色随文字态 -->
+          <Activity v-if="slot.pluginType === 'machine-monitor'" class="ic" aria-hidden="true" :stroke-width="1.8" />
+          <Cpu v-else class="ic" aria-hidden="true" :stroke-width="1.8" />
           <span class="txt">{{ slot.label }}</span>
           <span class="tip" aria-hidden="true">{{ slot.label }}</span>
         </button>
-        <button type="button" class="mi" :class="{ on: current === 'plugins' }" :aria-current="current === 'plugins' ? 'page' : undefined" @click="switchMenu('plugins')">
-          <el-icon class="ic" aria-hidden="true"><Cpu /></el-icon>
+        <button type="button" class="mi" :class="{ on: current === 'plugins' }" :aria-current="current === 'plugins' ? 'page' : undefined" @click="switchMenuMobile('plugins')">
+          <Puzzle class="ic" aria-hidden="true" :stroke-width="1.8" />
           <span class="txt">插件注册表</span>
           <span class="tip" aria-hidden="true">插件注册表</span>
         </button>
-        <button type="button" class="mi" :class="{ on: current === 'ops' }" :aria-current="current === 'ops' ? 'page' : undefined" @click="switchMenu('ops')">
-          <el-icon class="ic" aria-hidden="true"><Tools /></el-icon>
+        <button type="button" class="mi" :class="{ on: current === 'ops' }" :aria-current="current === 'ops' ? 'page' : undefined" @click="switchMenuMobile('ops')">
+          <Settings class="ic" aria-hidden="true" :stroke-width="1.8" />
           <span class="txt">运维台</span>
           <span class="tip" aria-hidden="true">运维台</span>
         </button>
-        <button type="button" class="mi" :class="{ on: current === 'security' }" :aria-current="current === 'security' ? 'page' : undefined" @click="switchMenu('security')">
-          <el-icon class="ic" aria-hidden="true"><Lock /></el-icon>
+        <button type="button" class="mi" :class="{ on: current === 'security' }" :aria-current="current === 'security' ? 'page' : undefined" @click="switchMenuMobile('security')">
+          <Lock class="ic" aria-hidden="true" :stroke-width="1.8" />
           <span class="txt">安全设置</span>
           <span class="tip" aria-hidden="true">安全设置</span>
         </button>
@@ -224,6 +262,10 @@ const head = usePageHeadAction()
     <el-main class="main">
       <div class="ph">
         <nav class="crumb" aria-label="面包屑">
+          <!-- 移动端汉堡按钮：开合侧栏抽屉 -->
+          <button v-if="isMobile" type="button" class="hamburger" aria-label="打开导航菜单" :aria-expanded="mobileNavOpen" @click="toggleMobileNav">
+            <el-icon aria-hidden="true"><Menu /></el-icon>
+          </button>
           <template v-for="(c, i) in crumb" :key="i">
             <button v-if="c.go && i < crumb.length - 1" type="button" class="crumb-link" @click="c.go">{{ c.label }}</button>
             <span v-else class="cur">{{ c.label }}</span>
@@ -317,27 +359,25 @@ const head = usePageHeadAction()
 }
 
 .mi .ic {
-  width: 18px;
-  height: 18px;
-  min-width: 18px;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
   flex-shrink: 0;
-  opacity: 0.75;
+  /* 图标颜色统一跟随文字色（currentColor）：默认菜单灰、hover 深色、选中品牌蓝，
+     不再对图标做单独透明度折扣 */
+  opacity: 1;
 }
 
 .mi .ic img {
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
 }
 
 .mi.on {
   background: var(--atlas-accent-soft);
   color: var(--atlas-accent);
   font-weight: 700;
-}
-
-.mi.on .ic {
-  opacity: 1;
 }
 
 .mi:not(.on):hover {
@@ -504,15 +544,23 @@ const head = usePageHeadAction()
   justify-content: center;
 }
 
+/* 收起态（图标模式）：图标是唯一信息载体，完全不透明，
+   避免大热区中心一小块灰图的失衡观感 */
 .layout.collapsed .mi .ic {
-  width: 20px;
-  height: 20px;
-  min-width: 20px;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  opacity: 1;
+}
+
+.layout.collapsed .mi:not(.on) .ic {
+  color: var(--atlas-text);
 }
 
 .layout.collapsed .mi .ic img {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
 }
 
 .layout.collapsed .mi .txt {
@@ -594,5 +642,90 @@ const head = usePageHeadAction()
 .crumb .cur {
   color: var(--atlas-text);
   font-weight: 600;
+}
+
+/* 汉堡按钮：仅移动端渲染（v-if），桌面不占位 */
+.hamburger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--atlas-stroke);
+  border-radius: var(--atlas-r-s);
+  background: var(--atlas-surface);
+  color: var(--atlas-text);
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-right: 10px;
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+.hamburger:hover {
+  background: var(--atlas-layer);
+  border-color: var(--atlas-stroke-strong);
+}
+
+/* 遮罩：移动端抽屉打开时盖住内容区 */
+.mobile-mask {
+  display: none;
+}
+
+/* ===== 移动端（≤768px）：侧栏覆盖式抽屉 + 内容区收窄 ===== */
+@media (max-width: 768px) {
+  .main {
+    padding: 16px 16px 28px;
+  }
+  .crumb {
+    font-size: 13px;
+  }
+
+  .mobile-mask {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 1990;
+    background: rgba(20, 28, 60, 0.4);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+  .mobile-mask.show {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* 侧栏变固定覆盖抽屉：忽略折叠态（collapsed 仅桌面语义），始终全宽展开 */
+  .layout.is-mobile .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100vh;
+    height: 100dvh;
+    width: min(80vw, 300px);
+    padding-top: 14px;
+    z-index: 2000;
+    background: var(--atlas-bg);
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+    box-shadow: none;
+  }
+  .layout.is-mobile.mobile-nav-open .sidebar {
+    transform: translateX(0);
+    box-shadow: 0 6px 24px rgba(20, 28, 60, 0.14);
+  }
+  /* 抽屉态下忽略桌面折叠样式，菜单始终图标+文字 */
+  .layout.is-mobile .sidebar .mi .txt {
+    display: inline;
+  }
+  .layout.is-mobile .mi .ic,
+  .layout.is-mobile .mi .ic img {
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+  }
+  /* 隐藏桌面折叠箭头（抽屉用遮罩关闭） */
+  .layout.is-mobile .acts {
+    display: none;
+  }
 }
 </style>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Grid, Folder, Key, SwitchButton, CircleCheck, Delete, CopyDocument, Collection, DataLine, Warning, Refresh, VideoPlay, VideoPause } from '@element-plus/icons-vue'
+import { Grid, Folder, Key, SwitchButton, CircleCheck, Delete, CopyDocument, Collection, DataLine, Warning, Refresh, VideoPlay, VideoPause, Search } from '@element-plus/icons-vue'
 import { appApi } from '../services/appApi'
 import { pluginApi } from '../services/pluginApi'
 import { setPageHeadAction } from '../pageHead'
@@ -45,15 +45,33 @@ const initialTab = (() => {
   return r.appId === props.app.id ? (r.spaceTab ?? '') : ''
 })()
 const isValidTab = (t: string) =>
-  t === 'board' || t === 'instances' || appSpaceSlots.value.some((s) => s.key === t)
+  t === 'board' || appSpaceSlots.value.some((s) => s.key === t)
 const activeTab = ref(
   initialTab && isValidTab(initialTab) ? initialTab : 'board',
 )
+/* 深链校准：硬刷新直达 core:/plugin: 深链时，setup 阶段 slot 清单尚未异步加载，
+   isValidTab 误判回落看板。监听 hashchange（含 slot 就绪后的首次触发）持续校准——
+   不能用「仅一次」守卫：连续两次深链切换（如 providers → prompts）会被旧 activeTab 挡住 */
+function recalibrateTabFromHash() {
+  const r = parseHash(typeof window !== 'undefined' ? window.location.hash : '')
+  if (r.appId !== props.app.id) return
+  const t = r.spaceTab ?? ''
+  if (t && t !== activeTab.value && isValidTab(t)) activeTab.value = t
+}
+watch(appSpaceSlots, recalibrateTabFromHash)
+onMounted(() => window.addEventListener('hashchange', recalibrateTabFromHash))
+onBeforeUnmount(() => window.removeEventListener('hashchange', recalibrateTabFromHash))
 const overview = ref<PluginOverviewRow[]>([])
 const loading = ref(false)
 const page = ref(1)
 const size = ref(10)
 const total = ref(0)
+
+/* ---------- 插件管理（看板内区块 + 启用抽屉，替代原「插件实例」Tab） ---------- */
+const enableDrawer = ref(false)
+const enableKeyword = ref('')
+/** 抽屉内待启用的数据范围选择：pluginType → scope。 */
+const pendingScope = ref<Record<string, string>>({})
 
 function statusTag(status: string) {
   return status === 'ACTIVE' ? 'success' : status === 'PAUSED' ? 'warning' : 'danger'
@@ -68,6 +86,33 @@ const enabledCount = computed(() => overview.value.filter((r) => r.instance?.ena
 const sharedCount = computed(() => overview.value.filter((r) => r.instance?.dataScope === 'GLOBAL_SHARED').length)
 const localCount = computed(() => overview.value.filter((r) => r.instance?.dataScope === 'APP_LOCAL').length)
 const loadedCount = computed(() => overview.value.filter((r) => r.runtimeLoaded).length)
+
+/** 启用抽屉内的插件过滤（按名称/类型搜索）。 */
+const drawerRows = computed(() => {
+  const kw = enableKeyword.value.trim().toLowerCase()
+  if (!kw) return overview.value
+  return overview.value.filter((r) => r.plugin.name.toLowerCase().includes(kw) || r.plugin.pluginType.toLowerCase().includes(kw))
+})
+/** 抽屉分区：已启用实例（含停用可恢复的实例）/ 尚未实例化的可启用插件。 */
+const enabledRows = computed(() => drawerRows.value.filter((r) => r.instance?.enabled))
+const disabledRows = computed(() => drawerRows.value.filter((r) => !r.instance?.enabled))
+
+function openEnableDrawer() {
+  enableKeyword.value = ''
+  pendingScope.value = {}
+  enableDrawer.value = true
+}
+
+/** 已启用实例调整数据范围（scope 单向规则由后端校验）。 */
+async function handleRescope(row: PluginOverviewRow, scope: string) {
+  try {
+    await pluginApi.enable(props.app.id, row.plugin.pluginType, scope)
+    ElMessage.success(`「${row.plugin.name}」数据范围已调整`)
+    fetchOverview()
+  } catch {
+    fetchOverview()
+  }
+}
 
 async function copyAppId() {
   await copyText(localApp.value.appId, 'App ID ')
@@ -152,7 +197,7 @@ function switchTab(tab: string) {
 
 async function handleEnable(row: PluginOverviewRow, scope?: string) {
   await pluginApi.enable(props.app.id, row.plugin.pluginType, scope)
-  ElMessage.success('已启用')
+  ElMessage.success(`已启用「${row.plugin.name}」`)
   fetchOverview()
 }
 
@@ -222,7 +267,7 @@ function scopeLabel(row: PluginOverviewRow): string {
             </div>
             <div class="hero-acts">
               <el-button :icon="Refresh" @click="fetchOverview">刷新</el-button>
-              <el-button type="primary" :icon="Key" @click="switchTab('instances')">启用插件</el-button>
+              <el-button type="primary" :icon="Key" @click="openEnableDrawer">启用插件</el-button>
             </div>
           </div>
           <div class="cred-strip">
@@ -281,81 +326,6 @@ function scopeLabel(row: PluginOverviewRow): string {
         </div>
       </el-tab-pane>
 
-      <!-- 插件实例 -->
-      <el-tab-pane name="instances">
-        <template #label>
-          <span class="tab-label">
-            <el-icon class="core-tab-icon"><Collection /></el-icon>
-            <span>插件实例</span>
-          </span>
-        </template>
-        <div class="surface">
-          <el-table v-loading="loading" :data="overview" empty-text="暂无已注册插件">            <el-table-column label="插件" min-width="200">
-              <template #default="{ row }">
-                <div class="plugin-cell">
-                  <img
-                    v-if="pluginIconUrl(row.plugin.pluginType, iconOf(row.plugin.pluginType))"
-                    :src="pluginIconUrl(row.plugin.pluginType, iconOf(row.plugin.pluginType))!"
-                    class="plugin-icon"
-                    alt=""
-                  />
-                  <span class="plugin-name">{{ row.plugin.name }}</span>
-                </div>
-              </template>
-            </el-table-column>
-            <el-table-column prop="plugin.pluginType" label="类型" width="140">
-              <template #default="{ row }"><code class="mono">{{ row.plugin.pluginType }}</code></template>
-            </el-table-column>
-            <el-table-column label="数据范围" width="110">
-              <template #default="{ row }">
-                <el-tag size="small" :type="row.instance?.dataScope === 'GLOBAL_SHARED' ? 'warning' : 'success'">
-                  {{ scopeLabel(row) }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="plugin.description" label="说明" min-width="220" show-overflow-tooltip />
-            <el-table-column label="运行时" width="90">
-              <template #default="{ row }">
-                <el-tag size="small" :type="row.runtimeLoaded ? 'success' : 'info'">
-                  {{ row.runtimeLoaded ? '已加载' : '未加载' }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="250" fixed="right">
-              <template #default="{ row }">
-                <template v-if="!row.instance || !row.instance.enabled">
-                  <el-select v-if="!row.instance" size="small" :model-value="row.plugin.defaultDataScope" style="width: 110px" @change="(v: string) => handleEnable(row, v)">
-                    <el-option v-for="opt in scopeOptions(row)" :key="opt.value" :value="opt.value" :label="opt.label" />
-                  </el-select>
-                  <el-tooltip :content="`按默认数据范围（${row.plugin.defaultDataScope === 'GLOBAL_SHARED' ? '全局共享' : '应用独立'}）启用实例`" placement="top">
-                    <el-button size="small" type="primary" :icon="VideoPlay" @click="handleEnable(row)">启用</el-button>
-                  </el-tooltip>
-                </template>
-                <template v-else>
-                  <el-tooltip content="停用后端点与数据访问立即失效，数据保留可恢复" placement="top">
-                    <el-button size="small" :icon="VideoPause" @click="handleDisable(row)">停用</el-button>
-                  </el-tooltip>
-                  <el-tooltip content="删除实例清理其通用存储；插件专用表数据保留" placement="top">
-                    <el-button size="small" type="danger" plain :icon="Delete" @click="handleRemoveInstance(row)">删除实例</el-button>
-                  </el-tooltip>
-                </template>
-              </template>
-            </el-table-column>
-          </el-table>
-          <div class="pager">
-            <el-pagination
-              layout="total, sizes, prev, pager, next"
-              :total="total"
-              :page-size="size"
-              :page-sizes="[10, 20, 50]"
-              :current-page="page"
-              @current-change="switchPage"
-              @size-change="switchSize"
-            />
-          </div>
-        </div>
-      </el-tab-pane>
-
       <!-- 框架能力面板（数据集 / 接口监控） -->
       <el-tab-pane v-for="slot in appSpaceSlots.filter((s) => s.key.startsWith('core:'))" :key="slot.key" :label="slot.label" :name="slot.key">
         <template #label>
@@ -378,6 +348,95 @@ function scopeLabel(row: PluginOverviewRow): string {
         <PluginMount v-if="activeTab === slot.key" :load="slot.load" :app-id="app.id" :plugin-type="slot.pluginType" mode="app-space" :refresh="fetchOverview" />
       </el-tab-pane>
     </el-tabs>
+
+    <!-- 启用插件抽屉：本应用插件实例的唯一管理入口（启用/停用/删除实例/数据范围） -->
+    <el-drawer v-model="enableDrawer" title="管理插件实例" direction="rtl" size="520px" role="dialog" aria-label="管理插件实例">
+      <div class="drawer-pad">
+        <el-input v-model="enableKeyword" placeholder="搜索插件名称 / 类型…" clearable class="drawer-search">
+          <template #prefix><el-icon aria-hidden="true"><Search /></el-icon></template>
+        </el-input>
+
+        <!-- 已启用实例 -->
+        <div class="drawer-section">
+          <div class="drawer-section-title">
+            已启用实例
+            <span class="muted drawer-section-count">{{ enabledRows.length }} 个</span>
+          </div>
+          <div class="drawer-list">
+            <div v-for="row in enabledRows" :key="row.plugin.pluginType" class="drawer-item active">
+              <img
+                v-if="pluginIconUrl(row.plugin.pluginType, iconOf(row.plugin.pluginType))"
+                :src="pluginIconUrl(row.plugin.pluginType, iconOf(row.plugin.pluginType))!"
+                class="plugin-icon"
+                alt=""
+              />
+              <div class="drawer-item-main">
+                <div class="drawer-item-name">{{ row.plugin.name }}</div>
+                <code class="mono muted drawer-item-type">{{ row.plugin.pluginType }}</code>
+              </div>
+              <el-select
+                size="small"
+                :model-value="row.instance?.dataScope"
+                style="width: 118px"
+                :aria-label="`${row.plugin.name} 数据范围`"
+                @change="(v: string) => handleRescope(row, v)"
+              >
+                <el-option v-for="opt in scopeOptions(row)" :key="opt.value" :value="opt.value" :label="opt.label" />
+              </el-select>
+              <el-tooltip content="停用后端点与数据访问立即失效，数据保留可恢复" placement="top">
+                <el-button size="small" :icon="VideoPause" :aria-label="`停用 ${row.plugin.name}`" @click="handleDisable(row)" />
+              </el-tooltip>
+              <el-tooltip content="删除实例清理其通用存储；插件专用表数据保留" placement="top">
+                <el-button size="small" type="danger" plain :icon="Delete" :aria-label="`删除实例 ${row.plugin.name}`" @click="handleRemoveInstance(row)" />
+              </el-tooltip>
+            </div>
+            <div v-if="enabledRows.length === 0" class="drawer-empty muted">暂无已启用实例，从下方列表启用插件</div>
+          </div>
+        </div>
+
+        <!-- 可启用插件 -->
+        <div class="drawer-section">
+          <div class="drawer-section-title">
+            可启用插件
+            <span class="muted drawer-section-count">{{ disabledRows.length }} 个</span>
+          </div>
+          <div class="drawer-list">
+            <div v-for="row in disabledRows" :key="row.plugin.pluginType" class="drawer-item">
+              <img
+                v-if="pluginIconUrl(row.plugin.pluginType, iconOf(row.plugin.pluginType))"
+                :src="pluginIconUrl(row.plugin.pluginType, iconOf(row.plugin.pluginType))!"
+                class="plugin-icon"
+                alt=""
+              />
+              <div class="drawer-item-main">
+                <div class="drawer-item-name">{{ row.plugin.name }}</div>
+                <code class="mono muted drawer-item-type">{{ row.plugin.pluginType }}</code>
+              </div>
+              <el-select
+                v-if="!row.instance"
+                v-model="pendingScope[row.plugin.pluginType]"
+                size="small"
+                placeholder="数据范围"
+                style="width: 118px"
+                :aria-label="`${row.plugin.name} 数据范围`"
+              >
+                <el-option v-for="opt in scopeOptions(row)" :key="opt.value" :value="opt.value" :label="opt.label" />
+              </el-select>
+              <el-tooltip :content="`按${row.plugin.defaultDataScope === 'GLOBAL_SHARED' ? '全局共享' : '应用独立'}数据范围启用实例`" placement="top">
+                <el-button
+                  type="primary"
+                  size="small"
+                  :icon="VideoPlay"
+                  :aria-label="`启用 ${row.plugin.name}`"
+                  @click="handleEnable(row, row.instance ? undefined : pendingScope[row.plugin.pluginType])"
+                >启用</el-button>
+              </el-tooltip>
+            </div>
+            <div v-if="disabledRows.length === 0" class="drawer-empty muted">全部插件均已启用</div>
+          </div>
+        </div>
+      </div>
+    </el-drawer>
 
     <!-- 凭证展示（仅一次） -->
     <el-dialog v-model="secretDialog" title="应用凭证（仅展示一次，请立即保存）" width="560" @closed="secretText = ''">
@@ -664,11 +723,90 @@ function scopeLabel(row: PluginOverviewRow): string {
   padding-top: 14px;
 }
 
+/* ===== 启用插件抽屉 ===== */
+.drawer-pad {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  height: 100%;
+}
+.drawer-search {
+  width: 100%;
+}
+.drawer-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+.drawer-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.drawer-section-count {
+  font-size: 12px;
+  font-weight: 400;
+}
+.drawer-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.drawer-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--atlas-stroke);
+  border-radius: var(--atlas-r-m);
+  background: var(--atlas-surface);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.drawer-item:hover {
+  border-color: var(--atlas-stroke-strong);
+}
+.drawer-item.active {
+  border-color: var(--atlas-accent);
+  box-shadow: 0 0 0 1px var(--atlas-accent) inset;
+}
+.drawer-item-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.drawer-item-name {
+  font-weight: 600;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.drawer-item-type {
+  font-size: 11px;
+}
+.drawer-empty {
+  font-size: 12px;
+  text-align: center;
+  padding: 18px 0;
+}
+
 @media (max-width: 960px) {
   .board-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+  /* 启用插件抽屉是实例管理唯一入口，窄屏不得隐藏按钮；仅收起次要的刷新（页头已有全局刷新） */
   .hero-acts {
+    gap: 8px;
+  }
+  .hero-acts .el-button:first-child {
     display: none;
   }
 }
@@ -678,6 +816,74 @@ function scopeLabel(row: PluginOverviewRow): string {
   }
   .hero-av {
     display: none;
+  }
+}
+
+/* ===== 移动端（≤768px）：看板纵向堆叠 + Tab 横向可滚 ===== */
+@media (max-width: 768px) {
+  /* 应用空间 Tab（页面级）超出可横向滑动，隐藏 EP 滚动箭头（手势滚动） */
+  .app-space-tabs :deep(.el-tabs__nav-wrap) {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .app-space-tabs :deep(.el-tabs__nav-wrap)::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* 英雄面板纵向堆叠，操作按钮占满一行 */
+  .hero-main {
+    flex-wrap: wrap;
+    gap: 14px;
+    padding: 18px 16px;
+  }
+  .hero-meta {
+    flex-basis: 100%;
+  }
+  .hero-title {
+    font-size: 18px;
+    flex-wrap: wrap;
+  }
+  .hero-acts {
+    flex-basis: 100%;
+  }
+  .hero-acts .el-button {
+    flex: 1;
+  }
+  .hero-acts .el-button:first-child {
+    display: none;
+  }
+
+  /* 凭证贯通条两行布局 */
+  .cred-strip {
+    padding: 12px 16px;
+    gap: 10px;
+  }
+  .cred-val {
+    flex-basis: 100%;
+    order: 3;
+  }
+  .cred-sp {
+    display: none;
+  }
+  .cred-strip .el-button {
+    margin-left: auto;
+  }
+
+  /* 指标卡单列已由 640px 规则覆盖；危险操作按钮纵排 */
+  .danger-ops {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* 启用插件抽屉里的行式条目允许换行 */
+  .drawer-item {
+    flex-wrap: wrap;
+  }
+  .drawer-item-main {
+    flex-basis: calc(100% - 42px);
+  }
+  .drawer-item .el-select {
+    margin-left: 34px;
   }
 }
 </style>

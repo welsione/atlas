@@ -11,6 +11,7 @@ const apps = ref<App[]>([])
 const rows = ref<OpsLogRow[]>([])
 const total = ref(0)
 const loading = ref(false)
+const loadError = ref('')
 const overview = ref<OpsOverview>({ levels: { INFO: 0, WARN: 0, ERROR: 0, DEBUG: 0 }, byPlugin: [], hourly: [] })
 
 const filters = ref<{ appId?: number; pluginType: string; level: string }>({
@@ -31,6 +32,7 @@ async function fetchOverview() {
 
 async function fetchLogs() {
   loading.value = true
+  loadError.value = ''
   try {
     const result = await opsApi.logs({
       appId: filters.value.appId,
@@ -41,6 +43,8 @@ async function fetchLogs() {
     })
     rows.value = result.rows
     total.value = result.total
+  } catch (e) {
+    loadError.value = (e as Error)?.message || '日志加载失败，请重试'
   } finally {
     loading.value = false
   }
@@ -134,7 +138,7 @@ const totalErrors = () => overview.value.byPlugin.reduce((s, p) => s + Number(p.
     </div>
 
     <div class="surface">
-      <el-table v-loading="loading" :data="rows" empty-text="暂无工作日志">
+      <el-table v-loading="loading" :data="rows" :empty-text="loadError || '暂无工作日志'">
         <el-table-column label="时间" width="170">
           <template #default="{ row }">{{ fmtTime(row.createdAt) }}</template>
         </el-table-column>
@@ -177,7 +181,8 @@ const totalErrors = () => overview.value.byPlugin.reduce((s, p) => s + Number(p.
 <style scoped>
 .overview-grid {
   display: grid;
-  grid-template-columns: 260px 1fr 300px;
+  /* auto-fit 自适应列数：宽屏三列，中窄屏自动降两列/一列，避免固定 260/300px 挤压中间 1fr */
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 16px;
   margin-bottom: 16px;
 }
@@ -185,6 +190,27 @@ const totalErrors = () => overview.value.byPlugin.reduce((s, p) => s + Number(p.
 .overview-card {
   padding: 16px;
   border-radius: var(--atlas-r-m);
+}
+
+/* ===== 移动端（≤768px）：概览三列转单列，筛选条与分页自适应 ===== */
+@media (max-width: 768px) {
+  .overview-grid {
+    grid-template-columns: 1fr;
+  }
+  /* 趋势条挤压时允许横向滚动（小时桶不可压缩） */
+  .trend {
+    overflow-x: auto;
+  }
+  .filter-bar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .filter-bar .el-select {
+    width: 100% !important;
+  }
+  .filter-bar .el-button {
+    flex: 1;
+  }
 }
 
 .level-row {

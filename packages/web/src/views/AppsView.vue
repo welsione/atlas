@@ -27,14 +27,18 @@ const secretDialog = ref(false)
 const secretText = ref('')
 /** 插件勾选（创建应用时实例化哪些插件）：默认全选。 */
 const pluginDefs = ref<PluginDef[]>([])
+const loadError = ref('')
 const selectedPlugins = ref<string[]>([])
 
 async function fetchAll() {
   loading.value = true
+  loadError.value = ''
   try {
     const res = await appApi.list(page.value, size.value)
     apps.value = res.rows
     total.value = res.total
+  } catch (e) {
+    loadError.value = (e as Error)?.message || '加载失败，请点击刷新重试'
   } finally {
     loading.value = false
   }
@@ -161,7 +165,7 @@ function isPluginSelected(pluginType: string) {
       </div>
 
       <div v-if="!loading && apps.length === 0" class="empty-state">
-        <el-empty description="暂无应用，点击右上角创建" :image-size="80" />
+        <el-empty :description="loadError || '暂无应用，点击右上角创建'" :image-size="80" />
       </div>
     </div>
 

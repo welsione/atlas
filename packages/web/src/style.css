@@ -117,6 +117,32 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ---- 窄屏自适应（全局兜底） ----
+ * EP 弹层固定宽度（520/560/640/680px）在 ≤ 屏宽 时溢出：统一限宽到 视口-32px。
+ * 表格窄屏横向滚动：el-table 自带 overflow，但外层容器需允许收缩。 */
+@media (max-width: 768px) {
+  .el-dialog,
+  .el-message-box {
+    width: calc(100vw - 32px) !important;
+    max-width: calc(100vw - 32px) !important;
+    margin-top: 8vh !important;
+  }
+  .el-drawer {
+    /* 移动端抽屉完全覆盖视口，不留边缘缝隙 */
+    width: 100vw !important;
+    max-width: 100vw !important;
+  }
+  .el-drawer.ltr,
+  .el-drawer.rtl {
+    width: 100vw !important;
+    max-width: 100vw !important;
+  }
+  /* EP 表格内嵌固定列在窄屏易错位：关闭 fixed 列的阴影错位依赖，允许整体横滚 */
+  .el-table {
+    width: 100%;
+  }
+}
+
 /* ---- 页面骨架（ui-design.md §3.1） ----
  * 视口的外边距（26px 36px 40px）由 App.vue 的 .main 承载；
  * 各视图 .page 只负责内容自身的纵向间距。 */

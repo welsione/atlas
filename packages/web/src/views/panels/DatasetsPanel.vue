@@ -204,14 +204,17 @@ curl '${accessSecretsUrl(row)}' \\
   return bearer
 }
 
+let fetchSeq = 0
 async function fetchAll() {
+  const seq = ++fetchSeq
   loading.value = true
   try {
     const res = await datasetApi.list(props.appId, page.value, size.value)
+    if (seq !== fetchSeq) return
     rows.value = res.rows
     total.value = res.total
   } finally {
-    loading.value = false
+    if (seq === fetchSeq) loading.value = false
   }
 }
 
@@ -312,7 +315,7 @@ function sensTag(s: string) {
     </div>
 
     <el-drawer v-model="drawerVisible" title="新建数据集" direction="rtl" size="560px">
-      <el-form label-width="80px">
+      <el-form label-position="top">
         <el-form-item label="名称" required>
           <el-input v-model="form.name" name="dataset-name" autocomplete="off" placeholder="例如：产品知识库" />
         </el-form-item>
@@ -405,7 +408,7 @@ function sensTag(s: string) {
 
         <div v-if="!isPlugin(detailRow)" class="detail-section">
           <div class="section-title">内容</div>
-          <el-form label-width="56px" label-position="top">
+          <el-form label-position="top">
             <el-form-item label="名称" required>
               <el-input v-model="editForm.name" name="dataset-edit-name" autocomplete="off" placeholder="例如：产品知识库" />
             </el-form-item>

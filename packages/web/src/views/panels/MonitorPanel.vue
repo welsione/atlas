@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { Refresh, Connection, DataLine, Select, CircleClose, SetUp, TrendCharts } from '@element-plus/icons-vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { Refresh, Connection, DataLine, Select, CircleClose } from '@element-plus/icons-vue'
 import { monitorApi, type MonitorOverview, type MonitorRow, type MonitorRange, type MonitorInterfaceRow } from '../../services/monitorApi'
 import { fmtTime } from '../../format'
 
@@ -14,6 +14,21 @@ const overview = ref<MonitorOverview>({
 })
 const series = ref<MonitorRow[]>([])
 const loading = ref(false)
+/* 请求序号守卫：切应用/切范围时旧响应晚到不得覆盖新数据 */
+let fetchSeq = 0
+/* 可选自动刷新（30s）：数据面调用持续发生，盯流量时免手动刷新 */
+const autoRefresh = ref(false)
+let refreshTimer: ReturnType<typeof setInterval> | null = null
+function setAutoRefresh(on: boolean) {
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+    refreshTimer = null
+  }
+  if (on) refreshTimer = setInterval(() => void fetchAll(), 30_000)
+}
+onBeforeUnmount(() => {
+  if (refreshTimer) clearInterval(refreshTimer)
+})
 
 // 接口管理（分页 10/页）
 const interfaces = ref<MonitorInterfaceRow[]>([])
@@ -123,6 +138,7 @@ async function fetchRecent() {
 }
 
 async function fetchAll() {
+  const seq = ++fetchSeq
   loading.value = true
   try {
     const r = range.value
@@ -130,9 +146,10 @@ async function fetchAll() {
       monitorApi.overview(props.appId, r),
       monitorApi.series(props.appId, r),
     ])
+    if (seq !== fetchSeq) return
     await Promise.all([fetchEndpoints(), fetchTopResources(), fetchTopIps(), fetchTopApps(), fetchRecent()])
   } finally {
-    loading.value = false
+    if (seq === fetchSeq) loading.value = false
   }
 }
 
@@ -170,22 +187,13 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
 
 <template>
   <div>
-    <div class="toolbar">
-      <el-radio-group :model-value="range" @change="(v: string | number | boolean | undefined) => switchRange(v as MonitorRange)">
-        <el-radio-button value="24h">24 小时</el-radio-button>
-        <el-radio-button value="7d">7 天</el-radio-button>
-        <el-radio-button value="all">全部</el-radio-button>
-      </el-radio-group>
-      <el-tooltip content="刷新" placement="bottom">
-        <el-button :icon="Refresh" circle aria-label="刷新监控数据" :loading="loading" @click="fetchAll" />
-      </el-tooltip>
-    </div>
-
     <el-tabs :model-value="monitorTab" class="monitor-tabs" @tab-change="switchTab">
       <!-- ==================== 接口管理 ==================== -->
       <el-tab-pane name="manage">
         <template #label>
-          <span class="tab-label"><el-icon aria-hidden="true"><SetUp /></el-icon>接口管理</span>
+          <span class="seg-tab" :class="{ active: monitorTab === 'manage' }" role="tab" :aria-selected="monitorTab === 'manage'">
+            接口管理
+          </span>
         </template>
         <div v-loading="interfaceLoading" class="if-list">
           <div v-for="group in interfaceGroups" :key="group.kind" class="plugin-card surface">
@@ -245,8 +253,32 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
       <!-- ==================== 流量分析 ==================== -->
       <el-tab-pane name="analytics">
         <template #label>
-          <span class="tab-label"><el-icon aria-hidden="true"><TrendCharts /></el-icon>流量分析</span>
+          <span class="seg-tab" :class="{ active: monitorTab === 'analytics' }" role="tab" :aria-selected="monitorTab === 'analytics'">
+            流量分析
+          </span>
         </template>
+
+        <!-- 时间范围只作用于流量分析（接口管理无时间维度），故收进本 Tab -->
+        <div class="toolbar">
+          <div class="toolbar-left">
+            <el-radio-group :model-value="range" @change="(v: string | number | boolean | undefined) => switchRange(v as MonitorRange)">
+              <el-radio-button value="24h">24 小时</el-radio-button>
+              <el-radio-button value="7d">7 天</el-radio-button>
+              <el-radio-button value="all">全部</el-radio-button>
+            </el-radio-group>
+            <el-switch
+              v-model="autoRefresh"
+              active-color="var(--atlas-accent)"
+              size="small"
+              aria-label="切换自动刷新"
+              @change="(v: string | number | boolean) => setAutoRefresh(!!v)"
+            />
+            <span class="refresh-hint muted">自动刷新（30s）</span>
+          </div>
+          <el-tooltip content="刷新" placement="bottom">
+            <el-button :icon="Refresh" circle aria-label="刷新流量分析数据" :loading="loading" @click="fetchAll" />
+          </el-tooltip>
+        </div>
 
         <!-- 统计卡片 -->
         <div class="stat-grid">
@@ -383,14 +415,82 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
   margin-bottom: 16px;
 }
 
-.tab-label {
+/* ===== 移动端（≤768px）：接口行两行布局，消除横向挤压重叠 ===== */
+
+/*
+ * 视图级分段控件（方案 A，规范见 docs/agent/ui-design.md §4.10）：
+ * 页面级导航用下划线 Tab；页面内视图切换降级为胶囊分段控件——
+ * 激活项白底浮层 + 品牌蓝文字（无下划线），层级一眼可分。
+ * 结构上仍复用 el-tabs（键盘/滚动手势免费），仅重写 label 形态。
+ */
+.monitor-tabs :deep(.el-tabs__header) {
+  margin-bottom: 16px;
+  /* flex 布局防止 nav-wrap 被拉伸成整行（必须收缩贴合内容，否则胶囊容器拖满全宽） */
+  display: flex;
+}
+.monitor-tabs :deep(.el-tabs__nav-wrap::after) {
+  /* 分段控件无整条底边线：容器自带描边 */
+  display: none;
+}
+.monitor-tabs :deep(.el-tabs__active-bar) {
+  /* 隐藏原生下划线：选中态由 seg-tab.active 表达 */
+  display: none;
+}
+.monitor-tabs :deep(.el-tabs__nav-wrap) {
+  /* EP 原生 flex:auto 会把 wrap 拉满整行——必须禁掉生长，收缩贴合内容 */
+  flex: none;
+  display: inline-flex;
+  width: fit-content;
+  background: var(--atlas-layer);
+  border: 1px solid var(--atlas-stroke);
+  border-radius: 10px;
+  padding: 3px;
+}
+.monitor-tabs :deep(.el-tabs__nav-scroll) {
+  display: inline-flex;
+}
+.monitor-tabs :deep(.el-tabs__item) {
+  height: 28px;
+  padding: 0 2px !important;
+  line-height: 28px;
+  font-size: 13px;
+  color: var(--atlas-muted);
+}
+.monitor-tabs :deep(.el-tabs__item + .el-tabs__item) {
+  margin-left: 2px;
+}
+.seg-tab {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  height: 28px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--atlas-muted);
+  border-radius: 8px;
+  transition: background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+}
+.seg-tab:hover {
+  color: var(--atlas-text);
+}
+.seg-tab.active {
+  background: var(--atlas-surface);
+  color: var(--atlas-accent);
+  font-weight: 600;
+  box-shadow: var(--atlas-shadow-card);
 }
 
-.tab-label .el-icon {
-  color: var(--atlas-accent);
+/* 流量分析 Tab 内嵌工具栏与分段控件的间距衔接 */
+.el-tab-pane .toolbar {
+  margin-top: 16px;
+}
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.refresh-hint {
+  font-size: 12px;
 }
 
 .stat-grid {
@@ -440,7 +540,7 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
 
 .grid-2 {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -616,5 +716,69 @@ const methodTag = (m: string) => (m === 'GET' ? 'success' : m === 'POST' ? 'prim
 
 .is-error {
   color: var(--atlas-danger);
+}
+
+/* ===== 移动端（≤768px）：接口行两行布局，消除横向挤压重叠 =====
+   注意：本块必须位于文件末尾——其规则需覆盖上方同优先级的 .ep-* 原始定义 */
+@media (max-width: 768px) {
+  .ep-row {
+    flex-wrap: wrap;
+    row-gap: 6px;
+    padding: 10px 4px;
+  }
+  /* 确定性三行布局：行1=方法 Tag+开关；行2=主信息占满；行3=敏感级+统计 */
+  .ep-row .el-switch {
+    order: 1;
+    margin-left: auto;
+  }
+  .ep-main {
+    order: 2;
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  /* 敏感级 Tag 是行内第二个 el-tag（首个是方法 GET/DS Tag，须留在首行） */
+  .ep-row > .el-tag:not(:first-child) {
+    order: 3;
+  }
+  .ep-stats {
+    order: 4;
+  }
+  .ep-row .el-button {
+    order: 5;
+    margin-left: auto;
+  }
+  .ep-row > .spacer {
+    display: none;
+  }
+  .ep-disabled-tag {
+    order: 7;
+    flex-basis: 100%;
+  }
+  /* 主信息行内允许换行，避免 pluginType/summary 与其他元素叠压 */
+  .ep-line1 {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+  .ep-summary {
+    flex-basis: 100%;
+    white-space: normal;
+  }
+  /* 卡片头（插件端点/数据集 + 计数）窄屏换行 */
+  .plugin-card-head {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  /* 端点分布/Top 资源、Top IP/Top 应用 双列转单列，消除横向溢出 */
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
+  /* 趋势空态在图区居中，不再沉底 */
+  .trend .empty {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+  }
 }
 </style>

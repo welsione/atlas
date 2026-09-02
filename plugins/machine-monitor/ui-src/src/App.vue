@@ -65,8 +65,10 @@ const fmtClock = () => {
 async function resolveApp() {
   if (resolvedAppId.value != null) return true
   try {
-    const apps = await get('/api/apps')
-    if (apps && apps.length > 0) {
+    // /api/apps 兼容分页 {rows} 与数组两种形状（分页改造后为 {rows,total,page,size}）
+    const res = await get('/api/apps')
+    const apps = Array.isArray(res) ? res : (res?.rows ?? [])
+    if (apps.length > 0) {
       resolvedAppId.value = apps[0].id
       return true
     }
@@ -76,17 +78,20 @@ async function resolveApp() {
   return false
 }
 
+let statusSeq = 0
 async function fetchStatus() {
   if (!(await resolveApp())) return
   const ep = base()
+  const seq = ++statusSeq
   try {
     const data = await get(ep + '/status')
+    if (seq !== statusSeq) return // 手动刷新与 5s 轮询并发时旧响应丢弃
     host.value = data.host
     sample.value = data.sample
     lastUpdated.value = fmtClock()
     error.value = ''
   } catch (e) {
-    error.value = (e && e.message) || '采集失败'
+    if (seq === statusSeq) error.value = (e && e.message) || '采集失败'
   }
 }
 
@@ -139,6 +144,14 @@ const trend = computed(() => {
 })
 const trendMax = () => Math.max(1, ...trend.value.cpu.map((p) => p.v ?? 0), ...trend.value.mem.map((p) => p.v ?? 0), ...trend.value.disk.map((p) => p.v ?? 0))
 const fmtTrendTime = (ts) => (ts ? new Intl.DateTimeFormat('zh-CN', { ...TZ, hour: '2-digit', minute: '2-digit' }).format(new Date(ts)) : '')
+/** 趋势图文本替代：最新非空采样值（可达性，规范 §8）。 */
+const latestText = (key) => {
+  const pts = trend.value[key] ?? []
+  for (let i = pts.length - 1; i >= 0; i -= 1) {
+    if (pts[i].v != null) return `${fmtTrendTime(pts[i].ts)} ${pts[i].v.toFixed(1)}%`
+  }
+  return '暂无采样'
+}
 
 // 最近采样：全量倒序 + 前端分页（每页 10 条）
 const SAMPLE_PAGE_SIZE = 10
@@ -177,15 +190,15 @@ onBeforeUnmount(() => {
   <div v-if="!DETAILED" class="card-mode">
     <div v-if="sample && host" class="card-grid">
       <div class="card-metric">
-        <el-progress type="dashboard" :width="64" :stroke-width="6" :percentage="sample.cpu" :color="colorOf(sample.cpu)" />
+        <el-progress type="dashboard" :width="64" :stroke-width="6" :percentage="sample.cpu" :color="colorOf(sample.cpu)" :aria-label="`CPU 使用率 ${sample.cpu}%`" />
         <div class="metric-label">CPU</div>
       </div>
       <div class="card-metric">
-        <el-progress type="dashboard" :width="64" :stroke-width="6" :percentage="sample.memPercent" :color="colorOf(sample.memPercent)" />
+        <el-progress type="dashboard" :width="64" :stroke-width="6" :percentage="sample.memPercent" :color="colorOf(sample.memPercent)" :aria-label="`内存使用率 ${sample.memPercent}%`" />
         <div class="metric-label">内存</div>
       </div>
       <div class="card-metric">
-        <el-progress type="dashboard" :width="64" :stroke-width="6" :percentage="sample.diskPercent ?? 0" :color="colorOf(sample.diskPercent)" />
+        <el-progress type="dashboard" :width="64" :stroke-width="6" :percentage="sample.diskPercent ?? 0" :color="colorOf(sample.diskPercent)" :aria-label="`磁盘使用率 ${sample.diskPercent ?? 0}%`" />
         <div class="metric-label">磁盘</div>
       </div>
       <div class="card-meta">
@@ -204,10 +217,12 @@ onBeforeUnmount(() => {
   <div v-else class="detail-mode">
     <div class="toolbar">
       <div class="toolbar-left">
-        <el-switch v-model="autoRefresh" active-text="自动刷新（5s）" size="small" />
+        <el-switch v-model="autoRefresh" active-color="var(--atlas-accent)" active-text="自动刷新（5s）" size="small" aria-label="切换自动刷新" />
         <span v-if="lastUpdated" class="updated muted">最近更新 {{ lastUpdated }}</span>
       </div>
-      <el-button :icon="Refresh" circle aria-label="刷新监控数据" :loading="loading" @click="refreshAll" title="刷新" />
+      <el-tooltip content="刷新监控数据" placement="top">
+        <el-button :icon="Refresh" circle aria-label="刷新监控数据" :loading="loading" @click="refreshAll" />
+      </el-tooltip>
     </div>
 
     <div v-if="error" class="error-bar">{{ error }}</div>
@@ -257,11 +272,16 @@ onBeforeUnmount(() => {
       <div v-if="trend.cpu.length" class="trend-grid">
         <div v-for="t in [['cpu', 'CPU %', 'cpu'], ['mem', '内存 %', 'mem'], ['disk', '磁盘 %', 'disk']]" :key="t[0]" class="trend-box">
           <div class="trend-name">{{ t[1] }}</div>
-          <div class="trend">
+          <div
+            class="trend"
+            role="img"
+            :aria-label="`近 24 小时 ${t[1]} 趋势图，共 ${trend[t[2]].length} 个采样点，最新 ${latestText(t[2])}`"
+          >
             <div v-for="(p, i) in trend[t[2]]" :key="i" class="trend-col" :title="`${fmtTrendTime(p.ts)}：${p.v == null ? '—' : p.v.toFixed(1)}%`">
               <div class="trend-bar" :style="{ height: `${(p.v ?? 0) / trendMax() * 100}%`, background: colorOf(p.v) }" />
             </div>
           </div>
+          <div class="trend-latest muted">{{ latestText(t[2]) }}</div>
         </div>
       </div>
       <div v-else class="empty muted">暂无历史数据（控制台卡片或定时数据集刷新会自动采样）</div>
@@ -271,7 +291,7 @@ onBeforeUnmount(() => {
       <!-- 最近采样 -->
       <div class="surface section">
         <div class="section-title">最近采样（北京时间）</div>
-        <el-table :data="pagedSamples" size="small" empty-text="暂无">
+        <el-table :data="pagedSamples" size="small" empty-text="暂无采样记录">
           <el-table-column label="时间" width="120">
             <template #default="{ row }">{{ fmtTime(row.ts) }}</template>
           </el-table-column>
@@ -303,7 +323,7 @@ onBeforeUnmount(() => {
       <!-- Top 进程 -->
       <div class="surface section">
         <div class="section-title">Top 进程（按 CPU）</div>
-        <el-table :data="pagedProcesses" size="small" empty-text="暂无">
+        <el-table :data="pagedProcesses" size="small" empty-text="暂无进程数据">
           <el-table-column prop="pid" label="PID" width="70" />
           <el-table-column prop="name" label="进程" min-width="140" show-overflow-tooltip />
           <el-table-column label="CPU" width="80">
@@ -479,10 +499,42 @@ onBeforeUnmount(() => {
   border-radius: 2px 2px 0 0;
   opacity: 0.9;
 }
+.trend-latest {
+  font-size: 11px;
+  margin-top: 6px;
+}
 .grid-2 {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* minmax(0,1fr)：1fr 默认 min-width:auto 会被卡内表格最小宽撑破容器（桌面中等宽度即溢出） */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+}
+@media (max-width: 720px) {
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
+  /* el-table 固定列宽合计（120+70+80+70+80+边距≈460px）超过手机容器宽，
+     会把 grid 轨道撑破导致横向溢出：让表格在卡内横向滚动 */
+  .grid-2 :deep(.el-table) {
+    width: 100%;
+  }
+  .section {
+    min-width: 0;
+    overflow: hidden;
+  }
+  .section :deep(.el-table) {
+    max-width: 100%;
+  }
+  .toolbar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .toolbar-left {
+    flex-wrap: wrap;
+  }
+  .host-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .table-pager {
