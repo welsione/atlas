@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { SwitchButton, ArrowLeft, Menu } from '@element-plus/icons-vue'
+import { SwitchButton, ArrowLeft } from '@element-plus/icons-vue'
 // 侧边导航统一用 Lucide 线性图标库（stroke 2 统一语言，currentColor 随菜单态）
 import { House, LayoutGrid, Puzzle, Settings, Lock, Cpu, Activity } from 'lucide-vue-next'
 import ConsoleView from './views/ConsoleView.vue'
@@ -262,9 +262,9 @@ const head = usePageHeadAction()
     <el-main class="main">
       <div class="ph">
         <nav class="crumb" aria-label="面包屑">
-          <!-- 移动端汉堡按钮：开合侧栏抽屉 -->
+          <!-- 移动端汉堡按钮：开合侧栏抽屉（用 Atlas 图标，与侧栏品牌一致） -->
           <button v-if="isMobile" type="button" class="hamburger" aria-label="打开导航菜单" :aria-expanded="mobileNavOpen" @click="toggleMobileNav">
-            <el-icon aria-hidden="true"><Menu /></el-icon>
+            <img src="/icons/atlas.svg" class="hamburger-ico" alt="" />
           </button>
           <template v-for="(c, i) in crumb" :key="i">
             <button v-if="c.go && i < crumb.length - 1" type="button" class="crumb-link" @click="c.go">{{ c.label }}</button>
@@ -649,8 +649,8 @@ const head = usePageHeadAction()
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 42px;
+  height: 42px;
   border: 1px solid var(--atlas-stroke);
   border-radius: var(--atlas-r-s);
   background: var(--atlas-surface);
@@ -663,6 +663,11 @@ const head = usePageHeadAction()
 .hamburger:hover {
   background: var(--atlas-layer);
   border-color: var(--atlas-stroke-strong);
+}
+.hamburger-ico {
+  width: 34px;
+  height: 34px;
+  display: block;
 }
 
 /* 遮罩：移动端抽屉打开时盖住内容区 */
@@ -701,8 +706,6 @@ const head = usePageHeadAction()
     top: 0;
     height: 100vh;
     height: 100dvh;
-    width: min(80vw, 300px);
-    padding-top: 14px;
     z-index: 2000;
     background: var(--atlas-bg);
     transform: translateX(-100%);
@@ -713,8 +716,28 @@ const head = usePageHeadAction()
     transform: translateX(0);
     box-shadow: 0 6px 24px rgba(20, 28, 60, 0.14);
   }
-  /* 抽屉态下忽略桌面折叠样式，菜单始终图标+文字 */
-  .layout.is-mobile .sidebar .mi .txt {
+  /* 抽屉态下忽略桌面折叠样式，恢复「图标+文字」完整展开形态：
+     collapsed 的 padding/justify/side-top/sfoot 等折叠布局属性全部覆盖回退 */
+  .layout.is-mobile .sidebar {
+    width: min(80vw, 300px);
+    padding: 14px 12px 16px;
+  }
+  .layout.is-mobile .side-top {
+    justify-content: flex-start;
+    margin-bottom: 6px;
+  }
+  .layout.is-mobile .brand-logo {
+    flex: 1;
+  }
+  .layout.is-mobile .menu {
+    margin-top: 12px;
+  }
+  .layout.is-mobile .mi {
+    padding: 9px 12px;
+    gap: 11px;
+    justify-content: flex-start;
+  }
+  .layout.is-mobile .mi .txt {
     display: inline;
   }
   .layout.is-mobile .mi .ic,
@@ -722,6 +745,16 @@ const head = usePageHeadAction()
     width: 24px;
     height: 24px;
     min-width: 24px;
+  }
+  .layout.is-mobile .sfoot {
+    justify-content: flex-start;
+  }
+  .layout.is-mobile .logout-btn {
+    padding: 9px 12px;
+    justify-content: flex-start;
+  }
+  .layout.is-mobile .logout-btn .txt {
+    display: inline;
   }
   /* 隐藏桌面折叠箭头（抽屉用遮罩关闭） */
   .layout.is-mobile .acts {

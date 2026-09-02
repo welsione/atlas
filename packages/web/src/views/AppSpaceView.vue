@@ -256,30 +256,28 @@ function scopeLabel(row: PluginOverviewRow): string {
                 <el-tag size="small" :type="statusTag(localApp.status)">{{ statusLabel(localApp.status) }}</el-tag>
               </h1>
               <div class="hero-facts">
-                <span class="fact">
-                  App ID <code class="mono fact-val">{{ localApp.appId }}</code>
-                  <el-tooltip content="复制 App ID" placement="top">
+                <div class="fact-row">
+                  <span class="fact">App ID <code class="mono fact-val">{{ localApp.appId }}</code></span>
+                  <el-tooltip content="复制 App ID（外部系统接入时配合 App Secret 使用）" placement="top">
                     <el-button size="small" text :icon="CopyDocument" aria-label="复制 App ID" @click="copyAppId" />
                   </el-tooltip>
-                </span>
-                <span class="fact">创建于 <b class="fact-val">{{ fmtTime(localApp.createdAt) }}</b></span>
+                </div>
+                <div class="fact-row">
+                  <span class="fact">App Secret <code class="mono fact-val">•••• •••• •••• {{ localApp.appId.slice(-4) }} <span class="cred-hint">仅创建/轮换时展示完整</span></code></span>
+                  <el-tooltip :content="localApp.status === 'ACTIVE' ? '轮换后新凭证生效，旧凭证保留可校验' : '应用已吊销，请先恢复'" placement="top">
+                    <el-button size="small" text :icon="Key" :disabled="localApp.status !== 'ACTIVE'" :loading="rotating" aria-label="轮换凭证" @click="handleRotate">轮换</el-button>
+                  </el-tooltip>
+                </div>
+                <div class="fact-row">
+                  <span class="fact">创建于 <b class="fact-val">{{ fmtTime(localApp.createdAt) }}</b></span>
+                </div>
               </div>
             </div>
             <div class="hero-acts">
-              <el-button :icon="Refresh" @click="fetchOverview">刷新</el-button>
               <el-button type="primary" :icon="Key" @click="openEnableDrawer">启用插件</el-button>
             </div>
           </div>
-          <div class="cred-strip">
-            <span class="cred-label">App Secret</span>
-            <span class="mono cred-val">•••• •••• •••• {{ localApp.appId.slice(-4) }}</span>
-            <span class="cred-hint">仅创建/轮换时展示完整</span>
-            <span class="cred-sp"></span>
-            <el-tooltip :content="localApp.status === 'ACTIVE' ? '轮换后新凭证生效，旧凭证保留可校验' : '应用已吊销，请先恢复'" placement="top">
-              <el-button size="small" :icon="Key" :disabled="localApp.status !== 'ACTIVE'" :loading="rotating" @click="handleRotate">轮换凭证</el-button>
-            </el-tooltip>
-            <el-button size="small" :icon="CopyDocument" @click="copyAppId">复制</el-button>
-          </div>
+
         </div>
 
         <!-- 指标卡 -->
@@ -522,10 +520,15 @@ function scopeLabel(row: PluginOverviewRow): string {
 }
 .hero-facts {
   display: flex;
-  gap: 18px;
+  flex-direction: column;
+  gap: 8px;
   margin-top: 10px;
-  flex-wrap: wrap;
+}
+.fact-row {
+  display: flex;
   align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 .fact {
   font-size: 12px;
@@ -546,29 +549,9 @@ function scopeLabel(row: PluginOverviewRow): string {
 }
 
 /* 凭证贯通条 */
-.cred-strip {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-  padding: 13px 26px;
-  background: var(--atlas-layer);
-  border-top: 1px solid var(--atlas-stroke);
-}
-.cred-label {
-  font-size: 12px;
-  color: var(--atlas-muted);
-}
-.cred-val {
-  font-size: 13px;
-  color: var(--atlas-text);
-}
 .cred-hint {
   font-size: 11px;
   color: var(--atlas-faint);
-}
-.cred-sp {
-  flex: 1;
 }
 
 /* ===== 指标卡 ===== */
@@ -851,22 +834,6 @@ function scopeLabel(row: PluginOverviewRow): string {
   }
   .hero-acts .el-button:first-child {
     display: none;
-  }
-
-  /* 凭证贯通条两行布局 */
-  .cred-strip {
-    padding: 12px 16px;
-    gap: 10px;
-  }
-  .cred-val {
-    flex-basis: 100%;
-    order: 3;
-  }
-  .cred-sp {
-    display: none;
-  }
-  .cred-strip .el-button {
-    margin-left: auto;
   }
 
   /* 指标卡单列已由 640px 规则覆盖；危险操作按钮纵排 */
