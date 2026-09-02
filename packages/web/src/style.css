@@ -141,6 +141,29 @@ body {
   .el-table {
     width: 100%;
   }
+  /* 分页条窄屏极简化：横排（total+sizes+pager）约 540px 宽必溢出。
+     换行后 sizes 选择器（~88px）与页码挤在一行仍窄且截断——干脆隐藏 sizes（每页条数去桌面调），
+     保留 Total 一行 + 页码一行，居中铺满，是移动端分页的标准形态 */
+  .el-pagination {
+    flex-wrap: wrap;
+    row-gap: 8px;
+    justify-content: center;
+  }
+  .el-pagination .el-pagination__total {
+    flex-basis: 100%;
+    text-align: center;
+  }
+  .el-pagination .el-pagination__sizes {
+    display: none;
+  }
+  .el-pagination .el-pager li {
+    min-width: 30px;
+    padding: 0 6px;
+  }
+  .el-pagination .btn-prev,
+  .el-pagination .btn-next {
+    display: none;
+  }
 }
 
 /* ---- 页面骨架（ui-design.md §3.1） ----

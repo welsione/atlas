@@ -339,6 +339,7 @@ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI',
 - **折叠语义在移动端失效**：抽屉没有「图标模式」——Logo 一律横幅版（与 localStorage 折叠态解耦），点 Logo 仅关闭抽屉；折叠箭头按钮不渲染。菜单图标固定 24px 图标+文字形态。
 - **内容区 padding** 36px → 16px。
 - **EP 弹层全局规则**（style.css 兜底，勿在各处手写）：`.el-dialog/.el-message-box` → `calc(100vw - 32px)` 限宽居中；`.el-drawer` → **100vw 完全覆盖视口**（移动端抽屉不留边缘缝隙，靠 X/遮罩关闭）。
+- **分页条窄屏极简两行**：`.el-pagination` 横排（Total+sizes+prev/next+页码）约 540px 宽必溢出。≤768px 收敛为两行居中：Total 独占一行，页码独占一行；隐藏 sizes 每页条数选择器与 prev/next 按钮（页码直接点击足够，sizes 调整去桌面端）——换行收缩仍会截断页码，极简是唯一稳定解（style.css 兜底）。
 
 **页面/面板自行降级（写自己的视图时必须做）**：
 
@@ -358,7 +359,7 @@ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI',
 1. `document.documentElement.scrollWidth <= window.innerWidth`（无横向溢出）；
 2. 双列/三列容器 `getComputedStyle().gridTemplateColumns` 只有一个轨道值；
 3. 深链硬刷新后落在目标 Tab/面板，而非默认页；
-4. 抽屉/对话框完整可见：dialog 宽度 ≤ 视口−32px；**移动端抽屉 100vw 完全覆盖、无边缘缝隙**；
+4. 抽屉/对话框完整可见：dialog 宽度 ≤ 视口−32px；**移动端抽屉 100vw 完全覆盖、无边缘缝隙**；分页条换行后完全在视口内（无负 x 坐标）；
 5. 汉堡开抽屉 → 点菜单项 → 抽屉自动关闭且路由切换；遮罩点击关闭；
 6. 信息行（Tag+名称+状态+操作混排）无文字叠压：逐行读 `getBoundingClientRect` 检查元素间无重叠；
 7. 卡内表格不撑破容器：卡片 `getBoundingClientRect().width` 与其父容器一致（此前 el-table 460px 撑破 grid 的回归项）；
