@@ -19,8 +19,7 @@ jobs:
     steps:
       - uses: googleapis/release-please-action@v4
         with:
-          # 内置 GITHUB_TOKEN（workflow 顶层已声明 contents:write + pull-requests:write）。
-          # 注：此前用 OPENCODE_BOT_TOKEN PAT 缺 create-a-release 权限导致 403；改内置 token 后
-          # release PR/tag/Release 的提交者显示为 github-actions[bot]。
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # welsione 用户 token（secret OPENCODE_BOT_TOKEN）：仓库 GITHUB_TOKEN 的 integration 权限
+          # 被 GitHub 拒绝 create-a-release，用户 token 实测可创建
+          token: ${{ secrets.OPENCODE_BOT_TOKEN }}
           target-branch: release
